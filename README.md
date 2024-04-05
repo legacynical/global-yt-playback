@@ -1,4 +1,4 @@
-<br>An AutoHotkey script to rewind/fast-forward youtube videos while working in a different window without losing focus.
+<br>An AutoHotkey script to rewind/fast-forward youtube videos while focused on a different window.
 <br>Install AutoHotkey @ https://www.autohotkey.com/
 <br>global-yt-playback-v1.0 (should work in windows)
 <br>global-yt-playback-gui-v0.1 (WIP)
