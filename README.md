@@ -1,6 +1,6 @@
 ### Description
 **An AutoHotkey script to rewind/fast-forward youtube videos while focused on a different window.** <br>
-**Enables hotkeys for global youtube playback and paired window focus toggling.**
+**Creates hotkey macros for global youtube playback and paired window focus toggling.**
 
 > *It's not that the few extra seconds I save from not having to move my mouse and click back and forth will increase my productivity, it's the satifaction of not having to deal with 
 that and preventing occassional misfocused window mishaps that will get me to want to use 
