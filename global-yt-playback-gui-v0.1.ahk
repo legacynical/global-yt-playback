@@ -6,6 +6,7 @@
 ; <#` (LWin + `) = display active window stats
 ; <#1 (LWin + 1) = pair currently active application/window
 ; <#2 (LWin + 2) = pair secondary window
+; ^<#2 (Ctrl + LWin + 2) = unpair secondary window
 ; ^` (CTRL + `) = open GUI
 
 #Requires AutoHotkey v1.1.37.01
@@ -124,6 +125,22 @@ ToggleSecondaryWindow()
 				if WinExist(workspace)	
 					WinActivate
 			}
+}
+
+^<#2::UnpairSecondaryWindow()
+
+UnpairSecondaryWindow()
+{
+	global secondaryIsPaired, secondaryID
+	if (secondaryIsPaired)
+	{
+		secondaryID := ""
+		secondaryIsPaired := false
+		MsgBox, % "[Unpaired Secondary Window]"
+	} else {
+		MsgBox, % "Secondary Window is already unpaired!"
+	}
+
 }
 
 ;=========== GUI ===========
