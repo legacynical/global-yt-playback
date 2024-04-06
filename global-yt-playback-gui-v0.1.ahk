@@ -17,7 +17,7 @@ SendMode Input ; Recommended for new scripts due to its superior speed and relia
 SetWorkingDir %A_ScriptDir% ; Force script to use its own folder as working directory.
 SetTitleMatchMode 2 ; Allow WinTitle to be matched anywhere from a window's title
 
-video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working
+video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 workspace := "A" ; Initialize default workspace to active window
 secondaryIsPaired := false
 secondaryID := ""
