@@ -19,8 +19,8 @@ InstallKeybdHook ; Allow use of additional special keys
 
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 workspace := "A" ; Initialize default workspace to active window
-win2IsPaired, win3IsPaired, win4IsPaired, win5IsPaired := false
-win2ID, win3ID, win4ID, win5ID := ""
+win2IsPaired := win3IsPaired := win4IsPaired := win5IsPaired := false
+win2ID := win3ID := win4ID := win5ID := ""
 
 Media_Prev::YoutubeRewind5(video, workspace)
 
