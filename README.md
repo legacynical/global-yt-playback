@@ -5,7 +5,7 @@
 > *It's not that the few extra seconds I save from not having to move my mouse and click back and forth will increase my productivity, it's the satifaction of not having to deal with 
 that and preventing occassional misfocused window mishaps that will get me to want to use 
 it more and work longer.*
-## WINDOWS
+## Windows
 ### Running with AHK Installation
 1. Install [AutoHotkey](https://www.autohotkey.com/) (v2.0 recommended)<br>
 2. run the .ahk script based on installed AHK version (v2.0 or v1.1)<br>
