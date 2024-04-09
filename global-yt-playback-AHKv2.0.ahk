@@ -22,9 +22,9 @@ workspace := "A" ; Initialize default workspace to active window
 secondaryIsPaired := false
 secondaryID := ""
 
-Media_Prev::YoutubeRewind(video, workspace)
+Media_Prev::YoutubeRewind5(video, workspace)
 
-YoutubeRewind(video, workspace)
+YoutubeRewind5(video, workspace)
 {
 	if WinExist(video) 
 	{
@@ -38,15 +38,47 @@ YoutubeRewind(video, workspace)
 	}
 }
 
-Media_Next::YoutubeFastforward(video, workspace)
+^Media_Prev::YoutubeRewind10(video, workspace)
 
-YoutubeFastforward(video, workspace)
+YoutubeRewind10(video, workspace)
+{
+	if WinExist(video) 
+	{
+		WinActivate
+		sleep 11 ; Delay rounds to nearest multiple of 10 or 15.6 ms
+	Send "{j}" ; YT rewind 10 seconds
+		sleep 11
+		
+		if WinExist(workspace) 
+			WinActivate
+	}
+}
+
+Media_Next::YoutubeFastforward5(video, workspace)
+
+YoutubeFastforward5(video, workspace)
 {
 	if WinExist(video)
 	{
 		WinActivate
 		sleep 11
-	Send "{Right}" ; YT fast forward 5 seconds
+	Send "{Right}" ; YT fast forward 10 seconds
+		sleep 11
+		
+		if WinExist(workspace) 
+			WinActivate
+	}
+}
+
+^Media_Next::YoutubeFastforward10(video, workspace)
+
+YoutubeFastforward10(video, workspace)
+{
+	if WinExist(video)
+	{
+		WinActivate
+		sleep 11
+	Send "{l}" ; YT fast forward 5 seconds
 		sleep 11
 		
 		if WinExist(workspace) 
