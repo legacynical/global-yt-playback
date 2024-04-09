@@ -30,7 +30,7 @@ YoutubeRewind(video, workspace)
 	{
 		WinActivate
 		sleep 11
-		Send j
+		Send left
 		sleep 11
 		
 		if WinExist(workspace)
@@ -48,7 +48,7 @@ YoutubeFastforward(video, workspace)
 	{
 		WinActivate
 		sleep 11
-		Send l
+		Send right
 		sleep 11
 		
 		if WinExist(workspace)
@@ -57,6 +57,25 @@ YoutubeFastforward(video, workspace)
 		}
 	}
 }
+
+; Redundant code for Media_Play_Pause (most browsers allow this)
+; Media_Play_Pause::YoutubePlayPause(video, workspace)
+
+; YoutubePlayPause(video, workspace)
+; {
+; 	if WinExist(video)
+; 	{
+; 		WinActivate
+; 		sleep 11
+; 		Send k
+; 		sleep 11
+		
+; 		if WinExist(workspace)
+; 		{
+; 			WinActivate
+; 		}
+; 	}
+; }
 
 ; If you don't have Media_Play_Pause key, uncomment line below and set hotkey
 ; hotkey::Media_Play_Pause

@@ -128,7 +128,7 @@ ToggleSecondaryWindow()
 		} else {
 			secondaryIsPaired := false
 			MsgBox "Current Window is already primary workspace!`n"
-						. "Please choose a different window"
+						. "Please choose a different window."
 		}
 	} else if (currentID != secondaryID)
 		{
