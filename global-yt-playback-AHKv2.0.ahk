@@ -148,9 +148,9 @@ Window2()
 		{
 			win2ID := currentID ; Change secondaryID to current active window
 			win2IsPaired := true
-			MsgBox "[Pairing Secondary Window]`n"
+			MsgBox "[Pairing Window 2]`n"
 						. "title: " winTitle "`n"
-						. "widow 2: " win2ID "`n"
+						. "window 2: " win2ID "`n"
 						. "process: " winProcess
 		} else {
 			win2IsPaired := false
