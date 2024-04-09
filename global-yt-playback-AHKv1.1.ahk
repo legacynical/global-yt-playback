@@ -9,7 +9,7 @@
 ; ^<#2 (Ctrl + LWin + 2) = unpair secondary window
 ; ^` (CTRL + `) = open GUI
 
-#Requires AutoHotkey v1.1.37.01
+#Requires AutoHotkey v1.1
 #InstallKeybdHook ; Allow use of additional special keys
 #SingleInstance ; Prompt to replace instance if already running
 #Warn ; For debugging
