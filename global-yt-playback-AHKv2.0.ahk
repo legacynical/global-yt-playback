@@ -168,9 +168,9 @@ Window2()
 			}
 }
 
-^<#2::UnpairSecondaryWindow()
+^<#2::UnpairWindow2()
 
-UnpairSecondaryWindow()
+UnpairWindow2()
 {
 	global win2IsPaired, win2ID
 	if (win2IsPaired)
@@ -181,7 +181,6 @@ UnpairSecondaryWindow()
 	} else {
 		MsgBox "Window 2 is already unpaired!"
 	}
-
 }
 
 ;=========== GUI ===========
