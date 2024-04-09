@@ -5,7 +5,7 @@
 ; Media_Play_Pause = Play/Pause (no script needed to work)
 ; <#` (LWin + `) = display active window stats
 ; <#1 (LWin + 1) = pair currently active application/window
-; <#2 (LWin + 2) = pair secondary window
+; <#2 (LWin + 2) = pair/toggle secondary window
 ; ^<#2 (Ctrl + LWin + 2) = unpair secondary window
 ; ^` (CTRL + `) = open GUI
 
@@ -19,8 +19,8 @@ InstallKeybdHook ; Allow use of additional special keys
 
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 workspace := "A" ; Initialize default workspace to active window
-secondaryIsPaired := false
-secondaryID := ""
+win2IsPaired, win3IsPaired, win4IsPaired, win5IsPaired := false
+win2ID, win3ID, win4ID, win5ID := ""
 
 Media_Prev::YoutubeRewind5(video, workspace)
 
@@ -30,9 +30,8 @@ YoutubeRewind5(video, workspace)
 	{
 		WinActivate
 		sleep 11 ; Delay rounds to nearest multiple of 10 or 15.6 ms
-	Send "{Left}" ; YT rewind 5 seconds
+		Send "{Left}" ; YT rewind 5 seconds
 		sleep 11
-		
 		if WinExist(workspace) 
 			WinActivate
 	}
@@ -46,9 +45,8 @@ YoutubeRewind10(video, workspace)
 	{
 		WinActivate
 		sleep 11 ; Delay rounds to nearest multiple of 10 or 15.6 ms
-	Send "{j}" ; YT rewind 10 seconds
-		sleep 11
-		
+		Send "{j}" ; YT rewind 10 seconds
+		sleep 11		
 		if WinExist(workspace) 
 			WinActivate
 	}
@@ -62,9 +60,8 @@ YoutubeFastforward5(video, workspace)
 	{
 		WinActivate
 		sleep 11
-	Send "{Right}" ; YT fast forward 10 seconds
+		Send "{Right}" ; YT fast forward 10 seconds
 		sleep 11
-		
 		if WinExist(workspace) 
 			WinActivate
 	}
@@ -78,9 +75,8 @@ YoutubeFastforward10(video, workspace)
 	{
 		WinActivate
 		sleep 11
-	Send "{l}" ; YT fast forward 5 seconds
+		Send "{l}" ; YT fast forward 5 seconds
 		sleep 11
-		
 		if WinExist(workspace) 
 			WinActivate
 	}
@@ -95,9 +91,8 @@ YoutubeFastforward10(video, workspace)
 ; 	{
 ; 		WinActivate
 ; 		sleep 11
-; 	Send {k} ; YT play/pause
+; 		Send {k} ; YT play/pause
 ; 		sleep 11
-		
 ; 		if WinExist(workspace) 
 ; 			WinActivate
 ; 	}
@@ -137,36 +132,36 @@ PairActiveWindow()
 				. "process: " winProcess
 }
 
-<#2::ToggleSecondaryWindow()
+<#2::Window2()
 
-ToggleSecondaryWindow()
+Window2()
 {
 	GetWinInfo()
 	currentID := "ahk_id " winId
-	global secondaryIsPaired, secondaryID, workspace
-	if (!secondaryIsPaired)
+	global win2IsPaired, win2ID, workspace
+	if (!win2IsPaired)
 	{	
 		if (workspace == "A")
 		{
 			MsgBox "Please pair a primary workspace first!"
 		} else if (currentID != workspace)
 		{
-			secondaryID := currentID ; Change secondaryID to current active window
-			secondaryIsPaired := true
+			win2ID := currentID ; Change secondaryID to current active window
+			win2IsPaired := true
 			MsgBox "[Pairing Secondary Window]`n"
 						. "title: " winTitle "`n"
-						. "secondary: " secondaryID "`n"
+						. "widow 2: " win2ID "`n"
 						. "process: " winProcess
 		} else {
-			secondaryIsPaired := false
+			win2IsPaired := false
 			MsgBox "Current Window is already primary workspace!`n"
 						. "Please choose a different window."
 		}
-	} else if (currentID != secondaryID)
+	} else if (currentID != win2ID)
 		{
-			if WinExist(secondaryID)
+			if WinExist(win2ID)
 				WinActivate
-		} else if (currentID == secondaryID)
+		} else if (currentID == win2ID)
 			{
 				if WinExist(workspace)	
 					WinActivate
@@ -177,14 +172,14 @@ ToggleSecondaryWindow()
 
 UnpairSecondaryWindow()
 {
-	global secondaryIsPaired, secondaryID
-	if (secondaryIsPaired)
+	global win2IsPaired, win2ID
+	if (win2IsPaired)
 	{
-		secondaryID := ""
-		secondaryIsPaired := false
-		MsgBox "[Unpaired Secondary Window]"
+		win2ID := ""
+		win2IsPaired := false
+		MsgBox "[Unpaired Window 2]"
 	} else {
-		MsgBox "Secondary Window is already unpaired!"
+		MsgBox "Window 2 is already unpaired!"
 	}
 
 }
