@@ -183,6 +183,58 @@ UnpairWindow2()
 	}
 }
 
+<#3::Window3()
+
+Window3()
+{
+	GetWinInfo()
+	currentID := "ahk_id " winId
+	global win3IsPaired, win3ID, workspace
+	if (!win3IsPaired)
+	{	
+		if (workspace == "A")
+		{
+			MsgBox "Please pair a primary workspace first!"
+		} else if (currentID != workspace)
+		{
+			win3ID := currentID ; Change secondaryID to current active window
+			win3IsPaired := true
+			MsgBox "[Pairing Window 3]`n"
+						. "title: " winTitle "`n"
+						. "window 2: " win3ID "`n"
+						. "process: " winProcess
+		} else {
+			win3IsPaired := false
+			MsgBox "Current Window is already primary workspace!`n"
+						. "Please choose a different window."
+		}
+	} else if (currentID != win3ID)
+		{
+			if WinExist(win3ID)
+				WinActivate
+		} else if (currentID == win3ID)
+			{
+				if WinExist(workspace)	
+					WinActivate
+			}
+}
+
+^<#3::UnpairWindow3()
+
+UnpairWindow3()
+{
+	global win3IsPaired, win3ID
+	if (win3IsPaired)
+	{
+		win3ID := ""
+		win3IsPaired := false
+		MsgBox "[Unpaired Window 3]"
+	} else {
+		MsgBox "Window 3 is already unpaired!"
+	}
+}
+
+
 ;=========== GUI ===========
 ; not currently functional, need to read more docs and play around
 
