@@ -5,8 +5,11 @@
 ; Media_Play_Pause = Play/Pause (no script needed to work)
 ; <#` (LWin + `) = display active window stats
 ; <#1 (LWin + 1) = pair currently active application/window
-; <#2 (LWin + 2) = pair/toggle secondary window
-; ^<#2 (Ctrl + LWin + 2) = unpair secondary window
+; <#2 (LWin + 2) = pair/toggle 2nd window
+; <#3 (LWin + 3) = pair/toggle 3rd window
+; ^<#1 (Ctrl + LWin + 1) = unpair main workspace
+; ^<#2 (Ctrl + LWin + 2) = unpair 2nd window
+; ^<#3 (Ctrl + LWin + 3) = unpair 3rd window
 ; ^` (CTRL + `) = open GUI
 
 #Requires AutoHotkey v2.0
