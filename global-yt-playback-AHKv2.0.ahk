@@ -139,7 +139,7 @@ PairMainWorkspace()
 
 }
 
-^<#2::UnpairMainWorkspace()
+^<#1::UnpairMainWorkspace()
 
 UnpairMainWorkspace()
 {
