@@ -134,7 +134,7 @@ PairMainWorkspace()
 					. "workspace: " workspace "`n"
 					. "process: " winProcess
 	} else {
-		MsgBox, "Main Workspace already paired!"
+		MsgBox "Main Workspace already paired!"
 	}
 
 }
