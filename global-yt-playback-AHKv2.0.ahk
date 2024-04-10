@@ -19,7 +19,7 @@ InstallKeybdHook ; Allow use of additional special keys
 
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 workspace := "A" ; Initialize default workspace to active window
-win2IsPaired := win3IsPaired := win4IsPaired := win5IsPaired := false
+win1IsPaired := win2IsPaired := win3IsPaired := win4IsPaired := win5IsPaired := false
 win2ID := win3ID := win4ID := win5ID := ""
 
 Media_Prev::YoutubeRewind5(video, workspace)
@@ -120,16 +120,38 @@ DisplayActiveWindowStats()
         . "Active window process: " winProcess
 }
 
-<#1::PairActiveWindow()
+<#1::PairMainWorkspace()
 
-PairActiveWindow()
+PairMainWorkspace()
 {
 	GetWinInfo()
-	global workspace := "ahk_id " winId ; Change workspace to current active window
-	MsgBox "[Pairing Current Active Window]`n"
-				. "title: " winTitle "`n"
-				. "workspace: " workspace "`n"
-				. "process: " winProcess
+	if (workspace == "A")
+	{
+		global workspace := "ahk_id " winId ; Change workspace to current active window
+		global win1IsPaired := true
+		MsgBox "[Pairing Main Workspace]`n"
+					. "title: " winTitle "`n"
+					. "workspace: " workspace "`n"
+					. "process: " winProcess
+	} else {
+		MsgBox, "Main Workspace already paired!"
+	}
+
+}
+
+^<#2::UnpairMainWorkspace()
+
+UnpairMainWorkspace()
+{
+	global win1IsPaired, workspace
+	if (!win1IsPaired)
+	{
+		workspace := "A"
+		win1IsPaired := false
+		MsgBox "[Unpaired Window 2]"
+	} else {
+		MsgBox "Main Workspace is already unpaired!"
+	}
 }
 
 <#2::Window2()
@@ -143,7 +165,7 @@ Window2()
 	{	
 		if (workspace == "A")
 		{
-			MsgBox "Please pair a primary workspace first!"
+			MsgBox "Please pair a main workspace first!"
 		} else if (currentID != workspace)
 		{
 			win2ID := currentID ; Change secondaryID to current active window
@@ -154,7 +176,7 @@ Window2()
 						. "process: " winProcess
 		} else {
 			win2IsPaired := false
-			MsgBox "Current Window is already primary workspace!`n"
+			MsgBox "Current Window is already a main workspace!`n"
 						. "Please choose a different window."
 		}
 	} else if (currentID != win2ID)
@@ -194,7 +216,7 @@ Window3()
 	{	
 		if (workspace == "A")
 		{
-			MsgBox "Please pair a primary workspace first!"
+			MsgBox "Please pair a main workspace first!"
 		} else if (currentID != workspace)
 		{
 			win3ID := currentID ; Change secondaryID to current active window
@@ -205,7 +227,7 @@ Window3()
 						. "process: " winProcess
 		} else {
 			win3IsPaired := false
-			MsgBox "Current Window is already primary workspace!`n"
+			MsgBox "Current Window is already a main workspace!`n"
 						. "Please choose a different window."
 		}
 	} else if (currentID != win3ID)
