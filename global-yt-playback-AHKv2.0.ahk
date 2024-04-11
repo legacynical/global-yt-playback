@@ -226,7 +226,7 @@ Window3()
 			win3IsPaired := true
 			MsgBox "[Pairing Window 3]`n"
 						. "title: " winTitle "`n"
-						. "window 2: " win3ID "`n"
+						. "window 3: " win3ID "`n"
 						. "process: " winProcess
 		} else {
 			win3IsPaired := false
@@ -259,6 +259,56 @@ UnpairWindow3()
 	}
 }
 
+<#4::Window4()
+
+Window4()
+{
+	GetWinInfo()
+	currentID := "ahk_id " winId
+	global win4IsPaired, win4ID, workspace
+	if (!win4IsPaired)
+	{	
+		if (workspace == "A")
+		{
+			MsgBox "Please pair a main workspace first!"
+		} else if (currentID != workspace)
+		{
+			win4ID := currentID ; Change secondaryID to current active window
+			win4IsPaired := true
+			MsgBox "[Pairing Window 4]`n"
+						. "title: " winTitle "`n"
+						. "window 4: " win4ID "`n"
+						. "process: " winProcess
+		} else {
+			win4IsPaired := false
+			MsgBox "Current Window is already a main workspace!`n"
+						. "Please choose a different window."
+		}
+	} else if (currentID != win3ID)
+		{
+			if WinExist(win3ID)
+				WinActivate
+		} else if (currentID == win3ID)
+			{
+				if WinExist(workspace)	
+					WinActivate
+			}
+}
+
+^<#4::UnpairWindow4()
+
+UnpairWindow4()
+{
+	global win4IsPaired, win4ID
+	if (win4IsPaired)
+	{
+		win4ID := ""
+		win4IsPaired := false
+		MsgBox "[Unpaired Window 4]"
+	} else {
+		MsgBox "Window 4 is already unpaired!"
+	}
+}
 
 ;=========== GUI ===========
 ; not currently functional, need to read more docs and play around
