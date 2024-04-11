@@ -310,6 +310,57 @@ UnpairWindow4()
 	}
 }
 
+<#5::Window5()
+
+Window5()
+{
+	GetWinInfo()
+	currentID := "ahk_id " winId
+	global win5IsPaired, win5ID, workspace
+	if (!win5IsPaired)
+	{	
+		if (workspace == "A")
+		{
+			MsgBox "Please pair a main workspace first!"
+		} else if (currentID != workspace)
+		{
+			win5ID := currentID ; Change secondaryID to current active window
+			win5IsPaired := true
+			MsgBox "[Pairing Window 5]`n"
+						. "title: " winTitle "`n"
+						. "window 5: " win5ID "`n"
+						. "process: " winProcess
+		} else {
+			win5IsPaired := false
+			MsgBox "Current Window is already a main workspace!`n"
+						. "Please choose a different window."
+		}
+	} else if (currentID != win3ID)
+		{
+			if WinExist(win5ID)
+				WinActivate
+		} else if (currentID == win5ID)
+			{
+				if WinExist(workspace)	
+					WinActivate
+			}
+}
+
+^<#5::UnpairWindow5()
+
+UnpairWindow5()
+{
+	global win5IsPaired, win5ID
+	if (win5IsPaired)
+	{
+		win5ID := ""
+		win5IsPaired := false
+		MsgBox "[Unpaired Window 5]"
+	} else {
+		MsgBox "Window 5 is already unpaired!"
+	}
+}
+
 ;=========== GUI ===========
 ; not currently functional, need to read more docs and play around
 
