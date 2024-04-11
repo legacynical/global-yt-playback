@@ -284,11 +284,11 @@ Window4()
 			MsgBox "Current Window is already a main workspace!`n"
 						. "Please choose a different window."
 		}
-	} else if (currentID != win3ID)
+	} else if (currentID != win4ID)
 		{
-			if WinExist(win3ID)
+			if WinExist(win4ID)
 				WinActivate
-		} else if (currentID == win3ID)
+		} else if (currentID == win4ID)
 			{
 				if WinExist(workspace)	
 					WinActivate
@@ -335,7 +335,7 @@ Window5()
 			MsgBox "Current Window is already a main workspace!`n"
 						. "Please choose a different window."
 		}
-	} else if (currentID != win3ID)
+	} else if (currentID != win5ID)
 		{
 			if WinExist(win5ID)
 				WinActivate
