@@ -264,7 +264,7 @@ UnpairWindow3()
 }
 
 
-<#0::UnpairAllWindows()
+^<#0::UnpairAllWindows()
 
 UnpairAllWindows()
 {
