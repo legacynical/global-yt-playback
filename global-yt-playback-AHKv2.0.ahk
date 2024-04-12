@@ -128,7 +128,7 @@ DisplayActiveWindowStats()
 PairMainWorkspace()
 {
 	GetWinInfo()
-	if (workspace == "A")
+	if (workspace == "")
 	{
 		global workspace := "ahk_id " winId ; Change workspace to current active window
 		global win1IsPaired := true
@@ -149,7 +149,7 @@ UnpairMainWorkspace()
 	global win1IsPaired, workspace
 	if (!win1IsPaired)
 	{
-		workspace := "A"
+		workspace := ""
 		win1IsPaired := false
 		MsgBox "[Unpaired Window 2]"
 	} else {
@@ -166,7 +166,7 @@ Window2()
 	global win2IsPaired, win2ID, workspace
 	if (!win2IsPaired)
 	{	
-		if (workspace == "A")
+		if (workspace == "")
 		{
 			MsgBox "Please pair a main workspace first!"
 		} else if (currentID != workspace)
@@ -217,7 +217,7 @@ Window3()
 	global win3IsPaired, win3ID, workspace
 	if (!win3IsPaired)
 	{	
-		if (workspace == "A")
+		if (workspace == "")
 		{
 			MsgBox "Please pair a main workspace first!"
 		} else if (currentID != workspace)
@@ -259,107 +259,6 @@ UnpairWindow3()
 	}
 }
 
-<#4::Window4()
-
-Window4()
-{
-	GetWinInfo()
-	currentID := "ahk_id " winId
-	global win4IsPaired, win4ID, workspace
-	if (!win4IsPaired)
-	{	
-		if (workspace == "A")
-		{
-			MsgBox "Please pair a main workspace first!"
-		} else if (currentID != workspace)
-		{
-			win4ID := currentID ; Change secondaryID to current active window
-			win4IsPaired := true
-			MsgBox "[Pairing Window 4]`n"
-						. "title: " winTitle "`n"
-						. "window 4: " win4ID "`n"
-						. "process: " winProcess
-		} else {
-			win4IsPaired := false
-			MsgBox "Current Window is already a main workspace!`n"
-						. "Please choose a different window."
-		}
-	} else if (currentID != win4ID)
-		{
-			if WinExist(win4ID)
-				WinActivate
-		} else if (currentID == win4ID)
-			{
-				if WinExist(workspace)	
-					WinActivate
-			}
-}
-
-^<#4::UnpairWindow4()
-
-UnpairWindow4()
-{
-	global win4IsPaired, win4ID
-	if (win4IsPaired)
-	{
-		win4ID := ""
-		win4IsPaired := false
-		MsgBox "[Unpaired Window 4]"
-	} else {
-		MsgBox "Window 4 is already unpaired!"
-	}
-}
-
-<#5::Window5()
-
-Window5()
-{
-	GetWinInfo()
-	currentID := "ahk_id " winId
-	global win5IsPaired, win5ID, workspace
-	if (!win5IsPaired)
-	{	
-		if (workspace == "A")
-		{
-			MsgBox "Please pair a main workspace first!"
-		} else if (currentID != workspace)
-		{
-			win5ID := currentID ; Change secondaryID to current active window
-			win5IsPaired := true
-			MsgBox "[Pairing Window 5]`n"
-						. "title: " winTitle "`n"
-						. "window 5: " win5ID "`n"
-						. "process: " winProcess
-		} else {
-			win5IsPaired := false
-			MsgBox "Current Window is already a main workspace!`n"
-						. "Please choose a different window."
-		}
-	} else if (currentID != win5ID)
-		{
-			if WinExist(win5ID)
-				WinActivate
-		} else if (currentID == win5ID)
-			{
-				if WinExist(workspace)	
-					WinActivate
-			}
-}
-
-^<#5::UnpairWindow5()
-
-UnpairWindow5()
-{
-	global win5IsPaired, win5ID
-	if (win5IsPaired)
-	{
-		win5ID := ""
-		win5IsPaired := false
-		MsgBox "[Unpaired Window 5]"
-	} else {
-		MsgBox "Window 5 is already unpaired!"
-	}
-}
 
 <#0::UnpairAllWindows()
 
