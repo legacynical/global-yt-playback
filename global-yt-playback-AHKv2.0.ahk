@@ -1,4 +1,4 @@
-;=========== CONTROLS ===========
+; =========== CONTROLS ===========
 ; Change keys in code if you don't have media keys
 ; Media_Prev = Rewind
 ; Media_Next = FastForward
@@ -47,7 +47,7 @@ YoutubeRewind10(video, workspace)
 	if WinExist(video) 
 	{
 		WinActivate
-		sleep 11 ; Delay rounds to nearest multiple of 10 or 15.6 ms
+		sleep 11
 		Send "{j}" ; YT rewind 10 seconds
 		sleep 11		
 		if WinExist(workspace) 
@@ -63,7 +63,7 @@ YoutubeFastforward5(video, workspace)
 	{
 		WinActivate
 		sleep 11
-		Send "{Right}" ; YT fast forward 10 seconds
+		Send "{Right}" ; YT fast forward 5 seconds
 		sleep 11
 		if WinExist(workspace) 
 			WinActivate
@@ -78,14 +78,14 @@ YoutubeFastforward10(video, workspace)
 	{
 		WinActivate
 		sleep 11
-		Send "{l}" ; YT fast forward 5 seconds
+		Send "{l}" ; YT fast forward 10 seconds
 		sleep 11
 		if WinExist(workspace) 
 			WinActivate
 	}
 }
 
-; Redundant code for Media_Play_Pause (most browsers allow this)
+; Redundant code for Media_Play_Pause (most browsers allow this, if not, then uncomment)
 ; Media_Play_Pause::YoutubePlayPause(video, workspace)
 
 ; YoutubeFastforward(video, workspace)
@@ -94,7 +94,7 @@ YoutubeFastforward10(video, workspace)
 ; 	{
 ; 		WinActivate
 ; 		sleep 11
-; 		Send {k} ; YT play/pause
+; 		Send {k} ; YT toggle play/pause
 ; 		sleep 11
 ; 		if WinExist(workspace) 
 ; 			WinActivate
@@ -110,6 +110,7 @@ GetWinInfo()
 	global winId := WinGetID("A")
 	global winClass := WinGetClass("A")
 	global winProcess := WinGetProcessName("A")
+	global currentID := "ahk_id " winId
 }
 
 <#`::DisplayActiveWindowStats()
@@ -123,74 +124,67 @@ DisplayActiveWindowStats()
         . "Active window process: " winProcess
 }
 
-<#1::PairMainWorkspace()
+<#1::PairWorkspace()
 
-PairMainWorkspace()
+PairWorkspace()
 {
 	GetWinInfo()
 	if (workspace == "")
 	{
-		global workspace := "ahk_id " winId ; Change workspace to current active window
+		global workspace := "ahk_id " winId ; Set workspace to current active window
 		global win1IsPaired := true
 		MsgBox "[Pairing Main Workspace]`n"
 					. "title: " winTitle "`n"
 					. "workspace: " workspace "`n"
-					. "process: " winProcess
-	} else {
-		MsgBox "Main Workspace already paired!"
-	}
-
+					. "process: " winProcess,, "T3"
+	} else if (currentID != workspace) 
+		{
+			if WinExist(workspace)
+				WinActivate
+		} else if (currentID == workspace)
+			{
+				if WinExist(workspace) 
+					WinMinimize
+			}	
 }
 
-^<#1::UnpairMainWorkspace()
+^<#1::UnpairWorkspace()
 
-UnpairMainWorkspace()
+UnpairWorkspace()
 {
 	global win1IsPaired, workspace
-	if (!win1IsPaired)
+	if (win1IsPaired)
 	{
 		workspace := ""
 		win1IsPaired := false
-		MsgBox "[Unpaired Window 2]"
+		MsgBox "[Unpaired Main Workspace]",, "T1"
 	} else {
-		MsgBox "Main Workspace is already unpaired!"
+		MsgBox "Main Workspace is already unpaired!",, "T1"
 	}
 }
 
-<#2::Window2()
+<#2::PairWindow2()
 
-Window2()
+PairWindow2()
 {
 	GetWinInfo()
-	currentID := "ahk_id " winId
-	global win2IsPaired, win2, workspace
-	if (!win2IsPaired)
-	{	
-		if (workspace == "")
-		{
-			MsgBox "Please pair a main workspace first!"
-		} else if (currentID != workspace)
-		{
-			win2 := currentID ; Change secondaryID to current active window
-			win2IsPaired := true
-			MsgBox "[Pairing Window 2]`n"
-						. "title: " winTitle "`n"
-						. "window 2: " win2 "`n"
-						. "process: " winProcess
-		} else {
-			win2IsPaired := false
-			MsgBox "Current Window is already a main workspace!`n"
-						. "Please choose a different window."
-		}
-	} else if (currentID != win2)
+	if (win2 == "")
+	{
+		global win2 := "ahk_id " winId ; Set window 2 to current active window
+		global win2IsPaired := true
+		MsgBox "[Pairing Window 2]`n"
+					. "title: " winTitle "`n"
+					. "workspace: " workspace "`n"
+					. "process: " winProcess,, "T3"
+	} else if (currentID != win2) 
 		{
 			if WinExist(win2)
 				WinActivate
 		} else if (currentID == win2)
 			{
-				if WinExist(workspace)	
-					WinActivate
-			}
+				if WinExist(win2) 
+					WinMinimize
+			}	
 }
 
 ^<#2::UnpairWindow2()
@@ -202,46 +196,34 @@ UnpairWindow2()
 	{
 		win2 := ""
 		win2IsPaired := false
-		MsgBox "[Unpaired Window 2]"
+		MsgBox "[Unpaired Window 2]",, "T1"
 	} else {
-		MsgBox "Window 2 is already unpaired!"
+		MsgBox "Window 2 is already unpaired!",, "T1"
 	}
 }
 
-<#3::Window3()
+<#3::PairWindow3()
 
-Window3()
+PairWindow3()
 {
 	GetWinInfo()
-	currentID := "ahk_id " winId
-	global win3IsPaired, win3, workspace
-	if (!win3IsPaired)
-	{	
-		if (workspace == "")
-		{
-			MsgBox "Please pair a main workspace first!"
-		} else if (currentID != workspace)
-		{
-			win3 := currentID ; Change secondaryID to current active window
-			win3IsPaired := true
-			MsgBox "[Pairing Window 3]`n"
-						. "title: " winTitle "`n"
-						. "window 3: " win3 "`n"
-						. "process: " winProcess
-		} else {
-			win3IsPaired := false
-			MsgBox "Current Window is already a main workspace!`n"
-						. "Please choose a different window."
-		}
-	} else if (currentID != win3)
+	if (win3 == "")
+	{
+		global win3 := "ahk_id " winId ; Set window 3 to current active window
+		global win3IsPaired := true
+		MsgBox "[Pairing Window 3]`n"
+					. "title: " winTitle "`n"
+					. "workspace: " workspace "`n"
+					. "process: " winProcess,, "T3"
+	} else if (currentID != win3) 
 		{
 			if WinExist(win3)
 				WinActivate
 		} else if (currentID == win3)
 			{
-				if WinExist(workspace)	
-					WinActivate
-			}
+				if WinExist(win3) 
+					WinMinimize
+			}	
 }
 
 ^<#3::UnpairWindow3()
@@ -253,9 +235,9 @@ UnpairWindow3()
 	{
 		win3 := ""
 		win3IsPaired := false
-		MsgBox "[Unpaired Window 3]"
+		MsgBox "[Unpaired Window 3]",, "T1"
 	} else {
-		MsgBox "Window 3 is already unpaired!"
+		MsgBox "Window 3 is already unpaired!",, "T1"
 	}
 }
 
