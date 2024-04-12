@@ -124,9 +124,9 @@ DisplayActiveWindowStats()
         . "Active window process: " winProcess
 }
 
-<#1::PairWorkspace()
+<#1::Workspace()
 
-PairWorkspace()
+Workspace()
 {
 	GetWinInfo()
 	if (workspace == "")
@@ -163,9 +163,9 @@ UnpairWorkspace()
 	}
 }
 
-<#2::PairWindow2()
+<#2::Window2()
 
-PairWindow2()
+Window2()
 {
 	GetWinInfo()
 	if (win2 == "")
@@ -202,9 +202,9 @@ UnpairWindow2()
 	}
 }
 
-<#3::PairWindow3()
+<#3::Window3()
 
-PairWindow3()
+Window3()
 {
 	GetWinInfo()
 	if (win3 == "")
