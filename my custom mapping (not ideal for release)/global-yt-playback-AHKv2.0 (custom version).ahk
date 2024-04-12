@@ -24,7 +24,7 @@ InstallKeybdHook ; Allow use of additional special keys
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 workspace := win2 := win3 := win4 := win5 := ""
 win1IsPaired := win2IsPaired := win3IsPaired := win4IsPaired := win5IsPaired := false
-inputBuffer := 0 ; Used to reduce unwanted window minimize
+inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
 
 F19::YoutubeRewind5(video, workspace)
 
@@ -125,6 +125,7 @@ DisplayActiveWindowStats()
 
 MainWorkspace()
 {
+	global inputBuffer, maxInputBuffer
 	GetWinInfo()
 	if (workspace == "")
 	{
@@ -137,11 +138,18 @@ MainWorkspace()
 	} else if (currentID != workspace) 
 		{
 			if WinExist(workspace)
+			{
+				inputBuffer := maxInputBuffer
 				WinActivate
+			}
 		} else if (currentID == workspace)
 			{
-				if WinExist(workspace) 
+				inputBuffer--
+				if (WinExist(workspace) && (inputBuffer == 0)) 
+				{	
+					inputBuffer := maxInputBuffer
 					WinMinimize
+				}
 			}	
 }
 
@@ -165,6 +173,7 @@ UnpairMainWorkspace()
 
 Window2()
 {
+	global inputBuffer, maxInputBuffer
 	GetWinInfo()
 	if (win2 == "")
 	{
@@ -177,11 +186,18 @@ Window2()
 	} else if (currentID != win2) 
 		{
 			if WinExist(win2)
+			{
+				inputBuffer := maxInputBuffer
 				WinActivate
+			}
 		} else if (currentID == win2)
 			{
-				if WinExist(win2) 
+				inputBuffer--
+				if (WinExist(win2) && (inputBuffer == 0))
+				{	
+					inputBuffer := maxInputBuffer
 					WinMinimize
+				}
 			}	
 }
 
@@ -204,6 +220,7 @@ UnpairWindow2()
 
 Window3()
 {
+	global inputBuffer, maxInputBuffer
 	GetWinInfo()
 	if (win3 == "")
 	{
@@ -216,11 +233,18 @@ Window3()
 	} else if (currentID != win3) 
 		{
 			if WinExist(win3)
+			{
+				inputBuffer := maxInputBuffer
 				WinActivate
+			}
 		} else if (currentID == win3)
 			{
-				if WinExist(win3) 
+				inputBuffer--
+				if (WinExist(win3) && (inputBuffer == 0))
+				{	
+					inputBuffer := maxInputBuffer
 					WinMinimize
+				}
 			}	
 }
 
