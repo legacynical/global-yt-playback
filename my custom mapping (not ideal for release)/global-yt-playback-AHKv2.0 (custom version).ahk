@@ -135,22 +135,20 @@ MainWorkspace()
 					. "title: " winTitle "`n"
 					. "workspace: " workspace "`n"
 					. "process: " winProcess,, "T3"
-	} else if (currentID != workspace) 
+	} else if (currentID != workspace) {
+		if WinExist(workspace)
 		{
-			if WinExist(workspace)
-			{
-				inputBuffer := maxInputBuffer
-				WinActivate
-			}
-		} else if (currentID == workspace)
-			{
-				inputBuffer--
-				if (WinExist(workspace) && (inputBuffer == 0)) 
-				{	
-					inputBuffer := maxInputBuffer
-					WinMinimize
-				}
-			}	
+			inputBuffer := maxInputBuffer
+			WinActivate
+		}
+	} else if (currentID == workspace) {
+		inputBuffer--
+		if (WinExist(workspace) && (inputBuffer == 0)) 
+		{	
+			inputBuffer := maxInputBuffer
+			WinMinimize
+		}
+	}	
 }
 
 ^<#1::UnpairMainWorkspace()
@@ -183,22 +181,20 @@ Window2()
 					. "title: " winTitle "`n"
 					. "workspace: " workspace "`n"
 					. "process: " winProcess,, "T3"
-	} else if (currentID != win2) 
+	} else if (currentID != win2) {
+		if WinExist(win2)
 		{
-			if WinExist(win2)
-			{
-				inputBuffer := maxInputBuffer
-				WinActivate
-			}
-		} else if (currentID == win2)
-			{
-				inputBuffer--
-				if (WinExist(win2) && (inputBuffer == 0))
-				{	
-					inputBuffer := maxInputBuffer
-					WinMinimize
-				}
-			}	
+			inputBuffer := maxInputBuffer
+			WinActivate
+		}
+	} else if (currentID == win2)	{
+		inputBuffer--
+		if (WinExist(win2) && (inputBuffer == 0))
+		{	
+			inputBuffer := maxInputBuffer
+			WinMinimize
+		}
+	}	
 }
 
 ^<#2::UnpairWindow2()
@@ -230,22 +226,20 @@ Window3()
 					. "title: " winTitle "`n"
 					. "workspace: " workspace "`n"
 					. "process: " winProcess,, "T3"
-	} else if (currentID != win3) 
+	} else if (currentID != win3) {
+		if WinExist(win3)
 		{
-			if WinExist(win3)
-			{
-				inputBuffer := maxInputBuffer
-				WinActivate
-			}
-		} else if (currentID == win3)
-			{
-				inputBuffer--
-				if (WinExist(win3) && (inputBuffer == 0))
-				{	
-					inputBuffer := maxInputBuffer
-					WinMinimize
-				}
-			}	
+			inputBuffer := maxInputBuffer
+			WinActivate
+		}
+	} else if (currentID == win3) {
+		inputBuffer--
+		if (WinExist(win3) && (inputBuffer == 0))
+		{	
+			inputBuffer := maxInputBuffer
+			WinMinimize
+		}
+	}	
 }
 
 ^<#3::UnpairWindow3()
@@ -268,8 +262,15 @@ UnpairWindow3()
 
 UnpairAllWindows()
 {
-	
-
+	confirmUnpair := MsgBox("Are you sure you want to unpair all windows?",, "YesNo")
+	if confirmUnpair = "Yes"
+	{
+		global workspace, win2, win3, win4, win5, win1IsPaired, win2IsPaired,
+		win3IsPaired, win4IsPaired, win5IsPaired
+		workspace := win2 := win3 := win4 := win5 := ""
+		win1IsPaired := win2IsPaired := win3IsPaired := win4IsPaired := win5IsPaired := false
+		MsgBox "[Unpaired All Windows]",, "T1"		
+	}
 }
 
 ;=========== GUI ===========
