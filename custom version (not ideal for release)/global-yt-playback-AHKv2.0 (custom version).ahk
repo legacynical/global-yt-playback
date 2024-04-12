@@ -1,16 +1,17 @@
-;=========== CONTROLS ===========
-; Change keys in code if you don't have media keys
-; Media_Prev = Rewind
-; Media_Next = FastForward
-; Media_Play_Pause = Play/Pause (no script needed to work)
-; <#` (LWin + `) = display active window stats
-; <#1 (LWin + 1) = pair currently active application/window
-; <#2 (LWin + 2) = pair/toggle 2nd window
-; <#3 (LWin + 3) = pair/toggle 3rd window
-; ^<#1 (Ctrl + LWin + 1) = unpair main workspace
-; ^<#2 (Ctrl + LWin + 2) = unpair 2nd window
-; ^<#3 (Ctrl + LWin + 3) = unpair 3rd window
-; ^` (CTRL + `) = open GUI
+; ========== [CONTROLS] ===========
+;            F19 = YT rewind 5 sec
+;     Ctrl + F19 = YT rewind 10 sec
+;            F20 = YT toggle play/pause
+;            F21 = YT fast forward 5 sec
+;     Ctrl + F21 = YT fast forward 10 sec
+;        Win + ` = display active window stats
+;        Win + 1 = pair active as workspace
+;        Win + 2 = pair active as window 2
+;        Win + 3 = pair active as window 3
+; Ctrl + Win + 1 = unpair workspace
+; Ctrl + Win + 2 = unpair window 2
+; Ctrl + Win + 3 = unpair window 3
+;       Ctrl + ` = open GUI
 
 #Requires AutoHotkey v2.0
 #SingleInstance ; Prompt to replace instance if already running
@@ -24,8 +25,7 @@ video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your 
 workspace := win2 := win3 := win4 := win5 := ""
 win1IsPaired := win2IsPaired := win3IsPaired := win4IsPaired := win5IsPaired := false
 
-
-Media_Prev::YoutubeRewind5(video, workspace)
+F19::YoutubeRewind5(video, workspace)
 
 YoutubeRewind5(video, workspace)
 {
@@ -40,14 +40,14 @@ YoutubeRewind5(video, workspace)
 	}
 }
 
-^Media_Prev::YoutubeRewind10(video, workspace)
+^F19::YoutubeRewind10(video, workspace)
 
 YoutubeRewind10(video, workspace)
 {
 	if WinExist(video) 
 	{
 		WinActivate
-		sleep 11 ; Delay rounds to nearest multiple of 10 or 15.6 ms
+		sleep 11
 		Send "{j}" ; YT rewind 10 seconds
 		sleep 11		
 		if WinExist(workspace) 
@@ -55,7 +55,22 @@ YoutubeRewind10(video, workspace)
 	}
 }
 
-Media_Next::YoutubeFastforward5(video, workspace)
+F20::YoutubePlayPause(video, workspace)
+
+YoutubeFastforward(video, workspace)
+{
+	if WinExist(video)
+	{
+		WinActivate
+		sleep 11
+		Send "{k}" ; YT play/pause
+		sleep 11
+		if WinExist(workspace) 
+			WinActivate
+	}
+}
+
+F21::YoutubeFastforward5(video, workspace)
 
 YoutubeFastforward5(video, workspace)
 {
@@ -70,7 +85,7 @@ YoutubeFastforward5(video, workspace)
 	}
 }
 
-^Media_Next::YoutubeFastforward10(video, workspace)
+^F21::YoutubeFastforward10(video, workspace)
 
 YoutubeFastforward10(video, workspace)
 {
@@ -84,25 +99,6 @@ YoutubeFastforward10(video, workspace)
 			WinActivate
 	}
 }
-
-; Redundant code for Media_Play_Pause (most browsers allow this)
-; Media_Play_Pause::YoutubePlayPause(video, workspace)
-
-; YoutubeFastforward(video, workspace)
-; {
-; 	if WinExist(video)
-; 	{
-; 		WinActivate
-; 		sleep 11
-; 		Send {k} ; YT play/pause
-; 		sleep 11
-; 		if WinExist(workspace) 
-; 			WinActivate
-; 	}
-; }
-
-; If you don't have Media_Play_Pause key, uncomment line below and set hotkey
-; hotkey::Media_Play_Pause
 
 GetWinInfo()
 {
@@ -171,7 +167,7 @@ Window2()
 			MsgBox "Please pair a main workspace first!"
 		} else if (currentID != workspace)
 		{
-			win2 := currentID ; Change secondaryID to current active window
+			win2 := currentID ; Sets window 2 to current active window
 			win2IsPaired := true
 			MsgBox "[Pairing Window 2]`n"
 						. "title: " winTitle "`n"
@@ -222,7 +218,7 @@ Window3()
 			MsgBox "Please pair a main workspace first!"
 		} else if (currentID != workspace)
 		{
-			win3 := currentID ; Change secondaryID to current active window
+			win3 := currentID ; Sets window 3 to current active window
 			win3IsPaired := true
 			MsgBox "[Pairing Window 3]`n"
 						. "title: " winTitle "`n"
