@@ -361,6 +361,14 @@ UnpairWindow5()
 	}
 }
 
+<#0::UnpairAllWindows()
+
+UnpairAllWindows()
+{
+	
+
+}
+
 ;=========== GUI ===========
 ; not currently functional, need to read more docs and play around
 
