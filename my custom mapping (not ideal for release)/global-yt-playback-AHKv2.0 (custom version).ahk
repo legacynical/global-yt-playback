@@ -24,6 +24,7 @@ InstallKeybdHook ; Allow use of additional special keys
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 workspace := win2 := win3 := win4 := win5 := ""
 win1IsPaired := win2IsPaired := win3IsPaired := win4IsPaired := win5IsPaired := false
+inputBuffer := 0 ; Used to reduce unwanted window minimize
 
 F19::YoutubeRewind5(video, workspace)
 
@@ -120,14 +121,14 @@ DisplayActiveWindowStats()
         . "Active window process: " winProcess
 }
 
-<#1::Workspace()
+<#1::MainWorkspace()
 
-Workspace()
+MainWorkspace()
 {
 	GetWinInfo()
 	if (workspace == "")
 	{
-		global workspace := "ahk_id " winId ; Set workspace to current active window
+		global workspace := "ahk_id " winId ; Sets workspace to current active window
 		global win1IsPaired := true
 		MsgBox "[Pairing Main Workspace]`n"
 					. "title: " winTitle "`n"
@@ -144,9 +145,9 @@ Workspace()
 			}	
 }
 
-^<#1::UnpairWorkspace()
+^<#1::UnpairMainWorkspace()
 
-UnpairWorkspace()
+UnpairMainWorkspace()
 {
 	global win1IsPaired, workspace
 	if (win1IsPaired)
@@ -167,7 +168,7 @@ Window2()
 	GetWinInfo()
 	if (win2 == "")
 	{
-		global win2 := "ahk_id " winId ; Set window 2 to current active window
+		global win2 := "ahk_id " winId ; Sets window 2 to current active window
 		global win2IsPaired := true
 		MsgBox "[Pairing Window 2]`n"
 					. "title: " winTitle "`n"
@@ -206,7 +207,7 @@ Window3()
 	GetWinInfo()
 	if (win3 == "")
 	{
-		global win3 := "ahk_id " winId ; Set window 3 to current active window
+		global win3 := "ahk_id " winId ; Sets window 3 to current active window
 		global win3IsPaired := true
 		MsgBox "[Pairing Window 3]`n"
 					. "title: " winTitle "`n"
