@@ -7,23 +7,27 @@ that and preventing occassional misfocused window mishaps that will get me to wa
 it more and work longer.*
 ## Windows
 ### Running with AHK Installation
-1. Install [AutoHotkey](https://www.autohotkey.com/) (v2.0 recommended)<br>
-2. run the .ahk script based on installed AHK version (v2.0 or v1.1)<br>
+1. Install [AutoHotkey v2.0](https://www.autohotkey.com/)<br>
+2. run the .ahk scipt (v2.0 recommended)<br>
 [optional] place script (or script shortcut) in '%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup' to autorun on startup
 ### Running without AHK Installation
 Might add compiled script (.exe standalone) after further improvements
 ## Controls
 > [!TIP]
 > Change hotkeys in code if you don't have media keys or want to use different ones. <br>
-Refer to AHK's [Hotkeys](https://www.autohotkey.com/docs/v1/Hotkeys.htm) & [List of Keys](https://www.autohotkey.com/docs/v1/KeyList.htm) documentation for modifiers & keycodes.
+> Refer to AHK's [Hotkeys](https://www.autohotkey.com/docs/v1/Hotkeys.htm) & [List of Keys](https://www.autohotkey.com/docs/v1/KeyList.htm) documentation for modifiers & keycodes<br>
 
-Media_Prev = Rewind <br>
-Media_Next = FastForward <br>
-Media_Play_Pause = Play/Pause (no script needed to work) <br>
-LWin + ` = display active window stats <br>
-LWin + 1 = pair currently active application/window as main workspace <br>
-LWin + 2 = pair 2nd window / toggle focus between main workspace & 2nd window <br>
-LWin + 3 = pair 3rd window / toggle focus between main workspace & 3rd window <br>
-Ctrl + Lwin + 1 = unpair main workspace <br>
-Ctrl + Lwin + 2 = unpair 2nd window <br>
-Ctrl + Lwin + 3 = unpair 3rd window <br>
+<pre>
+        Media_Prev = YT rewind 5 sec<br>
+ Ctrl + Media_Prev = YT rewind 10 sec<br>
+  Media_Play_Pause = YT toggle play/pause (should work w/o script, see line 98)<br>
+        Media_Next = YT fast forward 5 sec<br>
+ Ctrl + Media_Next = YT fast forward 10 sec<br>
+          Win + \` = display active window stats<br>
+           Win + 1 = pair active as workspace<br>
+       Win + [2-5] = pair active as window [2-5]<br>
+    Ctrl + Win + 1 = unpair workspace<br>
+Ctrl + Win + [2-5] = unpair window [2-5]<br>
+    Ctrl + Win + 0 = unpair all windows<br>
+         Ctrl + \` = open GUI (not currently functional)<br>
+</pre>
