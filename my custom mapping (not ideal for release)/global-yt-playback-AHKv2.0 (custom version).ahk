@@ -8,10 +8,15 @@
 ;        Win + 1 = pair active as workspace
 ;        Win + 2 = pair active as window 2
 ;        Win + 3 = pair active as window 3
+;        Win + 4 = pair active as window 4
+;        Win + 5 = pair active as window 5
 ; Ctrl + Win + 1 = unpair workspace
 ; Ctrl + Win + 2 = unpair window 2
 ; Ctrl + Win + 3 = unpair window 3
-;       Ctrl + ` = open GUI
+; Ctrl + Win + 4 = unpair window 4
+; Ctrl + Win + 5 = unpair window 5
+; Ctrl + Win + 0 = unpair all windows
+;       Ctrl + ` = open GUI (not currently functional)
 
 #Requires AutoHotkey v2.0
 #SingleInstance ; Prompt to replace instance if already running

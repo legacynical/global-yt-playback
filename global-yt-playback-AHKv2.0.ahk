@@ -1,16 +1,22 @@
-; =========== CONTROLS ===========
-; Change keys in code if you don't have media keys
-; Media_Prev = Rewind
-; Media_Next = FastForward
-; Media_Play_Pause = Play/Pause (no script needed to work)
-; <#` (LWin + `) = display active window stats
-; <#1 (LWin + 1) = pair currently active application/window
-; <#2 (LWin + 2) = pair/toggle 2nd window
-; <#3 (LWin + 3) = pair/toggle 3rd window
-; ^<#1 (Ctrl + LWin + 1) = unpair main workspace
-; ^<#2 (Ctrl + LWin + 2) = unpair 2nd window
-; ^<#3 (Ctrl + LWin + 3) = unpair 3rd window
-; ^` (CTRL + `) = open GUI
+; ========== [CONTROLS] ===========
+;        Media_Prev = YT rewind 5 sec
+; Ctrl + Media_Prev = YT rewind 10 sec
+;  Media_Play_Pause = YT toggle play/pause (should work w/o script, see line 98)
+;        Media_Next = YT fast forward 5 sec
+; Ctrl + Media_Next = YT fast forward 10 sec
+;           Win + ` = display active window stats
+;           Win + 1 = pair active as workspace
+;           Win + 2 = pair active as window 2
+;           Win + 3 = pair active as window 3
+;           Win + 4 = pair active as window 4
+;           Win + 5 = pair active as window 5
+;    Ctrl + Win + 1 = unpair workspace
+;    Ctrl + Win + 2 = unpair window 2
+;    Ctrl + Win + 3 = unpair window 3
+;    Ctrl + Win + 4 = unpair window 4
+;    Ctrl + Win + 5 = unpair window 5
+;    Ctrl + Win + 0 = unpair all windows
+;          Ctrl + ` = open GUI (not currently functional)
 
 #Requires AutoHotkey v2.0
 #SingleInstance ; Prompt to replace instance if already running

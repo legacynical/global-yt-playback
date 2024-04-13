@@ -1,3 +1,8 @@
+/*
+NOTE: I stopped working on this script in favor of switching to
+using AutoHotkey v2. It should still work but it has less features.
+*/
+
 ;=========== CONTROLS ===========
 ; Change keys in code if you don't have media keys
 ; Media_Prev = Rewind
@@ -7,7 +12,7 @@
 ; <#1 (LWin + 1) = pair currently active application/window
 ; <#2 (LWin + 2) = pair secondary window
 ; ^<#2 (Ctrl + LWin + 2) = unpair secondary window
-; ^` (CTRL + `) = open GUI
+; ^` (CTRL + `) = open GUI (not currently functional)
 
 #Requires AutoHotkey v1.1
 #InstallKeybdHook ; Allow use of additional special keys
