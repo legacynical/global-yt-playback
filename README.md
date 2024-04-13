@@ -8,9 +8,9 @@ it more and work longer.*
 ## Windows
 ### Running with AHK Installation
 1. Install [AutoHotkey v2.0](https://www.autohotkey.com/)<br>
-2. run the `global-yt-playback-AHKv2.0.ahk` script<br>
+2. run the ` global-yt-playback-AHKv2.0.ahk ` script<br>
 > [!TIP]
-> Place script file (or script shortcut) in `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup` to autorun on startup.
+> Place script file (or script shortcut) in ` %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup ` to autorun on startup.
 ### Running without AHK Installation
 Might add compiled script (.exe standalone) after further improvements.
 ## Controls
