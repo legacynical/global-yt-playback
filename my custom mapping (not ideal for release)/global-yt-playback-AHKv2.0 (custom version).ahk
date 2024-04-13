@@ -257,6 +257,95 @@ UnpairWindow3()
 	}
 }
 
+<#4::Window4()
+
+Window4()
+{
+	global inputBuffer, maxInputBuffer
+	GetWinInfo()
+	if (win4 == "")
+	{
+		global win4 := "ahk_id " winId ; Sets window 4 to current active window
+		global win4IsPaired := true
+		MsgBox "[Pairing Window 4]`n"
+					. "title: " winTitle "`n"
+					. "workspace: " workspace "`n"
+					. "process: " winProcess,, "T3"
+	} else if (currentID != win4) {
+		if WinExist(win4)
+		{
+			inputBuffer := maxInputBuffer
+			WinActivate
+		}
+	} else if (currentID == win4) {
+		inputBuffer--
+		if (WinExist(win4) && (inputBuffer == 0))
+		{	
+			inputBuffer := maxInputBuffer
+			WinMinimize
+		}
+	}	
+}
+
+^<#4::UnpairWindow4()
+
+UnpairWindow4()
+{
+	global win4IsPaired, win4
+	if (win4IsPaired)
+	{
+		win4 := ""
+		win4IsPaired := false
+		MsgBox "[Unpaired Window 4]",, "T1"
+	} else {
+		MsgBox "Window 4 is already unpaired!",, "T1"
+	}
+}
+
+<#5::Window5()
+
+Window5()
+{
+	global inputBuffer, maxInputBuffer
+	GetWinInfo()
+	if (win5 == "")
+	{
+		global win5 := "ahk_id " winId ; Sets window 5 to current active window
+		global win5IsPaired := true
+		MsgBox "[Pairing Window 5]`n"
+					. "title: " winTitle "`n"
+					. "workspace: " workspace "`n"
+					. "process: " winProcess,, "T3"
+	} else if (currentID != win5) {
+		if WinExist(win5)
+		{
+			inputBuffer := maxInputBuffer
+			WinActivate
+		}
+	} else if (currentID == win5) {
+		inputBuffer--
+		if (WinExist(win5) && (inputBuffer == 0))
+		{	
+			inputBuffer := maxInputBuffer
+			WinMinimize
+		}
+	}	
+}
+
+^<#5::UnpairWindow5()
+
+UnpairWindow5()
+{
+	global win5IsPaired, win5
+	if (win5IsPaired)
+	{
+		win5 := ""
+		win5IsPaired := false
+		MsgBox "[Unpaired Window 5]",, "T1"
+	} else {
+		MsgBox "Window 5 is already unpaired!",, "T1"
+	}
+}
 
 ^<#0::UnpairAllWindows()
 
