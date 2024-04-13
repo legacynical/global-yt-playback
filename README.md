@@ -8,14 +8,15 @@ it more and work longer.*
 ## Windows
 ### Running with AHK Installation
 1. Install [AutoHotkey v2.0](https://www.autohotkey.com/)<br>
-2. run the .ahk script (v2.0 recommended)<br>
-[optional] place script (or script shortcut) in '%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup' to autorun on startup
+2. run the `global-yt-playback-AHKv2.0.ahk` script<br>
+> [!TIP]
+> Place script file (or script shortcut) in `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup` to autorun on startup.
 ### Running without AHK Installation
-Might add compiled script (.exe standalone) after further improvements
+Might add compiled script (.exe standalone) after further improvements.
 ## Controls
 > [!TIP]
 > Change hotkeys in code if you don't have media keys or want to use different ones. <br>
-> Refer to AHK's [Hotkeys](https://www.autohotkey.com/docs/v1/Hotkeys.htm) & [List of Keys](https://www.autohotkey.com/docs/v1/KeyList.htm) documentation for modifiers & keycodes<br>
+> Refer to AHK's [Hotkeys](https://www.autohotkey.com/docs/v1/Hotkeys.htm) & [List of Keys](https://www.autohotkey.com/docs/v1/KeyList.htm) documentation for modifiers & keycodes.<br>
 
 <pre>
         Media_Prev = YT rewind 5 sec<br>
