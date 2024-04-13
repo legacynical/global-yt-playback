@@ -63,7 +63,7 @@ YoutubeRewind10(video, workspace)
 
 F20::YoutubePlayPause(video, workspace)
 
-YoutubeFastforward(video, workspace)
+YoutubePlayPause(video, workspace)
 {
 	if WinExist(video)
 	{

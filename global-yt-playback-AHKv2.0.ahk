@@ -95,7 +95,7 @@ YoutubeFastforward10(video, workspace)
 ; Redundant code for Media_Play_Pause (most browsers allow this, if not, then uncomment)
 ; Media_Play_Pause::YoutubePlayPause(video, workspace)
 
-; YoutubeFastforward(video, workspace)
+; YoutubePlayPause(video, workspace)
 ; {
 ; 	if WinExist(video)
 ; 	{
