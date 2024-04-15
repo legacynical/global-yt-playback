@@ -27,6 +27,7 @@ InstallKeybdHook ; Allow use of additional special keys
 ; SetTitleMatchMode 2 ; (AHKv2 default) Allow WinTitle to be matched anywhere from a window's title
 
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
+spotify := "ahk_exe Spotify.exe"
 workspace := win2 := win3 := win4 := win5 := ""
 win1IsPaired := win2IsPaired := win3IsPaired := win4IsPaired := win5IsPaired := false
 inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
@@ -103,6 +104,87 @@ YoutubeFastforward10(video, workspace)
 		sleep 11
 		if WinExist(workspace) 
 			WinActivate
+	}
+}
+
+; Media_Prev::SpotifyPrevious(spotify)
+
+; SpotifyPrevious(spotify)
+; {
+; 	if WinExist(spotify)
+; 	{
+; 		WinActivate
+; 		sleep 11
+; 		ControlSend "^{Left}"
+; 		sleep 11
+; 		if WinExist(workspace)
+; 		{
+; 			WinActivate
+; 		}	else {
+; 			WinMinimize
+; 		}
+; 	}
+; }
+
+Media_Play_Pause::SpotifyPlayPause(spotify)
+
+SpotifyPlayPause(spotify)
+{
+	if WinExist(spotify)
+		{
+			WinActivate
+			sleep 11
+			Send "{Space}"
+			sleep 11
+			if WinExist(workspace)
+			{
+				WinActivate
+			} else {
+		 		WinMinimize
+			}
+		}
+}
+
+; Media_Next::SpotifyNext(spotify)
+
+; SpotifyNext(spotify)
+; {
+; 	if WinExist(spotify)
+; 		{
+; 			WinActivate
+; 			sleep 11
+; 			Send "^{Right}"
+; 			sleep 11
+; 			if WinExist(workspace)
+; 			{
+; 				WinActivate
+; 			}	else {
+; 				WinMinimize
+; 			}
+; 		}
+; }
+
+; F22::
+
+F23::SpotifyLowerVolume(spotify)
+
+SpotifyLowerVolume(spotify)
+{
+	if WinExist(spotify)
+	{
+		
+
+	}
+}
+
+F24::SpotifyRaiseVolume(spotify)
+
+SpotifyRaiseVolume(spotify)
+{
+	if WinExist(spotify)
+	{
+		
+
 	}
 }
 
