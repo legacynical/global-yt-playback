@@ -107,24 +107,24 @@ YoutubeFastforward10(video, workspace)
 	}
 }
 
-; Media_Prev::SpotifyPrevious(spotify)
+Media_Prev::SpotifyPrevious(spotify)
 
-; SpotifyPrevious(spotify)
-; {
-; 	if WinExist(spotify)
-; 	{
-; 		WinActivate
-; 		sleep 11
-; 		ControlSend "^{Left}"
-; 		sleep 11
-; 		if WinExist(workspace)
-; 		{
-; 			WinActivate
-; 		}	else {
-; 			WinMinimize
-; 		}
-; 	}
-; }
+SpotifyPrevious(spotify)
+{
+	if WinExist(spotify)
+	{
+		WinActivate
+		sleep 11
+		ControlSend "^{Left}"
+		sleep 11
+		if WinExist(workspace)
+		{
+			WinActivate
+		}	;else {
+			;WinMinimize
+		;}
+	}
+}
 
 Media_Play_Pause::SpotifyPlayPause(spotify)
 
@@ -145,24 +145,24 @@ SpotifyPlayPause(spotify)
 		}
 }
 
-; Media_Next::SpotifyNext(spotify)
+Media_Next::SpotifyNext(spotify)
 
-; SpotifyNext(spotify)
-; {
-; 	if WinExist(spotify)
-; 		{
-; 			WinActivate
-; 			sleep 11
-; 			Send "^{Right}"
-; 			sleep 11
-; 			if WinExist(workspace)
-; 			{
-; 				WinActivate
-; 			}	else {
-; 				WinMinimize
-; 			}
-; 		}
-; }
+SpotifyNext(spotify)
+{
+	if WinExist(spotify)
+		{
+			WinActivate
+			sleep 11
+			Send "^{Right}"
+			sleep 11
+			if WinExist(workspace)
+			{
+				WinActivate
+			}	;else {
+				;WinMinimize
+			;}
+		}
+}
 
 ; F22::
 
@@ -172,7 +172,7 @@ SpotifyLowerVolume(spotify)
 {
 	if WinExist(spotify)
 	{
-		
+
 
 	}
 }
