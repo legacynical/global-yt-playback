@@ -16,7 +16,7 @@
 ;    Ctrl + Win + 4 = unpair window 4
 ;    Ctrl + Win + 5 = unpair window 5
 ;    Ctrl + Win + 0 = unpair all windows
-;          Ctrl + ` = open GUI (not currently functional)
+;          Ctrl + ` = open GUI (currently under development)
 
 #Requires AutoHotkey v2.0
 #SingleInstance ; Prompt to replace instance if already running
