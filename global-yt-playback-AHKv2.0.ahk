@@ -372,28 +372,87 @@ UnpairAllWindows()
 }
 
 ;=========== GUI ===========
-; not currently functional, need to read more docs and play around
+; currently under development
 
 ^`::OpenGUI()
 
 OpenGUI()
 {
+	; Create the main GUI
+	MainGui := Gui("+Resize", "Window Management")
+	MainGui.Opt("+AlwaysOnTop")
+	
+	; Active Window Information Section
 	GetWinInfo()
-  activeProcess := winProcess
-    
-  ; Create GUI
-	MyGui := Gui()
-  MyGui.Add("Text",, "Active window process: " activeProcess)
-  MyGui.AddEdit(activeProcess)
-  Btn := MyGui.Add("Button", "default xm", "OK")  ; xm puts it at the bottom left corner.
-	Btn.OnEvent("Click", ProcessUserInput)
-	MyGui.OnEvent("Close", ProcessUserInput)
-	MyGui.OnEvent("Escape", ProcessUserInput)  
-	MyGui.Show()
+	MainGui.Add("Text", "w240 section", "Active Window Details:")
+	MainGui.Add("Edit", "w240 vActiveTitle ReadOnly", winTitle)
+	MainGui.Add("Edit", "w240 vActiveProcess ReadOnly", winProcess)
+	MainGui.Add("Edit", "w240 vActiveClass ReadOnly", winClass)
+	MainGui.Add("Edit", "w240 vActiveID ReadOnly", winId)
+	
+	; Window Pairing Section
+	MainGui.Add("Text", "w240", "Window Pairing:")
+	MainGui.Add("Button", "w240", "Set as Main Workspace").OnEvent("Click", PairWorkspace)
+	MainGui.Add("Button", "w240", "Set as Window 2").OnEvent("Click", PairWindow2)
+	MainGui.Add("Button", "w240", "Set as Window 3").OnEvent("Click", PairWindow3)
+	MainGui.Add("Button", "w240", "Set as Window 4").OnEvent("Click", PairWindow4)
+	MainGui.Add("Button", "w240", "Set as Window 5").OnEvent("Click", PairWindow5)
+	
+	; Unpair Options and Quick Actions
+	MainGui.Add("Text", "w240", "Unpair Options and Quick Actions:")
+	MainGui.Add("Button", "w240", "Unpair Workspace").OnEvent("Click", UnpairWorkspace)
+	MainGui.Add("Button", "w240", "Unpair All Windows").OnEvent("Click", UnpairAll)
+	MainGui.Add("Button", "w240", "Show Window Stats").OnEvent("Click", ShowWindowStats)
+	MainGui.Add("Button", "w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
+	
+	; Show the GUI
+	MainGui.Show("w260 h450")
 
-	ProcessUserInput(*)
+	; Defined event handlers
+	PairWorkspace(*)
 	{
-		Saved := MyGui.Submit()  ; Save the contents of named controls into an object.
-		MsgBox("You entered: " Saved.activeProcess)
+		MainWorkspace()
+		MainGui.Destroy()
+	}
+
+	PairWindow2(*)
+	{
+		Window2()
+		MainGui.Destroy()
+	}
+
+	PairWindow3(*)
+	{
+		Window3()
+		MainGui.Destroy()
+	}
+
+	PairWindow4(*)
+	{
+		Window4()
+		MainGui.Destroy()
+	}
+
+	PairWindow5(*)
+	{
+		Window5()
+		MainGui.Destroy()
+	}
+
+	UnpairWorkspace(*)
+	{
+		UnpairMainWorkspace()
+		MainGui.Destroy()
+	}
+
+	UnpairAll(*)
+	{
+		UnpairAllWindows()
+		MainGui.Destroy()
+	}
+
+	ShowWindowStats(*)
+	{
+		DisplayActiveWindowStats()
 	}
 }
