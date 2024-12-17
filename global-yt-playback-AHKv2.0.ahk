@@ -31,85 +31,30 @@ workspace := win2 := win3 := win4 := win5 := ""
 IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
 inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
 
+Media_Prev::YoutubeControl("rewind 5 sec", "{left}")
+^Media_Prev::YoutubeControl("rewind 10 sec", "{j}")
+Media_Next::YoutubeControl("fast forward 5 sec", "{Right}")
+^Media_Next::YoutubeControl("fast forward 10 sec", "{l}")
 
-Media_Prev::YoutubeRewind5(video, workspace)
+; Most browsers allow this by default. If not, or you want to specifically target yt, then uncomment
+; Media_Play_Pause::YoutubeControl("play/pause", "{k}")
 
-YoutubeRewind5(video, workspace)
+; If you don't have Media_Play_Pause key, uncomment and set hotkey
+; hotkey::Media_Play_Pause
+
+YoutubeControl(action, keyPress) ; action param not used but added for clarity future use
 {
+	global video, workspace
 	if WinExist(video) 
 	{
 		WinActivate
 		sleep 11 ; Delay rounds to nearest multiple of 10 or 15.6 ms
-		Send "{Left}" ; YT rewind 5 seconds
+		Send keyPress
 		sleep 11
 		if WinExist(workspace) 
 			WinActivate
 	}
 }
-
-^Media_Prev::YoutubeRewind10(video, workspace)
-
-YoutubeRewind10(video, workspace)
-{
-	if WinExist(video) 
-	{
-		WinActivate
-		sleep 11
-		Send "{j}" ; YT rewind 10 seconds
-		sleep 11		
-		if WinExist(workspace) 
-			WinActivate
-	}
-}
-
-Media_Next::YoutubeFastforward5(video, workspace)
-
-YoutubeFastforward5(video, workspace)
-{
-	if WinExist(video)
-	{
-		WinActivate
-		sleep 11
-		Send "{Right}" ; YT fast forward 5 seconds
-		sleep 11
-		if WinExist(workspace) 
-			WinActivate
-	}
-}
-
-^Media_Next::YoutubeFastforward10(video, workspace)
-
-YoutubeFastforward10(video, workspace)
-{
-	if WinExist(video)
-	{
-		WinActivate
-		sleep 11
-		Send "{l}" ; YT fast forward 10 seconds
-		sleep 11
-		if WinExist(workspace) 
-			WinActivate
-	}
-}
-
-; Redundant code for Media_Play_Pause (most browsers allow this, if not, then uncomment)
-; Media_Play_Pause::YoutubePlayPause(video, workspace)
-
-; YoutubePlayPause(video, workspace)
-; {
-; 	if WinExist(video)
-; 	{
-; 		WinActivate
-; 		sleep 11
-; 		Send {k} ; YT toggle play/pause
-; 		sleep 11
-; 		if WinExist(workspace) 
-; 			WinActivate
-; 	}
-; }
-
-; If you don't have Media_Play_Pause key, uncomment line below and set hotkey
-; hotkey::Media_Play_Pause
 
 GetWinInfo()
 {
