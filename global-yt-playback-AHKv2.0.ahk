@@ -28,7 +28,7 @@ InstallKeybdHook ; Allow use of additional special keys
 
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 workspace := win2 := win3 := win4 := win5 := ""
-win1IsPaired := win2IsPaired := win3IsPaired := win4IsPaired := win5IsPaired := false
+IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
 inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
 
 
@@ -140,7 +140,7 @@ MainWorkspace()
 	if (workspace == "")
 	{
 		global workspace := "ahk_id " winId ; Sets workspace to current active window
-		global win1IsPaired := true
+		global IsWinPaired1 := true
 		MsgBox "[Pairing Main Workspace]`n"
 					. "title: " winTitle "`n"
 					. "workspace: " workspace "`n"
@@ -165,11 +165,11 @@ MainWorkspace()
 
 UnpairMainWorkspace()
 {
-	global win1IsPaired, workspace
-	if (win1IsPaired)
+	global IsWinPaired1, workspace
+	if (IsWinPaired1)
 	{
 		workspace := ""
-		win1IsPaired := false
+		IsWinPaired1 := false
 		MsgBox "[Unpaired Main Workspace]",, "T1"
 	} else {
 		MsgBox "Main Workspace is already unpaired!",, "T1"
@@ -185,7 +185,7 @@ Window2()
 	if (win2 == "")
 	{
 		global win2 := "ahk_id " winId ; Sets window 2 to current active window
-		global win2IsPaired := true
+		global IsWinPaired2 := true
 		MsgBox "[Pairing Window 2]`n"
 					. "title: " winTitle "`n"
 					. "workspace: " workspace "`n"
@@ -210,11 +210,11 @@ Window2()
 
 UnpairWindow2()
 {
-	global win2IsPaired, win2
-	if (win2IsPaired)
+	global IsWinPaired2, win2
+	if (IsWinPaired2)
 	{
 		win2 := ""
-		win2IsPaired := false
+		IsWinPaired2 := false
 		MsgBox "[Unpaired Window 2]",, "T1"
 	} else {
 		MsgBox "Window 2 is already unpaired!",, "T1"
@@ -230,7 +230,7 @@ Window3()
 	if (win3 == "")
 	{
 		global win3 := "ahk_id " winId ; Sets window 3 to current active window
-		global win3IsPaired := true
+		global IsWinPaired3 := true
 		MsgBox "[Pairing Window 3]`n"
 					. "title: " winTitle "`n"
 					. "workspace: " workspace "`n"
@@ -255,11 +255,11 @@ Window3()
 
 UnpairWindow3()
 {
-	global win3IsPaired, win3
-	if (win3IsPaired)
+	global IsWinPaired3, win3
+	if (IsWinPaired3)
 	{
 		win3 := ""
-		win3IsPaired := false
+		IsWinPaired3 := false
 		MsgBox "[Unpaired Window 3]",, "T1"
 	} else {
 		MsgBox "Window 3 is already unpaired!",, "T1"
@@ -275,7 +275,7 @@ Window4()
 	if (win4 == "")
 	{
 		global win4 := "ahk_id " winId ; Sets window 4 to current active window
-		global win4IsPaired := true
+		global IsWinPaired4 := true
 		MsgBox "[Pairing Window 4]`n"
 					. "title: " winTitle "`n"
 					. "workspace: " workspace "`n"
@@ -300,11 +300,11 @@ Window4()
 
 UnpairWindow4()
 {
-	global win4IsPaired, win4
-	if (win4IsPaired)
+	global IsWinPaired4, win4
+	if (IsWinPaired4)
 	{
 		win4 := ""
-		win4IsPaired := false
+		IsWinPaired4 := false
 		MsgBox "[Unpaired Window 4]",, "T1"
 	} else {
 		MsgBox "Window 4 is already unpaired!",, "T1"
@@ -320,7 +320,7 @@ Window5()
 	if (win5 == "")
 	{
 		global win5 := "ahk_id " winId ; Sets window 5 to current active window
-		global win5IsPaired := true
+		global IsWinPaired5 := true
 		MsgBox "[Pairing Window 5]`n"
 					. "title: " winTitle "`n"
 					. "workspace: " workspace "`n"
@@ -345,11 +345,11 @@ Window5()
 
 UnpairWindow5()
 {
-	global win5IsPaired, win5
-	if (win5IsPaired)
+	global IsWinPaired5, win5
+	if (IsWinPaired5)
 	{
 		win5 := ""
-		win5IsPaired := false
+		IsWinPaired5 := false
 		MsgBox "[Unpaired Window 5]",, "T1"
 	} else {
 		MsgBox "Window 5 is already unpaired!",, "T1"
@@ -363,10 +363,10 @@ UnpairAllWindows()
 	confirmUnpair := MsgBox("Are you sure you want to unpair all windows?",, "YesNo")
 	if confirmUnpair = "Yes"
 	{
-		global workspace, win2, win3, win4, win5, win1IsPaired, win2IsPaired,
-		win3IsPaired, win4IsPaired, win5IsPaired
+		global workspace, win2, win3, win4, win5, IsWinPaired1, IsWinPaired2,
+		IsWinPaired3, IsWinPaired4, IsWinPaired5
 		workspace := win2 := win3 := win4 := win5 := ""
-		win1IsPaired := win2IsPaired := win3IsPaired := win4IsPaired := win5IsPaired := false
+		IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
 		MsgBox "[Unpaired All Windows]",, "T1"		
 	}
 }
