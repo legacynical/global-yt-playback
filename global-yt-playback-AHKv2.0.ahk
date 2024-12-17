@@ -26,10 +26,12 @@ InstallKeybdHook ; Allow use of additional special keys
 ; SetWorkingDir A_ScriptDir ; (AHKv2 default) Force script to use its own folder as working directory.
 ; SetTitleMatchMode 2 ; (AHKv2 default) Allow WinTitle to be matched anywhere from a window's title
 
+
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 workspace := win2 := win3 := win4 := win5 := ""
 IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
 inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
+
 
 Media_Prev::YoutubeControl("rewind 5 sec", "{left}")
 ^Media_Prev::YoutubeControl("rewind 10 sec", "{j}")
@@ -41,6 +43,7 @@ Media_Next::YoutubeControl("fast forward 5 sec", "{Right}")
 
 ; If you don't have Media_Play_Pause key, uncomment and set hotkey
 ; hotkey::Media_Play_Pause
+
 
 YoutubeControl(action, keyPress) ; action param not used but added for clarity future use
 {
@@ -106,20 +109,6 @@ MainWorkspace()
 	}	
 }
 
-^<#1::UnpairMainWorkspace()
-
-UnpairMainWorkspace()
-{
-	global IsWinPaired1, workspace
-	if (IsWinPaired1)
-	{
-		workspace := ""
-		IsWinPaired1 := false
-		MsgBox "[Unpaired Main Workspace]",, "T1"
-	} else {
-		MsgBox "Main Workspace is already unpaired!",, "T1"
-	}
-}
 
 <#2::Window2()
 
@@ -151,20 +140,6 @@ Window2()
 	}	
 }
 
-^<#2::UnpairWindow2()
-
-UnpairWindow2()
-{
-	global IsWinPaired2, win2
-	if (IsWinPaired2)
-	{
-		win2 := ""
-		IsWinPaired2 := false
-		MsgBox "[Unpaired Window 2]",, "T1"
-	} else {
-		MsgBox "Window 2 is already unpaired!",, "T1"
-	}
-}
 
 <#3::Window3()
 
@@ -196,20 +171,6 @@ Window3()
 	}	
 }
 
-^<#3::UnpairWindow3()
-
-UnpairWindow3()
-{
-	global IsWinPaired3, win3
-	if (IsWinPaired3)
-	{
-		win3 := ""
-		IsWinPaired3 := false
-		MsgBox "[Unpaired Window 3]",, "T1"
-	} else {
-		MsgBox "Window 3 is already unpaired!",, "T1"
-	}
-}
 
 <#4::Window4()
 
@@ -241,20 +202,7 @@ Window4()
 	}	
 }
 
-^<#4::UnpairWindow4()
 
-UnpairWindow4()
-{
-	global IsWinPaired4, win4
-	if (IsWinPaired4)
-	{
-		win4 := ""
-		IsWinPaired4 := false
-		MsgBox "[Unpaired Window 4]",, "T1"
-	} else {
-		MsgBox "Window 4 is already unpaired!",, "T1"
-	}
-}
 
 <#5::Window5()
 
@@ -286,22 +234,24 @@ Window5()
 	}	
 }
 
-^<#5::UnpairWindow5()
+^<#1::UnpairWindow(IsWinPaired1, workspace, "Main Workspace")
+^<#2::UnpairWindow(IsWinPaired2, win2, "Window 2")
+^<#3::UnpairWindow(IsWinPaired3, win3, "Window 3")
+^<#4::UnpairWindow(IsWinPaired4, win4, "Window 4")
+^<#5::UnpairWindow(IsWinPaired5, win5, "Window 5")
+^<#0::UnpairAllWindows()
 
-UnpairWindow5()
+UnpairWindow(pairedStatus, window, windowName)
 {
-	global IsWinPaired5, win5
-	if (IsWinPaired5)
+	if (pairedStatus)
 	{
-		win5 := ""
-		IsWinPaired5 := false
-		MsgBox "[Unpaired Window 5]",, "T1"
+		window := ""
+		pairedStatus := false
+		MsgBox "[Unpaired " windowName "]",, "T1"
 	} else {
-		MsgBox "Window 5 is already unpaired!",, "T1"
+		MsgBox "" windowName " is already unpaired!",, "T1"
 	}
 }
-
-^<#0::UnpairAllWindows()
 
 UnpairAllWindows()
 {
@@ -386,7 +336,7 @@ OpenGUI()
 
 	UnpairWorkspace(*)
 	{
-		UnpairMainWorkspace()
+		UnpairWindow(IsWinPaired1, workspace, "Main Workspace")
 		MainGui.Destroy()
 	}
 
