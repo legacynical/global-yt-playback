@@ -109,12 +109,6 @@ PairWindow(pairedStatus, window, windowName) {
 	}
 }
 
-/*
-Contrary to what Claude and ChatGPT suggests for AHKv2,
-you DON'T use a depreciated ByRef keyword (which is CLEARLY STATED IN THE DOCS FOR AHKv2)
-and instead the global vars have to be wrapped in "" for it to be
-properly dereferenced with %% and assigned values (which is NOT CLEARLY STATED IN THE DOCS FOR AHKv2)
-*/
 ^<#1:: UnpairWindow("IsWinPaired1", "workspace", "Main Workspace")
 ^<#2:: UnpairWindow("IsWinPaired2", "win2", "Window 2")
 ^<#3:: UnpairWindow("IsWinPaired3", "win3", "Window 3")
