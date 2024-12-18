@@ -1,7 +1,7 @@
 ; ========== [CONTROLS] ===========
 ;        Media_Prev = YT rewind 5 sec
 ; Ctrl + Media_Prev = YT rewind 10 sec
-;  Media_Play_Pause = YT toggle play/pause (should work w/o script, see line 98)
+;  Media_Play_Pause = YT toggle play/pause
 ;        Media_Next = YT fast forward 5 sec
 ; Ctrl + Media_Next = YT fast forward 10 sec
 ;           Win + ` = display active window stats
@@ -26,257 +26,134 @@ InstallKeybdHook ; Allow use of additional special keys
 ; SetWorkingDir A_ScriptDir ; (AHKv2 default) Force script to use its own folder as working directory.
 ; SetTitleMatchMode 2 ; (AHKv2 default) Allow WinTitle to be matched anywhere from a window's title
 
-
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 workspace := win2 := win3 := win4 := win5 := ""
 IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
 inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
 
-
-Media_Prev::YoutubeControl("rewind 5 sec", "{left}")
-^Media_Prev::YoutubeControl("rewind 10 sec", "{j}")
-Media_Next::YoutubeControl("fast forward 5 sec", "{Right}")
-^Media_Next::YoutubeControl("fast forward 10 sec", "{l}")
-
-; Most browsers allow this by default. If not, or you want to specifically target yt, then uncomment
-; Media_Play_Pause::YoutubeControl("play/pause", "{k}")
+Media_Prev:: YoutubeControl("rewind 5 sec", "{left}")
+^Media_Prev:: YoutubeControl("rewind 10 sec", "{j}")
+Media_Next:: YoutubeControl("fast forward 5 sec", "{Right}")
+^Media_Next:: YoutubeControl("fast forward 10 sec", "{l}")
+; Most browsers allow Media_Play_Pause by default but this ensures that it targets a YouTube tab
+Media_Play_Pause:: YoutubeControl("play/pause", "{k}")
 
 ; If you don't have Media_Play_Pause key, uncomment and set hotkey
 ; hotkey::Media_Play_Pause
 
-
-YoutubeControl(action, keyPress) ; action param not used but added for clarity future use
-{
+; action param not used but added for clarity future use
+YoutubeControl(action, keyPress) {
 	global video, workspace
-	if WinExist(video) 
-	{
+	if WinExist(video) {
 		WinActivate
 		sleep 11 ; Delay rounds to nearest multiple of 10 or 15.6 ms
 		Send keyPress
 		sleep 11
-		if WinExist(workspace) 
+		if WinExist(workspace)
 			WinActivate
 	}
 }
 
-GetWinInfo()
-{
-	global winTitle := WinGetTitle("A")
-	global winId := WinGetID("A")
-	global winClass := WinGetClass("A")
-	global winProcess := WinGetProcessName("A")
-	global currentID := "ahk_id " winId
+GetWinInfo() {
+	global
+	winTitle := WinGetTitle("A")
+	winId := WinGetID("A")
+	winClass := WinGetClass("A")
+	winProcess := WinGetProcessName("A")
+	currentID := "ahk_id " winId
 }
 
-<#`::DisplayActiveWindowStats()
+<#`:: DisplayActiveWindowStats()
 
-DisplayActiveWindowStats()
-{
+DisplayActiveWindowStats() {
 	GetWinInfo()
 	MsgBox "Active window title: " winTitle "`n"
-        . "Active window ID: " winId "`n"
-				. "Active window class: " winClass "`n"
-        . "Active window process: " winProcess
+		. "Active window ID: " winId "`n"
+		. "Active window class: " winClass "`n"
+		. "Active window process: " winProcess
 }
 
-<#1::MainWorkspace()
+/*
+Contrary to what Claude and ChatGPT suggests for AHKv2,
+you DON'T use a depreciated ByRef keyword (which is CLEARLY STATED IN THE DOCS FOR AHKv2)
+and instead the global vars have to be wrapped in "" for it to be
+properly dereferenced with %% and assigned values (which is NOT CLEARLY STATED IN THE DOCS FOR AHKv2)
+*/
+<#1:: PairWindow("IsWinPaired1", "workspace", "Main Workspace")
+<#2:: PairWindow("IsWinPaired2", "win2", "Window 2")
+<#3:: PairWindow("IsWinPaired3", "win3", "Window 3")
+<#4:: PairWindow("IsWinPaired4", "win4", "Window 4")
+<#5:: PairWindow("IsWinPaired5", "win5", "Window 5")
 
-MainWorkspace()
-{
-	global inputBuffer, maxInputBuffer
+PairWindow(pairedStatus, window, windowName) {
+	global
 	GetWinInfo()
-	if (workspace == "")
-	{
-		global workspace := "ahk_id " winId ; Sets workspace to current active window
-		global IsWinPaired1 := true
-		MsgBox "[Pairing Main Workspace]`n"
-					. "title: " winTitle "`n"
-					. "workspace: " workspace "`n"
-					. "process: " winProcess,, "T3"
-	} else if (currentID != workspace) {
-		if WinExist(workspace)
-		{
+	if (%window% == "") {
+		%window% := "ahk_id " winId ;
+		%pairedStatus% := true
+		MsgBox "[Pairing " windowName "]`n"
+			. "title: " winTitle "`n"
+			. "workspace: " workspace "`n"
+			. "process: " winProcess, , "T3"
+	} else if (currentID != %window%) {
+		if WinExist(%window%) {
 			inputBuffer := maxInputBuffer
 			WinActivate
 		}
-	} else if (currentID == workspace) {
+	} else if (currentID == %window%) {
 		inputBuffer--
-		if (WinExist(workspace) && (inputBuffer == 0)) 
-		{	
+		if (WinExist(%window%) && (inputBuffer == 0)) {
 			inputBuffer := maxInputBuffer
 			WinMinimize
 		}
-	}	
-}
-
-
-<#2::Window2()
-
-Window2()
-{
-	global inputBuffer, maxInputBuffer
-	GetWinInfo()
-	if (win2 == "")
-	{
-		global win2 := "ahk_id " winId ; Sets window 2 to current active window
-		global IsWinPaired2 := true
-		MsgBox "[Pairing Window 2]`n"
-					. "title: " winTitle "`n"
-					. "workspace: " workspace "`n"
-					. "process: " winProcess,, "T3"
-	} else if (currentID != win2) {
-		if WinExist(win2)
-		{
-			inputBuffer := maxInputBuffer
-			WinActivate
-		}
-	} else if (currentID == win2)	{
-		inputBuffer--
-		if (WinExist(win2) && (inputBuffer == 0))
-		{	
-			inputBuffer := maxInputBuffer
-			WinMinimize
-		}
-	}	
-}
-
-
-<#3::Window3()
-
-Window3()
-{
-	global inputBuffer, maxInputBuffer
-	GetWinInfo()
-	if (win3 == "")
-	{
-		global win3 := "ahk_id " winId ; Sets window 3 to current active window
-		global IsWinPaired3 := true
-		MsgBox "[Pairing Window 3]`n"
-					. "title: " winTitle "`n"
-					. "workspace: " workspace "`n"
-					. "process: " winProcess,, "T3"
-	} else if (currentID != win3) {
-		if WinExist(win3)
-		{
-			inputBuffer := maxInputBuffer
-			WinActivate
-		}
-	} else if (currentID == win3) {
-		inputBuffer--
-		if (WinExist(win3) && (inputBuffer == 0))
-		{	
-			inputBuffer := maxInputBuffer
-			WinMinimize
-		}
-	}	
-}
-
-
-<#4::Window4()
-
-Window4()
-{
-	global inputBuffer, maxInputBuffer
-	GetWinInfo()
-	if (win4 == "")
-	{
-		global win4 := "ahk_id " winId ; Sets window 4 to current active window
-		global IsWinPaired4 := true
-		MsgBox "[Pairing Window 4]`n"
-					. "title: " winTitle "`n"
-					. "workspace: " workspace "`n"
-					. "process: " winProcess,, "T3"
-	} else if (currentID != win4) {
-		if WinExist(win4)
-		{
-			inputBuffer := maxInputBuffer
-			WinActivate
-		}
-	} else if (currentID == win4) {
-		inputBuffer--
-		if (WinExist(win4) && (inputBuffer == 0))
-		{	
-			inputBuffer := maxInputBuffer
-			WinMinimize
-		}
-	}	
-}
-
-
-
-<#5::Window5()
-
-Window5()
-{
-	global inputBuffer, maxInputBuffer
-	GetWinInfo()
-	if (win5 == "")
-	{
-		global win5 := "ahk_id " winId ; Sets window 5 to current active window
-		global IsWinPaired5 := true
-		MsgBox "[Pairing Window 5]`n"
-					. "title: " winTitle "`n"
-					. "workspace: " workspace "`n"
-					. "process: " winProcess,, "T3"
-	} else if (currentID != win5) {
-		if WinExist(win5)
-		{
-			inputBuffer := maxInputBuffer
-			WinActivate
-		}
-	} else if (currentID == win5) {
-		inputBuffer--
-		if (WinExist(win5) && (inputBuffer == 0))
-		{	
-			inputBuffer := maxInputBuffer
-			WinMinimize
-		}
-	}	
-}
-
-^<#1::UnpairWindow(IsWinPaired1, workspace, "Main Workspace")
-^<#2::UnpairWindow(IsWinPaired2, win2, "Window 2")
-^<#3::UnpairWindow(IsWinPaired3, win3, "Window 3")
-^<#4::UnpairWindow(IsWinPaired4, win4, "Window 4")
-^<#5::UnpairWindow(IsWinPaired5, win5, "Window 5")
-^<#0::UnpairAllWindows()
-
-UnpairWindow(pairedStatus, window, windowName)
-{
-	if (pairedStatus)
-	{
-		window := ""
-		pairedStatus := false
-		MsgBox "[Unpaired " windowName "]",, "T1"
-	} else {
-		MsgBox "" windowName " is already unpaired!",, "T1"
 	}
 }
 
-UnpairAllWindows()
-{
-	confirmUnpair := MsgBox("Are you sure you want to unpair all windows?",, "YesNo")
-	if confirmUnpair = "Yes"
-	{
+/*
+Contrary to what Claude and ChatGPT suggests for AHKv2,
+you DON'T use a depreciated ByRef keyword (which is CLEARLY STATED IN THE DOCS FOR AHKv2)
+and instead the global vars have to be wrapped in "" for it to be
+properly dereferenced with %% and assigned values (which is NOT CLEARLY STATED IN THE DOCS FOR AHKv2)
+*/
+^<#1:: UnpairWindow("IsWinPaired1", "workspace", "Main Workspace")
+^<#2:: UnpairWindow("IsWinPaired2", "win2", "Window 2")
+^<#3:: UnpairWindow("IsWinPaired3", "win3", "Window 3")
+^<#4:: UnpairWindow("IsWinPaired4", "win4", "Window 4")
+^<#5:: UnpairWindow("IsWinPaired5", "win5", "Window 5")
+^<#0:: UnpairAllWindows()
+
+UnpairWindow(pairedStatus, window, windowName) {
+	global
+	if (%pairedStatus%) {
+		%window% := ""
+		%pairedStatus% := false
+		MsgBox "[Unpaired " windowName "]", , "T1"
+	} else {
+		MsgBox "" windowName " is already unpaired!", , "T1"
+	}
+}
+
+UnpairAllWindows() {
+	confirmUnpair := MsgBox("Are you sure you want to unpair all windows?", , "YesNo")
+	if confirmUnpair = "Yes" {
 		global workspace, win2, win3, win4, win5, IsWinPaired1, IsWinPaired2,
-		IsWinPaired3, IsWinPaired4, IsWinPaired5
+			IsWinPaired3, IsWinPaired4, IsWinPaired5
 		workspace := win2 := win3 := win4 := win5 := ""
 		IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
-		MsgBox "[Unpaired All Windows]",, "T1"		
+		MsgBox "[Unpaired All Windows]", , "T1"
 	}
 }
 
 ;=========== GUI ===========
 ; currently under development
 
-^`::OpenGUI()
+^`:: OpenGUI()
 
-OpenGUI()
-{
+OpenGUI() {
 	; Create the main GUI
 	MainGui := Gui("+Resize", "Window Management")
 	MainGui.Opt("+AlwaysOnTop")
-	
+
 	; Active Window Information Section
 	GetWinInfo()
 	MainGui.Add("Text", "w240 section", "Active Window Details:")
@@ -284,14 +161,16 @@ OpenGUI()
 	MainGui.Add("Edit", "w240 vActiveProcess ReadOnly", winProcess)
 	MainGui.Add("Edit", "w240 vActiveClass ReadOnly", winClass)
 	MainGui.Add("Edit", "w240 vActiveID ReadOnly", winId)
-	
+
 	; Window Pairing Section
 	MainGui.Add("Text", "w240", "Window Pairing:")
+	/*
 	MainGui.Add("Button", "w240", "Set as Main Workspace").OnEvent("Click", PairWorkspace)
 	MainGui.Add("Button", "w240", "Set as Window 2").OnEvent("Click", PairWindow2)
 	MainGui.Add("Button", "w240", "Set as Window 3").OnEvent("Click", PairWindow3)
 	MainGui.Add("Button", "w240", "Set as Window 4").OnEvent("Click", PairWindow4)
 	MainGui.Add("Button", "w240", "Set as Window 5").OnEvent("Click", PairWindow5)
+	
 	
 	; Unpair Options and Quick Actions
 	MainGui.Add("Text", "w240", "Unpair Options and Quick Actions:")
@@ -302,52 +181,51 @@ OpenGUI()
 	
 	; Show the GUI
 	MainGui.Show("w260 h450")
-
+	
 	; Defined event handlers
 	PairWorkspace(*)
 	{
-		MainWorkspace()
+		PairMainWorkspace()
 		MainGui.Destroy()
 	}
-
+	
+	/*
 	PairWindow2(*)
 	{
 		Window2()
 		MainGui.Destroy()
 	}
-
+	
 	PairWindow3(*)
 	{
 		Window3()
 		MainGui.Destroy()
 	}
-
+	
 	PairWindow4(*)
 	{
 		Window4()
 		MainGui.Destroy()
 	}
-
+	
 	PairWindow5(*)
 	{
 		Window5()
 		MainGui.Destroy()
 	}
+	*/
 
-	UnpairWorkspace(*)
-	{
+	UnpairWorkspace(*) {
 		UnpairWindow(IsWinPaired1, workspace, "Main Workspace")
 		MainGui.Destroy()
 	}
 
-	UnpairAll(*)
-	{
+	UnpairAll(*) {
 		UnpairAllWindows()
 		MainGui.Destroy()
 	}
 
-	ShowWindowStats(*)
-	{
+	ShowWindowStats(*) {
 		DisplayActiveWindowStats()
 	}
 }
