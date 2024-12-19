@@ -158,12 +158,13 @@ OpenGUI() {
 
 	; Window Pairing Section
 	MainGui.Add("Text", "w240", "Window Pairing:")
+	MainGui.Add("Button", "w240", "Set as Main Workspace").OnEvent("Click", (*) => GuiPairWindow(1))
+	MainGui.Add("Button", "w240", "Set as Window 2").OnEvent("Click", (*) => GuiPairWindow(2))
+	MainGui.Add("Button", "w240", "Set as Window 3").OnEvent("Click", (*) => GuiPairWindow(3))
+	MainGui.Add("Button", "w240", "Set as Window 4").OnEvent("Click", (*) => GuiPairWindow(4))
+	MainGui.Add("Button", "w240", "Set as Window 5").OnEvent("Click", (*) => GuiPairWindow(5))
+
 	/*
-	MainGui.Add("Button", "w240", "Set as Main Workspace").OnEvent("Click", PairWorkspace)
-	MainGui.Add("Button", "w240", "Set as Window 2").OnEvent("Click", PairWindow2)
-	MainGui.Add("Button", "w240", "Set as Window 3").OnEvent("Click", PairWindow3)
-	MainGui.Add("Button", "w240", "Set as Window 4").OnEvent("Click", PairWindow4)
-	MainGui.Add("Button", "w240", "Set as Window 5").OnEvent("Click", PairWindow5)
 	
 	
 	; Unpair Options and Quick Actions
@@ -172,54 +173,38 @@ OpenGUI() {
 	MainGui.Add("Button", "w240", "Unpair All Windows").OnEvent("Click", UnpairAll)
 	MainGui.Add("Button", "w240", "Show Window Stats").OnEvent("Click", ShowWindowStats)
 	MainGui.Add("Button", "w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
-	
-	; Show the GUI
-	MainGui.Show("w260 h450")
-	
-	; Defined event handlers
-	PairWorkspace(*)
-	{
-		PairMainWorkspace()
-		MainGui.Destroy()
-	}
-	
-	/*
-	PairWindow2(*)
-	{
-		Window2()
-		MainGui.Destroy()
-	}
-	
-	PairWindow3(*)
-	{
-		Window3()
-		MainGui.Destroy()
-	}
-	
-	PairWindow4(*)
-	{
-		Window4()
-		MainGui.Destroy()
-	}
-	
-	PairWindow5(*)
-	{
-		Window5()
-		MainGui.Destroy()
-	}
 	*/
 
+	; Show the GUI
+	MainGui.Show("w260 h450")
+
+	; Defined event handlers
+	GuiPairWindow(num) {
+		switch num {
+			case 1: PairWindow("IsWinPaired1", "workspace", "Main Workspace")
+			case 2: PairWindow("IsWinPaired2", "win2", "Window 2")
+			case 3: PairWindow("IsWinPaired3", "win3", "Window 3")
+			case 4: PairWindow("IsWinPaired4", "win4", "Window 4")
+			case 5: PairWindow("IsWinPaired5", "win5", "Window 5")
+		}
+
+		MainGui.Destroy()
+	}
+
+	/*
 	UnpairWorkspace(*) {
 		UnpairWindow(IsWinPaired1, workspace, "Main Workspace")
 		MainGui.Destroy()
 	}
-
+	
 	UnpairAll(*) {
 		UnpairAllWindows()
 		MainGui.Destroy()
 	}
-
+	
 	ShowWindowStats(*) {
 		DisplayActiveWindowStats()
 	}
+	*/
+
 }
