@@ -164,16 +164,13 @@ OpenGUI() {
 	MainGui.Add("Button", "w240", "Set as Window 4").OnEvent("Click", (*) => GuiPairWindow(4))
 	MainGui.Add("Button", "w240", "Set as Window 5").OnEvent("Click", (*) => GuiPairWindow(5))
 
-	/*
-	
-	
+
 	; Unpair Options and Quick Actions
 	MainGui.Add("Text", "w240", "Unpair Options and Quick Actions:")
-	MainGui.Add("Button", "w240", "Unpair Workspace").OnEvent("Click", UnpairWorkspace)
-	MainGui.Add("Button", "w240", "Unpair All Windows").OnEvent("Click", UnpairAll)
+	MainGui.Add("Button", "w240", "Unpair Workspace").OnEvent("Click", (*) => GuiUnpairWindow(1))
+	MainGui.Add("Button", "w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpairWindow(10))
 	MainGui.Add("Button", "w240", "Show Window Stats").OnEvent("Click", ShowWindowStats)
 	MainGui.Add("Button", "w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
-	*/
 
 	; Show the GUI
 	MainGui.Show("w260 h450")
@@ -191,20 +188,22 @@ OpenGUI() {
 		MainGui.Destroy()
 	}
 
-	/*
-	UnpairWorkspace(*) {
-		UnpairWindow(IsWinPaired1, workspace, "Main Workspace")
+	GuiUnpairWindow(num) {
+		switch num {
+			case 1: UnpairWindow("IsWinPaired1", "workspace", "Main Workspace")
+			case 2: UnpairWindow("IsWinPaired2", "win2", "Window 2")
+			case 3: UnpairWindow("IsWinPaired3", "win3", "Window 3")
+			case 4: UnpairWindow("IsWinPaired4", "win4", "Window 4")
+			case 5: UnpairWindow("IsWinPaired5", "win5", "Window 5")
+			case 10: UnpairAllWindows()
+		}
+
+
 		MainGui.Destroy()
 	}
-	
-	UnpairAll(*) {
-		UnpairAllWindows()
-		MainGui.Destroy()
-	}
-	
+
 	ShowWindowStats(*) {
 		DisplayActiveWindowStats()
 	}
-	*/
 
 }
