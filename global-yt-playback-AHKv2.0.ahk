@@ -139,38 +139,44 @@ UnpairAllWindows() {
 }
 
 ;=========== GUI ===========
-; currently under development
+; currently under development, limited functionality
 
 ^`:: OpenGUI()
 
 OpenGUI() {
 	; Create the main GUI
 	MainGui := Gui("+Resize", "Window Management")
-	MainGui.Opt("+AlwaysOnTop")
+	MainGui.Opt("-MaximizeBox")
 
 	; Active Window Information Section
 	GetWinInfo()
-	MainGui.Add("Text", "w240 section", "Active Window Details:")
-	MainGui.Add("Edit", "w240 vActiveTitle ReadOnly", winTitle)
-	MainGui.Add("Edit", "w240 vActiveProcess ReadOnly", winProcess)
-	MainGui.Add("Edit", "w240 vActiveClass ReadOnly", winClass)
-	MainGui.Add("Edit", "w240 vActiveID ReadOnly", winId)
+	MainGui.AddText("w240 Section", "Active Window Details:")
+	MainGui.AddEdit("w240 vActiveTitle ReadOnly", winTitle)
+	MainGui.AddEdit("w240 vActiveProcess ReadOnly", winProcess)
+	MainGui.AddEdit("w240 vActiveClass ReadOnly", winClass)
+	MainGui.AddEdit("w240 vActiveID ReadOnly", winId)
 
 	; Window Pairing Section
-	MainGui.Add("Text", "w240", "Window Pairing:")
-	MainGui.Add("Button", "w240", "Set as Main Workspace").OnEvent("Click", (*) => GuiPairWindow(1))
-	MainGui.Add("Button", "w240", "Set as Window 2").OnEvent("Click", (*) => GuiPairWindow(2))
-	MainGui.Add("Button", "w240", "Set as Window 3").OnEvent("Click", (*) => GuiPairWindow(3))
-	MainGui.Add("Button", "w240", "Set as Window 4").OnEvent("Click", (*) => GuiPairWindow(4))
-	MainGui.Add("Button", "w240", "Set as Window 5").OnEvent("Click", (*) => GuiPairWindow(5))
+	MainGui.AddText("w200", "Window Pairing:")
+	MainGui.AddButton("w100 Section", "Set as Workspace").OnEvent("Click", (*) => GuiPairWindow(1))
+	MainGui.AddButton("w100", "Set as Window 2").OnEvent("Click", (*) => GuiPairWindow(2))
+	MainGui.AddButton("w100", "Set as Window 3").OnEvent("Click", (*) => GuiPairWindow(3))
+	MainGui.AddButton("w100", "Set as Window 4").OnEvent("Click", (*) => GuiPairWindow(4))
+	MainGui.AddButton("w100", "Set as Window 5").OnEvent("Click", (*) => GuiPairWindow(5))
 
 
-	; Unpair Options and Quick Actions
-	MainGui.Add("Text", "w240", "Unpair Options and Quick Actions:")
-	MainGui.Add("Button", "w240", "Unpair Workspace").OnEvent("Click", (*) => GuiUnpairWindow(1))
-	MainGui.Add("Button", "w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpairWindow(10))
-	MainGui.Add("Button", "w240", "Show Window Stats").OnEvent("Click", ShowWindowStats)
-	MainGui.Add("Button", "w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
+	; Unpair Options
+	MainGui.AddButton("YS w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(1))
+	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(2))
+	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(3))
+	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(4))
+	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(5))
+
+	MainGui.Add("Text", "XM w240", "Unpair Options and Quick Actions:")
+	MainGui.AddDropDownList("w240 vWindowChoice", [winTitle, "test title 2", "test title 3"])
+	MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpairWindow(10))
+	MainGui.AddButton("w240", "Show Window Stats").OnEvent("Click", ShowWindowStats)
+	MainGui.AddButton("w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
 
 	; Show the GUI
 	MainGui.Show("w260 h450")
@@ -197,7 +203,6 @@ OpenGUI() {
 			case 5: UnpairWindow("IsWinPaired5", "win5", "Window 5")
 			case 10: UnpairAllWindows()
 		}
-
 
 		MainGui.Destroy()
 	}
