@@ -145,7 +145,7 @@ UnpairAllWindows() {
 
 OpenGUI() {
 	; Create the main GUI
-	MainGui := Gui("+Resize", "Window Management")
+	MainGui := Gui("+Resize", "Window Pairing")
 	MainGui.Opt("-MaximizeBox")
 
 	; Active Window Information Section
@@ -189,7 +189,8 @@ OpenGUI() {
 			windowTitle := WinGetTitle(Win)
 			windowProcess := WinGetProcessName(Win)
 			if (windowTitle != "")
-				WorkspaceSelect.Add(["[" windowProcess "]" windowTitle])
+				; WorkspaceSelect.Add(["[" windowProcess "] " windowTitle])
+				WorkspaceSelect.Add([windowTitle])
 		}
 	}
 
@@ -209,7 +210,7 @@ OpenGUI() {
 	*/
 
 	; Show the GUI
-	MainGui.Show("w260 h450")
+	MainGui.Show("w280 h450")
 
 
 	; Defined event handlers
