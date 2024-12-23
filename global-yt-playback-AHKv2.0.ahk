@@ -160,7 +160,6 @@ OpenGUI() {
 	; Window Pairing Section
 	; MainGui.AddText("w200", "Window Pairing:")
 	/*
-	MainGui.AddText("w100 Section", "Workspace")
 	MainGui.AddButton("w100", "Set as Window 2").OnEvent("Click", (*) => GuiPairWindow(2))
 	MainGui.AddButton("w100", "Set as Window 3").OnEvent("Click", (*) => GuiPairWindow(3))
 	MainGui.AddButton("w100", "Set as Window 4").OnEvent("Click", (*) => GuiPairWindow(4))
@@ -168,7 +167,9 @@ OpenGUI() {
 	
 	*/
 
+	MainGui.AddText("w100 Section", "Workspace")
 	WorkspaceSelect := MainGui.AddDDL("w240")
+
 	UpdateWinList()
 
 
@@ -186,8 +187,9 @@ OpenGUI() {
 		for Win in WinGetList()
 		{
 			windowTitle := WinGetTitle(Win)
+			windowProcess := WinGetProcessName(Win)
 			if (windowTitle != "")
-				WorkspaceSelect.Add([windowTitle])
+				WorkspaceSelect.Add(["[" windowProcess "]" windowTitle])
 		}
 	}
 
