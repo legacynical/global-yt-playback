@@ -32,82 +32,25 @@ workspace := win2 := win3 := win4 := win5 := ""
 win1IsPaired := win2IsPaired := win3IsPaired := win4IsPaired := win5IsPaired := false
 inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
 
-F19::YoutubeRewind5(video, workspace)
+^F19:: YoutubeControl("rewind 10 sec", "{j}")
+F19:: YoutubeControl("rewind 5 sec", "{left}")
+F20:: YoutubeControl("play/pause", "{k}")
+F21:: YoutubeControl("fast forward 5 sec", "{Right}")
+^F21:: YoutubeControl("fast forward 10 sec", "{l}")
 
-YoutubeRewind5(video, workspace)
-{
-	if WinExist(video) 
-	{
+YoutubeControl(action, keyPress) {
+	global video, workspace
+	if WinExist(video) {
 		WinActivate
 		sleep 11 ; Delay rounds to nearest multiple of 10 or 15.6 ms
-		Send "{Left}" ; YT rewind 5 seconds
+		Send keyPress
 		sleep 11
-		if WinExist(workspace) 
+		if WinExist(workspace)
 			WinActivate
 	}
 }
 
-^F19::YoutubeRewind10(video, workspace)
-
-YoutubeRewind10(video, workspace)
-{
-	if WinExist(video) 
-	{
-		WinActivate
-		sleep 11
-		Send "{j}" ; YT rewind 10 seconds
-		sleep 11		
-		if WinExist(workspace) 
-			WinActivate
-	}
-}
-
-F20::YoutubePlayPause(video, workspace)
-
-YoutubePlayPause(video, workspace)
-{
-	if WinExist(video)
-	{
-		WinActivate
-		sleep 11
-		Send "{k}" ; YT play/pause
-		sleep 11
-		if WinExist(workspace) 
-			WinActivate
-	}
-}
-
-F21::YoutubeFastforward5(video, workspace)
-
-YoutubeFastforward5(video, workspace)
-{
-	if WinExist(video)
-	{
-		WinActivate
-		sleep 11
-		Send "{Right}" ; YT fast forward 10 seconds
-		sleep 11
-		if WinExist(workspace) 
-			WinActivate
-	}
-}
-
-^F21::YoutubeFastforward10(video, workspace)
-
-YoutubeFastforward10(video, workspace)
-{
-	if WinExist(video)
-	{
-		WinActivate
-		sleep 11
-		Send "{l}" ; YT fast forward 5 seconds
-		sleep 11
-		if WinExist(workspace) 
-			WinActivate
-	}
-}
-
-Media_Prev::SpotifyPrevious(spotify)
+Media_Prev:: SpotifyPrevious(spotify)
 
 SpotifyPrevious(spotify)
 {
@@ -121,52 +64,52 @@ SpotifyPrevious(spotify)
 		{
 			WinActivate
 		}	;else {
-			;WinMinimize
+		;WinMinimize
 		;}
 	}
 }
 
-Media_Play_Pause::SpotifyPlayPause(spotify)
+Media_Play_Pause:: SpotifyPlayPause(spotify)
 
 SpotifyPlayPause(spotify)
 {
 	if WinExist(spotify)
+	{
+		WinActivate
+		sleep 11
+		Send "{Space}"
+		sleep 11
+		if WinExist(workspace)
 		{
 			WinActivate
-			sleep 11
-			Send "{Space}"
-			sleep 11
-			if WinExist(workspace)
-			{
-				WinActivate
-			} else {
-		 		WinMinimize
-			}
+		} else {
+			WinMinimize
 		}
+	}
 }
 
-Media_Next::SpotifyNext(spotify)
+Media_Next:: SpotifyNext(spotify)
 
 SpotifyNext(spotify)
 {
 	if WinExist(spotify)
+	{
+		WinActivate
+		sleep 11
+		Send "^{Right}"
+		sleep 11
+		if WinExist(workspace)
 		{
 			WinActivate
-			sleep 11
-			Send "^{Right}"
-			sleep 11
-			if WinExist(workspace)
-			{
-				WinActivate
-			}	;else {
-				;WinMinimize
-			;}
-		}
+		}	;else {
+		;WinMinimize
+		;}
+	}
 }
 
 ; F22::
 
-F23::SpotifyLowerVolume(spotify)
+F23:: SpotifyLowerVolume(spotify)
 
 SpotifyLowerVolume(spotify)
 {
@@ -177,13 +120,13 @@ SpotifyLowerVolume(spotify)
 	}
 }
 
-F24::SpotifyRaiseVolume(spotify)
+F24:: SpotifyRaiseVolume(spotify)
 
 SpotifyRaiseVolume(spotify)
 {
 	if WinExist(spotify)
 	{
-		
+
 
 	}
 }
@@ -197,281 +140,179 @@ GetWinInfo()
 	global currentID := "ahk_id " winId
 }
 
-<#`::DisplayActiveWindowStats()
+<#`:: DisplayActiveWindowStats()
 
 DisplayActiveWindowStats()
 {
 	GetWinInfo()
 	MsgBox "Active window title: " winTitle "`n"
-        . "Active window ID: " winId "`n"
-				. "Active window class: " winClass "`n"
-        . "Active window process: " winProcess
+		. "Active window ID: " winId "`n"
+		. "Active window class: " winClass "`n"
+		. "Active window process: " winProcess
 }
 
-<#1::MainWorkspace()
+<#1:: PairWindow("IsWinPaired1", "workspace", "Main Workspace")
+<#2:: PairWindow("IsWinPaired2", "win2", "Window 2")
+<#3:: PairWindow("IsWinPaired3", "win3", "Window 3")
+<#4:: PairWindow("IsWinPaired4", "win4", "Window 4")
+<#5:: PairWindow("IsWinPaired5", "win5", "Window 5")
 
-MainWorkspace()
-{
-	global inputBuffer, maxInputBuffer
+PairWindow(pairedStatus, window, windowName) {
+	global
 	GetWinInfo()
-	if (workspace == "")
-	{
-		global workspace := "ahk_id " winId ; Sets workspace to current active window
-		global win1IsPaired := true
-		MsgBox "[Pairing Main Workspace]`n"
-					. "title: " winTitle "`n"
-					. "workspace: " workspace "`n"
-					. "process: " winProcess,, "T3"
-	} else if (currentID != workspace) {
-		if WinExist(workspace)
-		{
+	if (%window% == "") {
+		%window% := "ahk_id " winId ;
+		%pairedStatus% := true
+		MsgBox "[Pairing " windowName "]`n"
+			. "title: " winTitle "`n"
+			. "workspace: " workspace "`n"
+			. "process: " winProcess, , "T3"
+	} else if (currentID != %window%) {
+		if WinExist(%window%) {
 			inputBuffer := maxInputBuffer
 			WinActivate
 		}
-	} else if (currentID == workspace) {
+	} else if (currentID == %window%) {
 		inputBuffer--
-		if (WinExist(workspace) && (inputBuffer == 0)) 
-		{	
+		if (WinExist(%window%) && (inputBuffer == 0)) {
 			inputBuffer := maxInputBuffer
 			WinMinimize
 		}
-	}	
-}
-
-^<#1::UnpairMainWorkspace()
-
-UnpairMainWorkspace()
-{
-	global win1IsPaired, workspace
-	if (win1IsPaired)
-	{
-		workspace := ""
-		win1IsPaired := false
-		MsgBox "[Unpaired Main Workspace]",, "T1"
-	} else {
-		MsgBox "Main Workspace is already unpaired!",, "T1"
 	}
 }
 
+^<#1:: UnpairWindow("IsWinPaired1", "workspace", "Main Workspace")
+^<#2:: UnpairWindow("IsWinPaired2", "win2", "Window 2")
+^<#3:: UnpairWindow("IsWinPaired3", "win3", "Window 3")
+^<#4:: UnpairWindow("IsWinPaired4", "win4", "Window 4")
+^<#5:: UnpairWindow("IsWinPaired5", "win5", "Window 5")
+^<#0:: UnpairAllWindows()
 
-<#2::Window2()
-
-Window2()
-{
-	global inputBuffer, maxInputBuffer
-	GetWinInfo()
-	if (win2 == "")
-	{
-		global win2 := "ahk_id " winId ; Sets window 2 to current active window
-		global win2IsPaired := true
-		MsgBox "[Pairing Window 2]`n"
-					. "title: " winTitle "`n"
-					. "workspace: " workspace "`n"
-					. "process: " winProcess,, "T3"
-	} else if (currentID != win2) {
-		if WinExist(win2)
-		{
-			inputBuffer := maxInputBuffer
-			WinActivate
-		}
-	} else if (currentID == win2)	{
-		inputBuffer--
-		if (WinExist(win2) && (inputBuffer == 0))
-		{	
-			inputBuffer := maxInputBuffer
-			WinMinimize
-		}
-	}	
-}
-
-^<#2::UnpairWindow2()
-
-UnpairWindow2()
-{
-	global win2IsPaired, win2
-	if (win2IsPaired)
-	{
-		win2 := ""
-		win2IsPaired := false
-		MsgBox "[Unpaired Window 2]",, "T1"
+UnpairWindow(pairedStatus, window, windowName) {
+	global
+	if (%pairedStatus%) {
+		%window% := ""
+		%pairedStatus% := false
+		MsgBox "[Unpaired " windowName "]", , "T1"
 	} else {
-		MsgBox "Window 2 is already unpaired!",, "T1"
+		MsgBox "" windowName " is already unpaired!", , "T1"
 	}
 }
 
-<#3::Window3()
-
-Window3()
-{
-	global inputBuffer, maxInputBuffer
-	GetWinInfo()
-	if (win3 == "")
-	{
-		global win3 := "ahk_id " winId ; Sets window 3 to current active window
-		global win3IsPaired := true
-		MsgBox "[Pairing Window 3]`n"
-					. "title: " winTitle "`n"
-					. "workspace: " workspace "`n"
-					. "process: " winProcess,, "T3"
-	} else if (currentID != win3) {
-		if WinExist(win3)
-		{
-			inputBuffer := maxInputBuffer
-			WinActivate
-		}
-	} else if (currentID == win3) {
-		inputBuffer--
-		if (WinExist(win3) && (inputBuffer == 0))
-		{	
-			inputBuffer := maxInputBuffer
-			WinMinimize
-		}
-	}	
-}
-
-^<#3::UnpairWindow3()
-
-UnpairWindow3()
-{
-	global win3IsPaired, win3
-	if (win3IsPaired)
-	{
-		win3 := ""
-		win3IsPaired := false
-		MsgBox "[Unpaired Window 3]",, "T1"
-	} else {
-		MsgBox "Window 3 is already unpaired!",, "T1"
-	}
-}
-
-<#4::Window4()
-
-Window4()
-{
-	global inputBuffer, maxInputBuffer
-	GetWinInfo()
-	if (win4 == "")
-	{
-		global win4 := "ahk_id " winId ; Sets window 4 to current active window
-		global win4IsPaired := true
-		MsgBox "[Pairing Window 4]`n"
-					. "title: " winTitle "`n"
-					. "workspace: " workspace "`n"
-					. "process: " winProcess,, "T3"
-	} else if (currentID != win4) {
-		if WinExist(win4)
-		{
-			inputBuffer := maxInputBuffer
-			WinActivate
-		}
-	} else if (currentID == win4) {
-		inputBuffer--
-		if (WinExist(win4) && (inputBuffer == 0))
-		{	
-			inputBuffer := maxInputBuffer
-			WinMinimize
-		}
-	}	
-}
-
-^<#4::UnpairWindow4()
-
-UnpairWindow4()
-{
-	global win4IsPaired, win4
-	if (win4IsPaired)
-	{
-		win4 := ""
-		win4IsPaired := false
-		MsgBox "[Unpaired Window 4]",, "T1"
-	} else {
-		MsgBox "Window 4 is already unpaired!",, "T1"
-	}
-}
-
-<#5::Window5()
-
-Window5()
-{
-	global inputBuffer, maxInputBuffer
-	GetWinInfo()
-	if (win5 == "")
-	{
-		global win5 := "ahk_id " winId ; Sets window 5 to current active window
-		global win5IsPaired := true
-		MsgBox "[Pairing Window 5]`n"
-					. "title: " winTitle "`n"
-					. "workspace: " workspace "`n"
-					. "process: " winProcess,, "T3"
-	} else if (currentID != win5) {
-		if WinExist(win5)
-		{
-			inputBuffer := maxInputBuffer
-			WinActivate
-		}
-	} else if (currentID == win5) {
-		inputBuffer--
-		if (WinExist(win5) && (inputBuffer == 0))
-		{	
-			inputBuffer := maxInputBuffer
-			WinMinimize
-		}
-	}	
-}
-
-^<#5::UnpairWindow5()
-
-UnpairWindow5()
-{
-	global win5IsPaired, win5
-	if (win5IsPaired)
-	{
-		win5 := ""
-		win5IsPaired := false
-		MsgBox "[Unpaired Window 5]",, "T1"
-	} else {
-		MsgBox "Window 5 is already unpaired!",, "T1"
-	}
-}
-
-^<#0::UnpairAllWindows()
-
-UnpairAllWindows()
-{
-	confirmUnpair := MsgBox("Are you sure you want to unpair all windows?",, "YesNo")
-	if confirmUnpair = "Yes"
-	{
-		global workspace, win2, win3, win4, win5, win1IsPaired, win2IsPaired,
-		win3IsPaired, win4IsPaired, win5IsPaired
+UnpairAllWindows() {
+	confirmUnpair := MsgBox("Are you sure you want to unpair all windows?", , "YesNo")
+	if confirmUnpair = "Yes" {
+		global workspace, win2, win3, win4, win5, IsWinPaired1, IsWinPaired2,
+			IsWinPaired3, IsWinPaired4, IsWinPaired5
 		workspace := win2 := win3 := win4 := win5 := ""
-		win1IsPaired := win2IsPaired := win3IsPaired := win4IsPaired := win5IsPaired := false
-		MsgBox "[Unpaired All Windows]",, "T1"		
+		IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
+		MsgBox "[Unpaired All Windows]", , "T1"
 	}
 }
 
 ;=========== GUI ===========
 ; not currently functional, need to read more docs and play around
 
-^`::OpenGUI()
+^`:: OpenGUI()
 
-OpenGUI()
-{
+OpenGUI() {
+	; Create the main GUI
+	MainGui := Gui("+Resize", "Window Pairing")
+	MainGui.Opt("-MaximizeBox")
+
+	; Active Window Information Section
 	GetWinInfo()
-  activeProcess := winProcess
-    
-  ; Create GUI
-	MyGui := Gui()
-  MyGui.Add("Text",, "Active window process: " activeProcess)
-  MyGui.AddEdit(activeProcess)
-  Btn := MyGui.Add("Button", "default xm", "OK")  ; xm puts it at the bottom left corner.
-	Btn.OnEvent("Click", ProcessUserInput)
-	MyGui.OnEvent("Close", ProcessUserInput)
-	MyGui.OnEvent("Escape", ProcessUserInput)  
-	MyGui.Show()
+	MainGui.AddText("w240 Section", "Active Window Details:")
+	MainGui.AddEdit("w240 vActiveTitle ReadOnly", winTitle)
+	MainGui.AddEdit("w240 vActiveProcess ReadOnly", winProcess)
+	MainGui.AddEdit("w240 vActiveClass ReadOnly", winClass)
+	MainGui.AddEdit("w240 vActiveID ReadOnly", winId)
 
-	ProcessUserInput(*)
-	{
-		Saved := MyGui.Submit()  ; Save the contents of named controls into an object.
-		MsgBox("You entered: " Saved.activeProcess)
+
+	; Window Pairing Section
+	; MainGui.AddText("w200", "Window Pairing:")
+	/*
+	MainGui.AddButton("w100", "Set as Window 2").OnEvent("Click", (*) => GuiPairWindow(2))
+	MainGui.AddButton("w100", "Set as Window 3").OnEvent("Click", (*) => GuiPairWindow(3))
+	MainGui.AddButton("w100", "Set as Window 4").OnEvent("Click", (*) => GuiPairWindow(4))
+	MainGui.AddButton("w100", "Set as Window 5").OnEvent("Click", (*) => GuiPairWindow(5))
+	
+	*/
+
+	MainGui.AddText("w100 Section", "Workspace")
+	WorkspaceSelect := MainGui.AddDDL("w240")
+
+	UpdateWinList()
+
+
+	WorkspaceSelect.OnEvent("Change", WindowSelected)
+
+	WindowSelected(Ctrl, *) {
+		SelectedTitle := Ctrl.Text
+		SelectedID := "ahk_id " WinGetId(SelectedTitle)
+		global workspace := SelectedID
+		global IsWinPaired1 := true
 	}
+
+	UpdateWinList() {
+
+		for Win in WinGetList()
+		{
+			windowTitle := WinGetTitle(Win)
+			windowProcess := WinGetProcessName(Win)
+			if (windowTitle != "")
+				; WorkspaceSelect.Add(["[" windowProcess "] " windowTitle])
+				WorkspaceSelect.Add([windowTitle])
+		}
+	}
+
+	/*
+	; Unpair Options
+	MainGui.AddButton("YS w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(1))
+	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(2))
+	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(3))
+	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(4))
+	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(5))
+	
+	MainGui.Add("Text", "XM w240", "Unpair Options and Quick Actions:")
+	MainGui.AddDDL("w240 vWindowChoice", [winTitle, "test title 2", "test title 3"])
+	MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpairWindow(10))
+	MainGui.AddButton("w240", "Show Window Stats").OnEvent("Click", ShowWindowStats)
+	MainGui.AddButton("w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
+	*/
+
+	; Show the GUI
+	MainGui.Show("w280 h450")
+
+
+	; Defined event handlers
+	GuiPairWindow(num) {
+		switch num {
+			case 1: PairWindow("IsWinPaired1", "workspace", "Main Workspace")
+			case 2: PairWindow("IsWinPaired2", "win2", "Window 2")
+			case 3: PairWindow("IsWinPaired3", "win3", "Window 3")
+			case 4: PairWindow("IsWinPaired4", "win4", "Window 4")
+			case 5: PairWindow("IsWinPaired5", "win5", "Window 5")
+		}
+
+		MainGui.Destroy()
+	}
+
+	GuiUnpairWindow(num) {
+		switch num {
+			case 1: UnpairWindow("IsWinPaired1", "workspace", "Main Workspace")
+			case 2: UnpairWindow("IsWinPaired2", "win2", "Window 2")
+			case 3: UnpairWindow("IsWinPaired3", "win3", "Window 3")
+			case 4: UnpairWindow("IsWinPaired4", "win4", "Window 4")
+			case 5: UnpairWindow("IsWinPaired5", "win5", "Window 5")
+			case 10: UnpairAllWindows()
+		}
+
+		MainGui.Destroy()
+	}
+
+	ShowWindowStats(*) {
+		DisplayActiveWindowStats()
+	}
+
 }
