@@ -55,7 +55,6 @@ Media_Play_Pause:: SpotifyControl("play/pause", "{Space}")
 Media_Next:: SpotifyControl("next track", "^{Right}")
 
 F22:: SpotifyControl("like", "!+{B}")
-
 F23:: SpotifyControl("lower volume", "^{Down}")
 F24:: SpotifyControl("raise volume", "^{Up}")
 
