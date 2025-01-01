@@ -50,15 +50,21 @@ YoutubeControl(action, keyPress) {
 	}
 }
 
-Media_Prev:: SpotifyPrevious(spotify)
+Media_Prev:: SpotifyControl("prev track", "^{Left}")
+Media_Play_Pause:: SpotifyControl("play/pause", "{Space}")
+Media_Next:: SpotifyControl("next track", "^{Right}")
 
-SpotifyPrevious(spotify)
-{
-	if WinExist(spotify)
-	{
+F22:: SpotifyControl("like", "!+{B}")
+
+F23:: SpotifyControl("lower volume", "^{Down}")
+F24:: SpotifyControl("raise volume", "^{Up}")
+
+SpotifyControl(action, keyPress) {
+	global spotify, workspace
+	if WinExist(spotify) {
 		WinActivate
 		sleep 11
-		ControlSend "^{Left}"
+		Send keyPress
 		sleep 11
 		if WinExist(workspace)
 		{
@@ -66,68 +72,6 @@ SpotifyPrevious(spotify)
 		}	;else {
 		;WinMinimize
 		;}
-	}
-}
-
-Media_Play_Pause:: SpotifyPlayPause(spotify)
-
-SpotifyPlayPause(spotify)
-{
-	if WinExist(spotify)
-	{
-		WinActivate
-		sleep 11
-		Send "{Space}"
-		sleep 11
-		if WinExist(workspace)
-		{
-			WinActivate
-		} else {
-			WinMinimize
-		}
-	}
-}
-
-Media_Next:: SpotifyNext(spotify)
-
-SpotifyNext(spotify)
-{
-	if WinExist(spotify)
-	{
-		WinActivate
-		sleep 11
-		Send "^{Right}"
-		sleep 11
-		if WinExist(workspace)
-		{
-			WinActivate
-		}	;else {
-		;WinMinimize
-		;}
-	}
-}
-
-; F22::
-
-F23:: SpotifyLowerVolume(spotify)
-
-SpotifyLowerVolume(spotify)
-{
-	if WinExist(spotify)
-	{
-
-
-	}
-}
-
-F24:: SpotifyRaiseVolume(spotify)
-
-SpotifyRaiseVolume(spotify)
-{
-	if WinExist(spotify)
-	{
-
-
 	}
 }
 
