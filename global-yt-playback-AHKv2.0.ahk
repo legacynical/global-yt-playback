@@ -145,7 +145,7 @@ UnpairAllWindows() {
 
 OpenGUI() {
 	; Create the main GUI
-	MainGui := Gui("+Resize", "Window Management")
+	MainGui := Gui("+Resize", "Window Pairing")
 	MainGui.Opt("-MaximizeBox")
 
 	; Active Window Information Section
@@ -156,30 +156,62 @@ OpenGUI() {
 	MainGui.AddEdit("w240 vActiveClass ReadOnly", winClass)
 	MainGui.AddEdit("w240 vActiveID ReadOnly", winId)
 
+
 	; Window Pairing Section
-	MainGui.AddText("w200", "Window Pairing:")
-	MainGui.AddButton("w100 Section", "Set as Workspace").OnEvent("Click", (*) => GuiPairWindow(1))
+	; MainGui.AddText("w200", "Window Pairing:")
+	/*
 	MainGui.AddButton("w100", "Set as Window 2").OnEvent("Click", (*) => GuiPairWindow(2))
 	MainGui.AddButton("w100", "Set as Window 3").OnEvent("Click", (*) => GuiPairWindow(3))
 	MainGui.AddButton("w100", "Set as Window 4").OnEvent("Click", (*) => GuiPairWindow(4))
 	MainGui.AddButton("w100", "Set as Window 5").OnEvent("Click", (*) => GuiPairWindow(5))
+	
+	*/
+
+	MainGui.AddText("w100 Section", "Workspace")
+	WorkspaceSelect := MainGui.AddDDL("w240")
+
+	UpdateWinList()
 
 
+	WorkspaceSelect.OnEvent("Change", WindowSelected)
+
+	WindowSelected(Ctrl, *) {
+		SelectedTitle := Ctrl.Text
+		SelectedID := "ahk_id " WinGetId(SelectedTitle)
+		global workspace := SelectedID
+		global IsWinPaired1 := true
+	}
+
+	UpdateWinList() {
+
+		for Win in WinGetList()
+		{
+			windowTitle := WinGetTitle(Win)
+			windowProcess := WinGetProcessName(Win)
+			if (windowTitle != "")
+				; WorkspaceSelect.Add(["[" windowProcess "] " windowTitle])
+				WorkspaceSelect.Add([windowTitle])
+		}
+	}
+
+	/*
 	; Unpair Options
 	MainGui.AddButton("YS w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(1))
 	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(2))
 	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(3))
 	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(4))
 	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(5))
-
+	
 	MainGui.Add("Text", "XM w240", "Unpair Options and Quick Actions:")
-	MainGui.AddDropDownList("w240 vWindowChoice", [winTitle, "test title 2", "test title 3"])
+	MainGui.AddDDL("w240 vWindowChoice", [winTitle, "test title 2", "test title 3"])
 	MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpairWindow(10))
 	MainGui.AddButton("w240", "Show Window Stats").OnEvent("Click", ShowWindowStats)
 	MainGui.AddButton("w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
+	*/
 
 	; Show the GUI
-	MainGui.Show("w260 h450")
+	MainGui.Show("w280 h450")
+
 
 	; Defined event handlers
 	GuiPairWindow(num) {
