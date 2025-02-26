@@ -29,7 +29,7 @@ InstallKeybdHook ; Allow use of additional special keys
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 spotify := "ahk_exe Spotify.exe"
 workspace := win2 := win3 := win4 := win5 := ""
-win1IsPaired := win2IsPaired := win3IsPaired := win4IsPaired := win5IsPaired := false
+IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
 inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
 
 ^F19:: YoutubeControl("rewind 10 sec", "{j}")
