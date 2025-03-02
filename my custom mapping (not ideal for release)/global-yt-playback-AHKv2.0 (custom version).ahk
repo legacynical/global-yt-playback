@@ -32,13 +32,6 @@ workspace := win2 := win3 := win4 := win5 := ""
 win1IsPaired := win2IsPaired := win3IsPaired := win4IsPaired := win5IsPaired := false
 inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
 
-^+F1:: {
-	; Parameter #1: Pass 1 instead of 0 to hibernate rather than suspend.
-	; Parameter #2: Pass 1 instead of 0 to suspend immediately rather than asking each application for permission.
-	; Parameter #3: Pass 1 instead of 0 to disable all wake events.
-	DllCall("PowrProf\SetSuspendState", "Int", 1, "Int", 0, "Int", 0)
-}
-
 ^F19:: YoutubeControl("rewind 10 sec", "{j}")
 F19:: YoutubeControl("rewind 5 sec", "{left}")
 F20:: YoutubeControl("play/pause", "{k}")
