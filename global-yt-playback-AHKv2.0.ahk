@@ -142,7 +142,7 @@ UnpairAllWindows() {
 ; currently under development, limited functionality
 
 ^`:: {
-	MainGui.Show()
+	MainGui.Show("w280 h450")
 	UpdateGUI()
 }
 
@@ -157,7 +157,15 @@ activeWinProcess := MainGui.AddEdit("w240 vActiveProcess ReadOnly", "[Active Win
 activeWinClass := MainGui.AddEdit("w240 vActiveClass ReadOnly", "[Active Window Class]")
 activeWinId := MainGui.AddEdit("w240 vActiveID ReadOnly", "[Active Window Id]")
 
-SetTimer UpdateGUI, 500 ; calls UpdateGUI() every 500ms
+; Add controls for window DropDownList select
+MainGui.AddText("w100 Section", "Workspace")
+WorkspaceSelect := MainGui.AddDDL("w240")
+
+; Assign event handlers
+WorkspaceSelect.OnEvent("Change", WindowSelected)
+
+SetTimer UpdateGUI, 250 ; calls UpdateGUI() every 500ms
+
 
 UpdateGUI() {
 	; if the GUI window doesn't exist or is minimized...
@@ -181,32 +189,9 @@ UpdateGUI() {
 	
 	*/
 
-	MainGui.AddText("w100 Section", "Workspace")
-	WorkspaceSelect := MainGui.AddDDL("w240")
 
-	UpdateWinList()
+	; UpdateWinList()
 
-
-	WorkspaceSelect.OnEvent("Change", WindowSelected)
-
-	WindowSelected(Ctrl, *) {
-		SelectedTitle := Ctrl.Text
-		SelectedID := "ahk_id " WinGetId(SelectedTitle)
-		global workspace := SelectedID
-		global IsWinPaired1 := true
-	}
-
-	UpdateWinList() {
-
-		for Win in WinGetList()
-		{
-			windowTitle := WinGetTitle(Win)
-			windowProcess := WinGetProcessName(Win)
-			if (windowTitle != "")
-				WorkspaceSelect.Add(["[" windowProcess "] " windowTitle])
-			WorkspaceSelect.Add([windowTitle])
-		}
-	}
 
 	/*
 	; Unpair Options
@@ -223,9 +208,6 @@ UpdateGUI() {
 	MainGui.AddButton("w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
 	*/
 
-	; Show the GUI
-	MainGui.Show("w280 h450")
-
 
 	; Defined event handlers
 	GuiPairWindow(num) {
@@ -237,7 +219,6 @@ UpdateGUI() {
 			case 5: PairWindow("IsWinPaired5", "win5", "Window 5")
 		}
 
-		MainGui.Destroy()
 	}
 
 	GuiUnpairWindow(num) {
@@ -250,11 +231,23 @@ UpdateGUI() {
 			case 10: UnpairAllWindows()
 		}
 
-		MainGui.Destroy()
 	}
+}
 
-	ShowWindowStats(*) {
-		DisplayActiveWindowStats()
+WindowSelected(Ctrl, *) {
+	SelectedTitle := Ctrl.Text
+	SelectedID := "ahk_id " WinGetId(SelectedTitle)
+	global workspace := SelectedID
+	global IsWinPaired1 := true
+}
+
+UpdateWinList() {
+	for Win in WinGetList()
+	{
+		windowTitle := WinGetTitle(Win)
+		windowProcess := WinGetProcessName(Win)
+		if (windowTitle != "")
+			WorkspaceSelect.Add(["[" windowProcess "] " windowTitle])
+		WorkspaceSelect.Add([windowTitle])
 	}
-
 }
