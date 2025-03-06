@@ -142,7 +142,7 @@ UnpairAllWindows() {
 ; currently under development, limited functionality
 
 ^`:: {
-	MainGui.Show()
+	MainGui.Show("w280 h450")
 	UpdateGUI()
 }
 
@@ -157,7 +157,34 @@ activeWinProcess := MainGui.AddEdit("w240 vActiveProcess ReadOnly", "[Active Win
 activeWinClass := MainGui.AddEdit("w240 vActiveClass ReadOnly", "[Active Window Class]")
 activeWinId := MainGui.AddEdit("w240 vActiveID ReadOnly", "[Active Window Id]")
 
-SetTimer UpdateGUI, 500 ; calls UpdateGUI() every 500ms
+; Add controls for window DropDownList select
+MainGui.AddText("w100 Section", "Workspace")
+WorkspaceSelect := MainGui.AddDDL("w240")
+
+/*
+MainGui.AddButton("w100", "Set as Window 2").OnEvent("Click", (*) => GuiPairWindow(2))
+MainGui.AddButton("w100", "Set as Window 3").OnEvent("Click", (*) => GuiPairWindow(3))
+MainGui.AddButton("w100", "Set as Window 4").OnEvent("Click", (*) => GuiPairWindow(4))
+MainGui.AddButton("w100", "Set as Window 5").OnEvent("Click", (*) => GuiPairWindow(5))
+
+MainGui.AddButton("YS w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(1))
+MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(2))
+MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(3))
+MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(4))
+MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(5))
+
+MainGui.Add("Text", "XM w240", "Unpair Options and Quick Actions:")
+MainGui.AddDDL("w240 vWindowChoice", ["test title 1", "test title 2", "test title 3"])
+MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpairWindow(10))
+MainGui.AddButton("w240", "Show Window Stats").OnEvent("Click", ShowWindowStats)
+MainGui.AddButton("w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
+*/
+
+; Assign event handlers
+WorkspaceSelect.OnEvent("Change", WindowSelected)
+
+SetTimer UpdateGUI, 250 ; calls UpdateGUI() every 500ms
+
 
 UpdateGUI() {
 	; if the GUI window doesn't exist or is minimized...
@@ -169,92 +196,47 @@ UpdateGUI() {
 	activeWinProcess.Value := winProcess
 	activeWinClass.Value := winClass
 	activeWinId.Value := winId
+}
 
+WindowSelected(Ctrl, *) {
+	SelectedTitle := Ctrl.Text
+	SelectedID := "ahk_id " WinGetId(SelectedTitle)
+	global workspace := SelectedID
+	global IsWinPaired1 := true
+}
 
-	; Window Pairing Section
-	; MainGui.AddText("w200", "Window Pairing:")
-	/*
-	MainGui.AddButton("w100", "Set as Window 2").OnEvent("Click", (*) => GuiPairWindow(2))
-	MainGui.AddButton("w100", "Set as Window 3").OnEvent("Click", (*) => GuiPairWindow(3))
-	MainGui.AddButton("w100", "Set as Window 4").OnEvent("Click", (*) => GuiPairWindow(4))
-	MainGui.AddButton("w100", "Set as Window 5").OnEvent("Click", (*) => GuiPairWindow(5))
-	
-	*/
-
-	MainGui.AddText("w100 Section", "Workspace")
-	WorkspaceSelect := MainGui.AddDDL("w240")
-
-	UpdateWinList()
-
-
-	WorkspaceSelect.OnEvent("Change", WindowSelected)
-
-	WindowSelected(Ctrl, *) {
-		SelectedTitle := Ctrl.Text
-		SelectedID := "ahk_id " WinGetId(SelectedTitle)
-		global workspace := SelectedID
-		global IsWinPaired1 := true
+UpdateWinList() {
+	for Win in WinGetList()
+	{
+		windowTitle := WinGetTitle(Win)
+		windowProcess := WinGetProcessName(Win)
+		if (windowTitle != "")
+			WorkspaceSelect.Add(["[" windowProcess "] " windowTitle])
+		WorkspaceSelect.Add([windowTitle])
 	}
+}
 
-	UpdateWinList() {
-
-		for Win in WinGetList()
-		{
-			windowTitle := WinGetTitle(Win)
-			windowProcess := WinGetProcessName(Win)
-			if (windowTitle != "")
-				WorkspaceSelect.Add(["[" windowProcess "] " windowTitle])
-			WorkspaceSelect.Add([windowTitle])
-		}
+GuiPairWindow(num) {
+	switch num {
+		case 1: PairWindow("IsWinPaired1", "workspace", "Main Workspace")
+		case 2: PairWindow("IsWinPaired2", "win2", "Window 2")
+		case 3: PairWindow("IsWinPaired3", "win3", "Window 3")
+		case 4: PairWindow("IsWinPaired4", "win4", "Window 4")
+		case 5: PairWindow("IsWinPaired5", "win5", "Window 5")
 	}
+}
 
-	/*
-	; Unpair Options
-	MainGui.AddButton("YS w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(1))
-	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(2))
-	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(3))
-	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(4))
-	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(5))
-	
-	MainGui.Add("Text", "XM w240", "Unpair Options and Quick Actions:")
-	MainGui.AddDDL("w240 vWindowChoice", [winTitle, "test title 2", "test title 3"])
-	MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpairWindow(10))
-	MainGui.AddButton("w240", "Show Window Stats").OnEvent("Click", ShowWindowStats)
-	MainGui.AddButton("w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
-	*/
-
-	; Show the GUI
-	MainGui.Show("w280 h450")
-
-
-	; Defined event handlers
-	GuiPairWindow(num) {
-		switch num {
-			case 1: PairWindow("IsWinPaired1", "workspace", "Main Workspace")
-			case 2: PairWindow("IsWinPaired2", "win2", "Window 2")
-			case 3: PairWindow("IsWinPaired3", "win3", "Window 3")
-			case 4: PairWindow("IsWinPaired4", "win4", "Window 4")
-			case 5: PairWindow("IsWinPaired5", "win5", "Window 5")
-		}
-
-		MainGui.Destroy()
+GuiUnpairWindow(num) {
+	switch num {
+		case 1: UnpairWindow("IsWinPaired1", "workspace", "Main Workspace")
+		case 2: UnpairWindow("IsWinPaired2", "win2", "Window 2")
+		case 3: UnpairWindow("IsWinPaired3", "win3", "Window 3")
+		case 4: UnpairWindow("IsWinPaired4", "win4", "Window 4")
+		case 5: UnpairWindow("IsWinPaired5", "win5", "Window 5")
+		case 10: UnpairAllWindows()
 	}
+}
 
-	GuiUnpairWindow(num) {
-		switch num {
-			case 1: UnpairWindow("IsWinPaired1", "workspace", "Main Workspace")
-			case 2: UnpairWindow("IsWinPaired2", "win2", "Window 2")
-			case 3: UnpairWindow("IsWinPaired3", "win3", "Window 3")
-			case 4: UnpairWindow("IsWinPaired4", "win4", "Window 4")
-			case 5: UnpairWindow("IsWinPaired5", "win5", "Window 5")
-			case 10: UnpairAllWindows()
-		}
-
-		MainGui.Destroy()
-	}
-
-	ShowWindowStats(*) {
-		DisplayActiveWindowStats()
-	}
-
+ShowWindowStats(*) {
+	DisplayActiveWindowStats()
 }
