@@ -160,8 +160,9 @@ activeWinId := MainGui.AddEdit("w240 vActiveID ReadOnly", "[Active Window Id]")
 SetTimer UpdateGUI, 500 ; calls UpdateGUI() every 500ms
 
 UpdateGUI() {
-	if (!(WinGetMinMax("ahk_id " MainGui.Hwnd) == 1)) { ; if the GUI window isn't maximized
-		return ; don't update the GUI
+	; if the GUI window doesn't exist or is minimized...
+	if (!(WinExist("ahk_id " MainGui.Hwnd)) || (WinGetMinMax("ahk_id " MainGui.Hwnd) == -1)) {
+		return ; ...then don't update the GUI
 	}
 	GetWinInfo() ; called to get latest win info
 	activeWinTitle.Value := winTitle
