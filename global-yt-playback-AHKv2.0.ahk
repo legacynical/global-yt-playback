@@ -141,20 +141,33 @@ UnpairAllWindows() {
 ;=========== GUI ===========
 ; currently under development, limited functionality
 
-^`:: OpenGUI()
+^`:: {
+	MainGui.Show()
+	UpdateGUI()
+}
 
-OpenGUI() {
-	; Create the main GUI
-	MainGui := Gui("+Resize", "Window Pairing")
-	MainGui.Opt("-MaximizeBox")
+; Create the main GUI
+MainGui := Gui("+Resize", "Window Pairing")
+MainGui.Opt("-MaximizeBox")
 
-	; Active Window Information Section
-	GetWinInfo()
-	MainGui.AddText("w240 Section", "Active Window Details:")
-	MainGui.AddEdit("w240 vActiveTitle ReadOnly", winTitle)
-	MainGui.AddEdit("w240 vActiveProcess ReadOnly", winProcess)
-	MainGui.AddEdit("w240 vActiveClass ReadOnly", winClass)
-	MainGui.AddEdit("w240 vActiveID ReadOnly", winId)
+; Add Controls for active window stats
+MainGui.AddText("w240 Section", "Active Window Details:")
+activeWinTitle := MainGui.AddEdit("w240 vActiveTitle ReadOnly", winTitle)
+activeWinProcess := MainGui.AddEdit("w240 vActiveProcess ReadOnly", winProcess)
+activeWinClass := MainGui.AddEdit("w240 vActiveClass ReadOnly", winClass)
+activeWinId := MainGui.AddEdit("w240 vActiveID ReadOnly", winId)
+
+
+UpdateGUI() {
+	GetWinInfo() ; called to get latest win info
+	activeWinTitle.Delete()
+	activeWinTitle.Add(winTitle)
+	activeWinProcess.Delete()
+	activeWinProcess.Add(winProcess)
+	activeWinClass.Delete()
+	activeWinClass.Add(winClass)
+	activeWinId.Delete()
+	activeWinId.Add(winId)
 
 
 	; Window Pairing Section
@@ -189,8 +202,8 @@ OpenGUI() {
 			windowTitle := WinGetTitle(Win)
 			windowProcess := WinGetProcessName(Win)
 			if (windowTitle != "")
-				; WorkspaceSelect.Add(["[" windowProcess "] " windowTitle])
-				WorkspaceSelect.Add([windowTitle])
+				WorkspaceSelect.Add(["[" windowProcess "] " windowTitle])
+			WorkspaceSelect.Add([windowTitle])
 		}
 	}
 
