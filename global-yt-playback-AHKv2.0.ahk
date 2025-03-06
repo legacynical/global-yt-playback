@@ -152,10 +152,10 @@ MainGui.Opt("-MaximizeBox")
 
 ; Add Controls for active window stats
 MainGui.AddText("w240 Section", "Active Window Details:")
-activeWinTitle := MainGui.AddEdit("w240 vActiveTitle ReadOnly", winTitle)
-activeWinProcess := MainGui.AddEdit("w240 vActiveProcess ReadOnly", winProcess)
-activeWinClass := MainGui.AddEdit("w240 vActiveClass ReadOnly", winClass)
-activeWinId := MainGui.AddEdit("w240 vActiveID ReadOnly", winId)
+activeWinTitle := MainGui.AddEdit("w240 vActiveTitle ReadOnly", "[Active Window Title]")
+activeWinProcess := MainGui.AddEdit("w240 vActiveProcess ReadOnly", "[Active Window Process]")
+activeWinClass := MainGui.AddEdit("w240 vActiveClass ReadOnly", "[Active Window Class]")
+activeWinId := MainGui.AddEdit("w240 vActiveID ReadOnly", "[Active Window Id]")
 
 SetTimer UpdateGUI, 500 ; calls UpdateGUI() every 500ms
 
@@ -164,14 +164,10 @@ UpdateGUI() {
 		return ; don't update the GUI
 	}
 	GetWinInfo() ; called to get latest win info
-	activeWinTitle.Delete()
-	activeWinTitle.Add(winTitle)
-	activeWinProcess.Delete()
-	activeWinProcess.Add(winProcess)
-	activeWinClass.Delete()
-	activeWinClass.Add(winClass)
-	activeWinId.Delete()
-	activeWinId.Add(winId)
+	activeWinTitle.Value := winTitle
+	activeWinProcess.Value := winProcess
+	activeWinClass.Value := winClass
+	activeWinId.Value := winId
 
 
 	; Window Pairing Section
