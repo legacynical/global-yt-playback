@@ -144,7 +144,7 @@ global winSelectList := []
 global winList := []
 
 ^`:: {
-	MainGui.Show("w280 h450")
+	MainGui.Show("w500 h450")
 	UpdateGUI()
 	UpdateWinList()
 }
@@ -155,14 +155,13 @@ MainGui.Opt("-MaximizeBox")
 
 ; Add Controls for active window stats
 MainGui.AddText("w240 Section", "Focused Window Details:")
-activeWinTitle := MainGui.AddEdit("w240 vActiveTitle ReadOnly", "[Active Window Title]")
-activeWinProcess := MainGui.AddEdit("w240 vActiveProcess ReadOnly", "[Active Window Process]")
-activeWinClass := MainGui.AddEdit("w240 vActiveClass ReadOnly", "[Active Window Class]")
-activeWinId := MainGui.AddEdit("w240 vActiveID ReadOnly", "[Active Window Id]")
+activeWinTitle := MainGui.AddEdit("w400 vActiveTitle ReadOnly", "[Active Window Title]")
+; activeWinClass := MainGui.AddEdit("w240 vActiveClass ReadOnly", "[Active Window Class]")
+; activeWinId := MainGui.AddEdit("w240 vActiveID ReadOnly", "[Active Window Id]")
 
 ; Add controls for window DropDownList select
 MainGui.AddText("w100 Section", "Workspace")
-WorkspaceSelect := MainGui.AddDDL("w240")
+WorkspaceSelect := MainGui.AddDDL("w400")
 winSelectList.Push(WorkspaceSelect)
 
 /*
@@ -196,10 +195,9 @@ UpdateGUI() {
 		return ; ...then don't update the GUI
 	}
 	GetWinInfo() ; called to get latest win info
-	activeWinTitle.Value := winTitle
-	activeWinProcess.Value := winProcess
-	activeWinClass.Value := winClass
-	activeWinId.Value := winId
+	activeWinTitle.Value := "[" StrReplace(winProcess, ".exe") "] " winTitle
+	; activeWinClass.Value := winClass
+	; activeWinId.Value := winId
 }
 
 
@@ -207,10 +205,14 @@ WindowSelected(Ctrl, *) {
 	global winList, workspace, IsWinPaired1
 	for index, window in winList {
 		if (window.string == Ctrl.Text) {
-			workspace := "ahk_id " window.hwnd
-			IsWinPaired1 := true
-			UpdateWinList() ;
-			return
+			if WinExist(window.hwnd) {
+				workspace := "ahk_id " window.hwnd
+				IsWinPaired1 := true
+				UpdateWinList()
+				return
+			} else {
+				break
+			}
 		}
 	}
 	MsgBox "Selected window not found. Try Again!", , "T1"
@@ -225,7 +227,7 @@ UpdateWinList() { ; To be called after GUI actions instead of constant polling f
 		for hwnd in WinGetList() ; hwnd is the unique window handle
 		{
 			windowTitle := WinGetTitle(hwnd)
-			windowProcess := WinGetProcessName(hwnd)
+			windowProcess := StrReplace(WinGetProcessName(hwnd), ".exe")
 			if (windowTitle != "") {
 				displayString := "[" windowProcess "] " windowTitle
 				winList.Push({ string: displayString, hwnd: hwnd })
