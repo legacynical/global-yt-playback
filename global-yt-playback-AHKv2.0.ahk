@@ -140,10 +140,13 @@ UnpairAllWindows() {
 
 ;=========== GUI ===========
 ; currently under development, limited functionality
+global winSelectList := []
+global winList := []
 
 ^`:: {
 	MainGui.Show("w280 h450")
 	UpdateGUI()
+	UpdateWinList()
 }
 
 ; Create the main GUI
@@ -151,7 +154,7 @@ MainGui := Gui("+Resize", "Window Pairing")
 MainGui.Opt("-MaximizeBox")
 
 ; Add Controls for active window stats
-MainGui.AddText("w240 Section", "Active Window Details:")
+MainGui.AddText("w240 Section", "Focused Window Details:")
 activeWinTitle := MainGui.AddEdit("w240 vActiveTitle ReadOnly", "[Active Window Title]")
 activeWinProcess := MainGui.AddEdit("w240 vActiveProcess ReadOnly", "[Active Window Process]")
 activeWinClass := MainGui.AddEdit("w240 vActiveClass ReadOnly", "[Active Window Class]")
@@ -160,6 +163,7 @@ activeWinId := MainGui.AddEdit("w240 vActiveID ReadOnly", "[Active Window Id]")
 ; Add controls for window DropDownList select
 MainGui.AddText("w100 Section", "Workspace")
 WorkspaceSelect := MainGui.AddDDL("w240")
+winSelectList.Push(WorkspaceSelect)
 
 /*
 MainGui.AddButton("w100", "Set as Window 2").OnEvent("Click", (*) => GuiPairWindow(2))
@@ -198,21 +202,42 @@ UpdateGUI() {
 	activeWinId.Value := winId
 }
 
+
 WindowSelected(Ctrl, *) {
-	SelectedTitle := Ctrl.Text
-	SelectedID := "ahk_id " WinGetId(SelectedTitle)
-	global workspace := SelectedID
-	global IsWinPaired1 := true
+	global winList, workspace, IsWinPaired1
+	for index, window in winList {
+		if (window.string == Ctrl.Text) {
+			workspace := "ahk_id " window.hwnd
+			IsWinPaired1 := true
+			UpdateWinList() ;
+			return
+		}
+	}
+	MsgBox "Selected window not found. Try Again!", , "T1"
+	UpdateWinList()
+	Ctrl.Value := 1 ; Reset selection to "[Select Window...]"
 }
 
-UpdateWinList() {
-	for Win in WinGetList()
+UpdateWinList() { ; To be called after GUI actions instead of constant polling for performance
+	global winList
+	for winSelect in winSelectList
 	{
-		windowTitle := WinGetTitle(Win)
-		windowProcess := WinGetProcessName(Win)
-		if (windowTitle != "")
-			WorkspaceSelect.Add(["[" windowProcess "] " windowTitle])
-		WorkspaceSelect.Add([windowTitle])
+		for hwnd in WinGetList() ; hwnd is the unique window handle
+		{
+			windowTitle := WinGetTitle(hwnd)
+			windowProcess := WinGetProcessName(hwnd)
+			if (windowTitle != "") {
+				displayString := "[" windowProcess "] " windowTitle
+				winList.Push({ string: displayString, hwnd: hwnd })
+			}
+		}
+		; Update dropdown options
+		choices := ["[Select Window...]"]
+		for window in winList {
+			choices.Push(window.string)
+		}
+		winSelect.Delete()
+		winSelect.Add(choices)
 	}
 }
 
