@@ -173,6 +173,7 @@ UnpairAllWindows() {
 
 ^`:: {
 	MainGui.Show("w500 h450")
+	global guiHwnd := MainGui.Hwnd
 	UpdateGUI()
 }
 
@@ -216,14 +217,21 @@ MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpai
 MainGui.AddButton("w240", "Show Window Stats").OnEvent("Click", ShowWindowStats)
 MainGui.AddButton("w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
 */
+isGuiRefresh := true ;TODO make this a gui toggle
 
-SetTimer UpdateGUI, 250 ; calls UpdateGUI() every 500ms
+SetGuiRefreshTimer(isGuiRefresh)
+
+SetGuiRefreshTimer(bool) {
+	SetTimer UpdateGUI, (bool ? 250 : 0) ; calls UpdateGUI() every 250ms or disables timer
+}
+
 
 UpdateGUI() {
 	; if the GUI window doesn't exist or is minimized...
-	if (!(WinExist("ahk_id " MainGui.Hwnd)) || (WinGetMinMax("ahk_id " MainGui.Hwnd) == -1)) {
-		return ; ...then don't update the GUI
+	if (!(WinExist("ahk_id " guiHwnd)) || (WinGetMinMax("ahk_id " guiHwnd) == -1)) {
+		return
 	}
+	
 	GetWinInfo() ; called to get latest win info
 	activeWinTitle.Value := "[" StrReplace(winProcess, ".exe") "] " winTitle
 	; activeWinClass.Value := winClass
