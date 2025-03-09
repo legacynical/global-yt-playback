@@ -56,10 +56,11 @@ YoutubeControl(action, keyPress) {
 
 GetWinInfo() {
 	global
-	winTitle := WinGetTitle("A")
-	winId := WinGetID("A")
-	winClass := WinGetClass("A")
-	winProcess := WinGetProcessName("A")
+	local active := WinExist("A") ? "A" : "" ; get info of active window if it exists, else get info of last found window
+	winTitle := WinGetTitle(active)
+	winId := WinGetID(active)
+	winClass := WinGetClass(active)
+	winProcess := WinGetProcessName(active)
 	currentID := "ahk_id " winId
 }
 
@@ -146,7 +147,10 @@ global winList := []
 ^`:: {
 	MainGui.Show("w500 h450")
 	UpdateGUI()
-	UpdateWinList()
+	for winSelect in winSelectList {
+		UpdateWinList(winSelect)
+		MsgBox "updated a winSelect!", , "T1"
+	}
 }
 
 ; Create the main GUI
@@ -163,6 +167,7 @@ activeWinTitle := MainGui.AddEdit("w400 vActiveTitle ReadOnly", "[Active Window 
 MainGui.AddText("w100 Section", "Workspace")
 WorkspaceSelect := MainGui.AddDDL("w400")
 winSelectList.Push(WorkspaceSelect)
+UpdateWinList(WorkspaceSelect)
 
 /*
 MainGui.AddButton("w100", "Set as Window 2").OnEvent("Click", (*) => GuiPairWindow(2))
@@ -185,6 +190,7 @@ MainGui.AddButton("w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
 
 ; Assign event handlers
 WorkspaceSelect.OnEvent("Change", WindowSelected)
+WorkspaceSelect.OnEvent("LoseFocus", UpdateWinList) ; NOT Chef's kiss
 
 SetTimer UpdateGUI, 250 ; calls UpdateGUI() every 500ms
 
@@ -203,44 +209,65 @@ UpdateGUI() {
 
 WindowSelected(Ctrl, *) {
 	global winList, workspace, IsWinPaired1
-	for index, window in winList {
-		if (window.string == Ctrl.Text) {
+	for window in winList {
+		if (window.string == Ctrl.Text) { ; matches displayString
 			if WinExist(window.hwnd) {
 				workspace := "ahk_id " window.hwnd
 				IsWinPaired1 := true
-				UpdateWinList()
+				Sleep 11
+				UpdateWinList(Ctrl)
 				return
 			} else {
-				break
+				MsgBox "Did you select [Select Window...] ??", , "T1"
+				UpdateWinList(Ctrl)
 			}
 		}
 	}
 	MsgBox "Selected window not found. Try Again!", , "T1"
-	UpdateWinList()
-	Ctrl.Value := 1 ; Reset selection to "[Select Window...]"
+	UpdateWinList(Ctrl)
 }
 
-UpdateWinList() { ; To be called after GUI actions instead of constant polling for performance
-	global winList
-	for winSelect in winSelectList
-	{
-		for hwnd in WinGetList() ; hwnd is the unique window handle
-		{
-			windowTitle := WinGetTitle(hwnd)
-			windowProcess := StrReplace(WinGetProcessName(hwnd), ".exe")
-			if (windowTitle != "") {
-				displayString := "[" windowProcess "] " windowTitle
-				winList.Push({ string: displayString, hwnd: hwnd })
-			}
-		}
-		; Update dropdown options
-		choices := ["[Select Window...]"]
-		for window in winList {
-			choices.Push(window.string)
-		}
-		winSelect.Delete()
-		winSelect.Add(choices)
+; TODO Fix Logic flow,
+UpdateWinList(Ctrl, *) { ; To be called after GUI actions instead of constant polling for performance
+	; if a new window is selected, save it before winList reorder
+	;selectedWin := (Ctrl.Value > 1) ? winList[Ctrl.Value] : "none" ; note: Ctrl.Value initializes to 0 for non preselected DDLs
+	newWinList := []
+
+
+	if (Ctrl.Value > 1) {
+		selectedWin := winList[Ctrl.value - 1]
+		Ctrl.Delete()
+		Ctrl.Add([selectedWin.string])
+		newWinList.Push({ string: selectedWin.string, hwnd: selectedWin.hwnd })
+		Ctrl.Choose(1)
+	} else {
+		selectedWin := "none"
+		Ctrl.Delete()
+		Ctrl.Add(["[Select Window...]"])
+		;newWinList.Push("[Select Window...]")
+		Ctrl.Choose(1)
 	}
+
+
+	for hwnd in WinGetList() ; hwnd is the unique window handle
+	{
+		windowTitle := WinGetTitle(hwnd)
+		windowProcess := StrReplace(WinGetProcessName(hwnd), ".exe")
+
+		if (windowTitle != "" && (selectedWin == "none" || hwnd != selectedWin.hwnd)) { ; if not an blank title window or a selected window
+			displayString := "[" windowProcess "] " windowTitle
+			newWinList.Push({ string: displayString, hwnd: hwnd }) ; add to new list to repopulate dropdown choices
+		}
+	}
+	; Update dropdown options
+	choices := []
+	for window in newWinList {
+		choices.Push(window.string)
+	}
+	Ctrl.Add(choices)
+	global winList := newWinList
+	;Ctrl.Value := 1 ; The first element of choice, which also reflects selection state
+
 }
 
 GuiPairWindow(num) {
