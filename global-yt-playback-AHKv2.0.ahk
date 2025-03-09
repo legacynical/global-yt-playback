@@ -48,18 +48,18 @@ workspaceList := [
 ]
 inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
 
-Media_Prev:: YoutubeControl("rewind 5 sec", "{left}")
-^Media_Prev:: YoutubeControl("rewind 10 sec", "{j}")
-Media_Next:: YoutubeControl("fast forward 5 sec", "{Right}")
-^Media_Next:: YoutubeControl("fast forward 10 sec", "{l}")
-; Most browsers allow Media_Play_Pause by default but this ensures that it targets a YouTube tab
-Media_Play_Pause:: YoutubeControl("play/pause", "{k}")
+Media_Prev:: YoutubeControl("{left}") ; rewind 5 sec
+^Media_Prev:: YoutubeControl("{j}") ; rewind 10 sec
+Media_Next:: YoutubeControl("{Right}") ; fast forward 5 sec
+^Media_Next:: YoutubeControl("{l}") ; fast forward 10 sec
+Media_Play_Pause:: YoutubeControl("{k}") ; play/pause
+	; Most browsers allow Media_Play_Pause by default but this ensures that it targets a YouTube tab
 
 ; If you don't have Media_Play_Pause key, uncomment and set hotkey
 ; hotkey::Media_Play_Pause
 
 ; action param not used but added for clarity future use
-YoutubeControl(action, keyPress) {
+YoutubeControl(keyPress) {
 	global video, workspaceList
 	if WinExist(video) {
 		WinActivate
@@ -106,14 +106,13 @@ properly dereferenced with %% and assigned values (which is NOT CLEARLY STATED I
 PairWindow(workspaceObject) {
 	global
 	GetWinInfo()
-	local window := workspaceObject.id
-	local windowLabel := workspaceObject.label
+	local window := workspaceObject.id ; only used for readability
 	if (window == "") {
-		workspaceObject.id := "ahk_id " winId ;
+		workspaceObject.id := "ahk_id " winId
 		workspaceObject.isPaired := true
-		MsgBox "[Pairing " windowLabel "]`n"
+		MsgBox "[Pairing " workspaceObject.label "]`n"
 			. "title: " winTitle "`n"
-			. "workspace: " window "`n"
+			. "workspace: " winId "`n"
 			. "process: " winProcess, , "T3"
 	} else if (currentID != window) {
 		if WinExist(window) {
@@ -175,14 +174,7 @@ UnpairAllWindows() {
 ^`:: {
 	MainGui.Show("w500 h450")
 	UpdateGUI()
-	for workspace in workspaceList {
-		MainGui.AddText("w100 Section", workspace.label)
-		%workspace.control% := MainGui.AddDDL("w400")
-		;UpdateWinList(workspace) ;TODO (1/2) decide whether to call separate updates with workspace param
-	}
-	;TODO (2/2) or call a unified update to all with workspaceList param
 }
-
 
 
 ; Create the main GUI
@@ -225,12 +217,7 @@ MainGui.AddButton("w240", "Show Window Stats").OnEvent("Click", ShowWindowStats)
 MainGui.AddButton("w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
 */
 
-; Assign event handlers
-;Win1Select.OnEvent("Change", (*) => WindowSelected(WorkspaceSelect, workspace, IsWinPaired1))
-	;TODO refactor this after globals refactor
 SetTimer UpdateGUI, 250 ; calls UpdateGUI() every 500ms
-
-global winList := []
 
 UpdateGUI() {
 	; if the GUI window doesn't exist or is minimized...
