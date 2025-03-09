@@ -29,6 +29,13 @@ InstallKeybdHook ; Allow use of additional special keys
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 workspace := win2 := win3 := win4 := win5 := ""
 IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
+workspaceList := [
+	{ id: "", isPaired: false, label: "Main Workspace"},
+	{ id: "", isPaired: false, label: "Window 2"},
+	{ id: "", isPaired: false, label: "Window 3"},
+	{ id: "", isPaired: false, label: "Window 4"},
+	{ id: "", isPaired: false, label: "Window 5"},
+]
 inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
 
 Media_Prev:: YoutubeControl("rewind 5 sec", "{left}")
