@@ -29,12 +29,22 @@ InstallKeybdHook ; Allow use of additional special keys
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 ;workspace := win2 := win3 := win4 := win5 := ""
 ;IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
+
+class Workspace {
+	__New(id, isPaired, label) {
+		this.id := id
+		this.isPaired := isPaired
+		this.label := label
+		this.ddl := ""
+	}
+}
+
 workspaceList := [
-	{ id: "", isPaired: false, control: "Win1Select", label: "Main Workspace"},
-	{ id: "", isPaired: false, control: "Win2Select", label: "Window 2"},
-	{ id: "", isPaired: false, control: "Win3Select", label: "Window 3"},
-	{ id: "", isPaired: false, control: "Win4Select", label: "Window 4"},
-	{ id: "", isPaired: false, control: "Win5Select", label: "Window 5"},
+	Workspace("", false, "Main Workspace"),
+	Workspace("", false, "Window 2"),
+	Workspace("", false, "Window 3"),
+	Workspace("", false, "Window 4"),
+	Workspace("", false, "Window 5")
 ]
 inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
 
@@ -51,13 +61,12 @@ Media_Play_Pause:: YoutubeControl("play/pause", "{k}")
 ; action param not used but added for clarity future use
 YoutubeControl(action, keyPress) {
 	global video, workspaceList
-	workspace := workspaceList[1].id ; YT playback will return window focus back to main workspace
 	if WinExist(video) {
 		WinActivate
 		sleep 11 ; Delay rounds to nearest multiple of 10 or 15.6 ms
 		Send keyPress
 		sleep 11
-		if WinExist(workspace)
+		if WinExist(workspaceList[1].id) ; YT playback will return window focus back to main workspace
 			WinActivate
 	}
 }
@@ -190,14 +199,12 @@ activeWinTitle := MainGui.AddEdit("w400 vActiveTitle ReadOnly", "[Active Window 
 AddDropDownListControls()
 
 AddDropDownListControls() {
-	for workspace in workspaceList {
-		MainGui.AddText("w100 Section", workspace.label)
-		%workspace.control% := MainGui.AddDDL("w400")
-		;UpdateWinList(controlObject.control, controlObject.workspace) ; ex. workspaceSelect, workspace
-			;TODO remove above technical debt induced garbage line
+	for space in workspaceList {
+		MainGui.AddText("w100 Section", space.label)
+		space.ddl := MainGui.AddDDL("w400")
+		UpdateWinList(space)
 	}
 }
-
 
 /*
 MainGui.AddButton("w100", "Set as Window 2").OnEvent("Click", (*) => GuiPairWindow(2))
@@ -236,54 +243,40 @@ UpdateGUI() {
 	; activeWinId.Value := winId
 }
 
+; Assign event handlers
+;Win1Select.OnEvent("Change", (*) => WindowSelected(WorkspaceSelect, workspace, IsWinPaired1))
+	;TODO refactor this after globals refactor
+
+;TODO refactor this
 WindowSelected(dropDownListCtrl, selectedWin*) {
 	extractTitle := StrSplit(dropDownListCtrl.Text, "] ", 2)
 	targetTitle := (extractTitle.Length >= 2) ? extractTitle[2] : ""
 	if WinExist(targetTitle) {
 		selectedWin[1] := "ahk_id" WinGetID(targetTitle)
 		selectedWin[2] := true
-		;UpdateWinList(dropDownListCtrl, selectedWin[1])
-			;TODO remove above technical debt induced garbage line
 	}
 }
 
-; TODO decide workspaceObject param or workspaceList param, need to consider component design
-; workspaceList param is probably more future proof as each index of the array also serves as the window number
-UpdateWinList() {
-	newWinList := []
-	if WinExist(selectedWin[1]) {
 
+UpdateAllWinList(workspaceList) {
+	for space in workspaceList {
+		UpdateWinList(space)
 	}
+}
 
-	selectedWin := winList[Ctrl.value - 1]
-	Ctrl.Delete()
-	Ctrl.Add([selectedWin.string])
-	newWinList.Push({ string: selectedWin.string, hwnd: selectedWin.hwnd })
-	Ctrl.Choose(1)
-
-	selectedWin := "none"
-	Ctrl.Delete()
-	Ctrl.Add(["[Select Window...]"])
-	Ctrl.Choose(1)
-
-
-	for hwnd in WinGetList() ; hwnd is the unique window handle
-	{
-		windowTitle := WinGetTitle(hwnd)
-		windowProcess := StrReplace(WinGetProcessName(hwnd), ".exe")
-
-		if (windowTitle != "" && (selectedWin == "none" || hwnd != selectedWin.hwnd)) { ; if not an blank title window or a selected window
-			displayString := "[" windowProcess "] " windowTitle
-			newWinList.Push({ string: displayString, hwnd: hwnd }) ; add to new list to repopulate dropdown choices
-		}
+UpdateWinList(workspaceObject) {
+	if workspaceObject.isPaired {
+		workspaceObject.ddl.Delete()
+		workspaceObject.ddl.Add([IdToDisplayString(workspaceObject.id)])
+	} else {
+		workspaceObject.ddl.Add(["[Select Window...]"])
 	}
-	; Update dropdown options
-	choices := []
-	for window in newWinList {
-		choices.Push(window.string)
+	
+	for hwnd in WinGetList() { ; hwnd is the unique window handle
+		if (hwnd != workspaceObject.id && WinGetTitle(hwnd) != "") ; filters out paired window and blank windows
+			workspaceObject.ddl.Add([IdToDisplayString(hwnd)]) ; populates rest of options
 	}
-	Ctrl.Add(choices)
-	global winList := newWinList
+	workspaceObject.ddl.Choose(1)
 }
 
 
