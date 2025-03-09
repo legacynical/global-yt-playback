@@ -141,17 +141,27 @@ UnpairAllWindows() {
 
 ;=========== GUI ===========
 ; currently under development, limited functionality
-global winSelectList := []
-global winList := []
+
+global winSelectList := [
+	{	control: "WorkspaceSelect", workspace: workspace, label: "Workspace" },  
+	{	control: "Win2Select", workspace: win2, label: "Window 2" }, 
+	{	control: "Win3Select", workspace: win3, label: "Window 3" }, 
+	{	control: "Win4Select", workspace: win4, label: "Window 4"	}, 
+	{ control: "Win5Select", workspace: win5, label: "Window 5" }
+]
+
 
 ^`:: {
 	MainGui.Show("w500 h450")
 	UpdateGUI()
 	for winSelect in winSelectList {
-		UpdateWinList(winSelect)
-		MsgBox "updated a winSelect!", , "T1"
+		MainGui.AddText("w100 Section", winSelect.label)
+		%winSelect.control% := MainGui.AddDDL("w400")
+		UpdateWinList(winSelect.control)
 	}
 }
+
+
 
 ; Create the main GUI
 MainGui := Gui("+Resize", "Window Pairing")
@@ -164,10 +174,15 @@ activeWinTitle := MainGui.AddEdit("w400 vActiveTitle ReadOnly", "[Active Window 
 ; activeWinId := MainGui.AddEdit("w240 vActiveID ReadOnly", "[Active Window Id]")
 
 ; Add controls for window DropDownList select
-MainGui.AddText("w100 Section", "Workspace")
-WorkspaceSelect := MainGui.AddDDL("w400")
-winSelectList.Push(WorkspaceSelect)
-UpdateWinList(WorkspaceSelect)
+AddDropDownListControls()
+
+AddDropDownListControls() {
+	for controlObject in winSelectList {
+		MainGui.AddText("w100 Section", controlObject.label)
+		UpdateWinList(controlObject.control, controlObject.workspace) ; ex. workspaceSelect, workspace
+	}
+}
+
 
 /*
 MainGui.AddButton("w100", "Set as Window 2").OnEvent("Click", (*) => GuiPairWindow(2))
@@ -189,11 +204,11 @@ MainGui.AddButton("w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
 */
 
 ; Assign event handlers
-WorkspaceSelect.OnEvent("Change", WindowSelected)
-WorkspaceSelect.OnEvent("LoseFocus", UpdateWinList) ; NOT Chef's kiss
+WorkspaceSelect.OnEvent("Change", (*) => WindowSelected(WorkspaceSelect, workspace, IsWinPaired1))
 
 SetTimer UpdateGUI, 250 ; calls UpdateGUI() every 500ms
 
+global winList := []
 
 UpdateGUI() {
 	; if the GUI window doesn't exist or is minimized...
@@ -206,47 +221,33 @@ UpdateGUI() {
 	; activeWinId.Value := winId
 }
 
-
-WindowSelected(Ctrl, *) {
-	global winList, workspace, IsWinPaired1
-	for window in winList {
-		if (window.string == Ctrl.Text) { ; matches displayString
-			if WinExist(window.hwnd) {
-				workspace := "ahk_id " window.hwnd
-				IsWinPaired1 := true
-				Sleep 11
-				UpdateWinList(Ctrl)
-				return
-			} else {
-				MsgBox "Did you select [Select Window...] ??", , "T1"
-				UpdateWinList(Ctrl)
-			}
-		}
+WindowSelected(dropDownListCtrl, selectedWin*) {
+	extractTitle := StrSplit(dropDownListCtrl.Text, "] ", 2)
+	targetTitle := (extractTitle.Length >= 2) ? extractTitle[2] : ""
+	if WinExist(targetTitle) {
+		selectedWin[1] := "ahk_id" WinGetID(targetTitle)
+		selectedWin[2] := true
+		UpdateWinList(dropDownListCtrl, selectedWin[1])
 	}
-	MsgBox "Selected window not found. Try Again!", , "T1"
-	UpdateWinList(Ctrl)
 }
 
 ; TODO Fix Logic flow,
-UpdateWinList(Ctrl, *) { ; To be called after GUI actions instead of constant polling for performance
-	; if a new window is selected, save it before winList reorder
-	;selectedWin := (Ctrl.Value > 1) ? winList[Ctrl.Value] : "none" ; note: Ctrl.Value initializes to 0 for non preselected DDLs
+UpdateWinList(dropDownListCtrl, selectedWin*) {
 	newWinList := []
+	if WinExist(selectedWin[1]) {
 
-
-	if (Ctrl.Value > 1) {
-		selectedWin := winList[Ctrl.value - 1]
-		Ctrl.Delete()
-		Ctrl.Add([selectedWin.string])
-		newWinList.Push({ string: selectedWin.string, hwnd: selectedWin.hwnd })
-		Ctrl.Choose(1)
-	} else {
-		selectedWin := "none"
-		Ctrl.Delete()
-		Ctrl.Add(["[Select Window...]"])
-		;newWinList.Push("[Select Window...]")
-		Ctrl.Choose(1)
 	}
+
+	selectedWin := winList[Ctrl.value - 1]
+	Ctrl.Delete()
+	Ctrl.Add([selectedWin.string])
+	newWinList.Push({ string: selectedWin.string, hwnd: selectedWin.hwnd })
+	Ctrl.Choose(1)
+
+	selectedWin := "none"
+	Ctrl.Delete()
+	Ctrl.Add(["[Select Window...]"])
+	Ctrl.Choose(1)
 
 
 	for hwnd in WinGetList() ; hwnd is the unique window handle
@@ -266,7 +267,6 @@ UpdateWinList(Ctrl, *) { ; To be called after GUI actions instead of constant po
 	}
 	Ctrl.Add(choices)
 	global winList := newWinList
-	;Ctrl.Value := 1 ; The first element of choice, which also reflects selection state
 
 }
 
