@@ -27,14 +27,14 @@ InstallKeybdHook ; Allow use of additional special keys
 ; SetTitleMatchMode 2 ; (AHKv2 default) Allow WinTitle to be matched anywhere from a window's title
 
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
-workspace := win2 := win3 := win4 := win5 := ""
-IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
+;workspace := win2 := win3 := win4 := win5 := ""
+;IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
 workspaceList := [
-	{ id: "", isPaired: false, label: "Main Workspace"},
-	{ id: "", isPaired: false, label: "Window 2"},
-	{ id: "", isPaired: false, label: "Window 3"},
-	{ id: "", isPaired: false, label: "Window 4"},
-	{ id: "", isPaired: false, label: "Window 5"},
+	{ id: "", isPaired: false, control: "Win1Select", label: "Main Workspace"},
+	{ id: "", isPaired: false, control: "Win2Select", label: "Window 2"},
+	{ id: "", isPaired: false, control: "Win3Select", label: "Window 3"},
+	{ id: "", isPaired: false, control: "Win4Select", label: "Window 4"},
+	{ id: "", isPaired: false, control: "Win5Select", label: "Window 5"},
 ]
 inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
 
@@ -50,7 +50,8 @@ Media_Play_Pause:: YoutubeControl("play/pause", "{k}")
 
 ; action param not used but added for clarity future use
 YoutubeControl(action, keyPress) {
-	global video, workspace
+	global video, workspaceList
+	workspace := workspaceList[1].id ; YT playback will return window focus back to main workspace
 	if WinExist(video) {
 		WinActivate
 		sleep 11 ; Delay rounds to nearest multiple of 10 or 15.6 ms
@@ -87,61 +88,64 @@ you DON'T use a depreciated ByRef keyword (which is CLEARLY STATED IN THE DOCS F
 and instead the global vars have to be wrapped in "" for it to be
 properly dereferenced with %% and assigned values (which is NOT CLEARLY STATED IN THE DOCS FOR AHKv2)
 */
-<#1:: PairWindow("IsWinPaired1", "workspace", "Main Workspace")
-<#2:: PairWindow("IsWinPaired2", "win2", "Window 2")
-<#3:: PairWindow("IsWinPaired3", "win3", "Window 3")
-<#4:: PairWindow("IsWinPaired4", "win4", "Window 4")
-<#5:: PairWindow("IsWinPaired5", "win5", "Window 5")
+<#1:: PairWindow(workspaceList[1])
+<#2:: PairWindow(workspaceList[2])
+<#3:: PairWindow(workspaceList[3])
+<#4:: PairWindow(workspaceList[4])
+<#5:: PairWindow(workspaceList[5])
 
-PairWindow(pairedStatus, window, windowName) {
+PairWindow(workspaceObject) {
 	global
 	GetWinInfo()
-	if (%window% == "") {
-		%window% := "ahk_id " winId ;
-		%pairedStatus% := true
-		MsgBox "[Pairing " windowName "]`n"
+	local window := workspaceObject.id
+	local windowLabel := workspaceObject.label
+	if (window == "") {
+		workspaceObject.id := "ahk_id " winId ;
+		workspaceObject.isPaired := true
+		MsgBox "[Pairing " windowLabel "]`n"
 			. "title: " winTitle "`n"
-			. "workspace: " workspace "`n"
+			. "workspace: " window "`n"
 			. "process: " winProcess, , "T3"
-	} else if (currentID != %window%) {
-		if WinExist(%window%) {
+	} else if (currentID != window) {
+		if WinExist(window) {
 			inputBuffer := maxInputBuffer
 			WinActivate
 		}
-	} else if (currentID == %window%) {
+	} else if (currentID == window) {
 		inputBuffer--
-		if (WinExist(%window%) && (inputBuffer == 0)) {
+		if (WinExist(window) && (inputBuffer == 0)) {
 			inputBuffer := maxInputBuffer
 			WinMinimize
 		}
 	}
 }
 
-^<#1:: UnpairWindow("IsWinPaired1", "workspace", "Main Workspace")
-^<#2:: UnpairWindow("IsWinPaired2", "win2", "Window 2")
-^<#3:: UnpairWindow("IsWinPaired3", "win3", "Window 3")
-^<#4:: UnpairWindow("IsWinPaired4", "win4", "Window 4")
-^<#5:: UnpairWindow("IsWinPaired5", "win5", "Window 5")
+^<#1:: UnpairWindow(workspaceList[1])
+^<#2:: UnpairWindow(workspaceList[2])
+^<#3:: UnpairWindow(workspaceList[3])
+^<#4:: UnpairWindow(workspaceList[4])
+^<#5:: UnpairWindow(workspaceList[5])
 ^<#0:: UnpairAllWindows()
 
-UnpairWindow(pairedStatus, window, windowName) {
-	global
-	if (%pairedStatus%) {
-		%window% := ""
-		%pairedStatus% := false
-		MsgBox "[Unpaired " windowName "]", , "T1"
+UnpairWindow(workspaceObject) {
+	local windowLabel := workspaceObject.label
+	if (workspaceObject.isPaired) {
+		workspaceObject.id := ""
+		workspaceObject.isPaired := false
+		MsgBox "[Unpaired " windowLabel "]", , "T1"
 	} else {
-		MsgBox "" windowName " is already unpaired!", , "T1"
+		MsgBox "" windowLabel " is already unpaired!", , "T1"
 	}
 }
 
 UnpairAllWindows() {
+	global
 	confirmUnpair := MsgBox("Are you sure you want to unpair all windows?", , "YesNo")
 	if confirmUnpair = "Yes" {
-		global workspace, win2, win3, win4, win5, IsWinPaired1, IsWinPaired2,
-			IsWinPaired3, IsWinPaired4, IsWinPaired5
-		workspace := win2 := win3 := win4 := win5 := ""
-		IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
+		for workspaceObject in workspaceList {
+			workspaceObject.id := ""
+			workspaceObject.isPaired := false
+		}		
 		MsgBox "[Unpaired All Windows]", , "T1"
 	}
 }
@@ -149,23 +153,25 @@ UnpairAllWindows() {
 ;=========== GUI ===========
 ; currently under development, limited functionality
 
-global winSelectList := [
-	{	control: "WorkspaceSelect", workspace: workspace, label: "Workspace" },  
-	{	control: "Win2Select", workspace: win2, label: "Window 2" }, 
-	{	control: "Win3Select", workspace: win3, label: "Window 3" }, 
-	{	control: "Win4Select", workspace: win4, label: "Window 4"	}, 
-	{ control: "Win5Select", workspace: win5, label: "Window 5" }
-]
+;TODO remove this deprecated code
+; global winSelectList := [
+; 	{	control: "WorkspaceSelect", workspace: workspace, label: "Workspace" },  
+; 	{	control: "Win2Select", workspace: win2, label: "Window 2" }, 
+; 	{	control: "Win3Select", workspace: win3, label: "Window 3" }, 
+; 	{	control: "Win4Select", workspace: win4, label: "Window 4"	}, 
+; 	{ control: "Win5Select", workspace: win5, label: "Window 5" }
+; ]
 
 
 ^`:: {
 	MainGui.Show("w500 h450")
 	UpdateGUI()
-	for winSelect in winSelectList {
-		MainGui.AddText("w100 Section", winSelect.label)
-		%winSelect.control% := MainGui.AddDDL("w400")
-		UpdateWinList(winSelect.control)
+	for workspace in workspaceList {
+		MainGui.AddText("w100 Section", workspace.label)
+		%workspace.control% := MainGui.AddDDL("w400")
+		;UpdateWinList(workspace) ;TODO (1/2) decide whether to call separate updates with workspace param
 	}
+	;TODO (2/2) or call a unified update to all with workspaceList param
 }
 
 
@@ -184,9 +190,11 @@ activeWinTitle := MainGui.AddEdit("w400 vActiveTitle ReadOnly", "[Active Window 
 AddDropDownListControls()
 
 AddDropDownListControls() {
-	for controlObject in winSelectList {
-		MainGui.AddText("w100 Section", controlObject.label)
-		UpdateWinList(controlObject.control, controlObject.workspace) ; ex. workspaceSelect, workspace
+	for workspace in workspaceList {
+		MainGui.AddText("w100 Section", workspace.label)
+		%workspace.control% := MainGui.AddDDL("w400")
+		;UpdateWinList(controlObject.control, controlObject.workspace) ; ex. workspaceSelect, workspace
+			;TODO remove above technical debt induced garbage line
 	}
 }
 
@@ -211,8 +219,8 @@ MainGui.AddButton("w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
 */
 
 ; Assign event handlers
-WorkspaceSelect.OnEvent("Change", (*) => WindowSelected(WorkspaceSelect, workspace, IsWinPaired1))
-
+;Win1Select.OnEvent("Change", (*) => WindowSelected(WorkspaceSelect, workspace, IsWinPaired1))
+	;TODO refactor this after globals refactor
 SetTimer UpdateGUI, 250 ; calls UpdateGUI() every 500ms
 
 global winList := []
@@ -234,12 +242,14 @@ WindowSelected(dropDownListCtrl, selectedWin*) {
 	if WinExist(targetTitle) {
 		selectedWin[1] := "ahk_id" WinGetID(targetTitle)
 		selectedWin[2] := true
-		UpdateWinList(dropDownListCtrl, selectedWin[1])
+		;UpdateWinList(dropDownListCtrl, selectedWin[1])
+			;TODO remove above technical debt induced garbage line
 	}
 }
 
-; TODO Fix Logic flow,
-UpdateWinList(dropDownListCtrl, selectedWin*) {
+; TODO decide workspaceObject param or workspaceList param, need to consider component design
+; workspaceList param is probably more future proof as each index of the array also serves as the window number
+UpdateWinList() {
 	newWinList := []
 	if WinExist(selectedWin[1]) {
 
@@ -274,26 +284,27 @@ UpdateWinList(dropDownListCtrl, selectedWin*) {
 	}
 	Ctrl.Add(choices)
 	global winList := newWinList
-
 }
+
+
 
 GuiPairWindow(num) {
 	switch num {
-		case 1: PairWindow("IsWinPaired1", "workspace", "Main Workspace")
-		case 2: PairWindow("IsWinPaired2", "win2", "Window 2")
-		case 3: PairWindow("IsWinPaired3", "win3", "Window 3")
-		case 4: PairWindow("IsWinPaired4", "win4", "Window 4")
-		case 5: PairWindow("IsWinPaired5", "win5", "Window 5")
+		case 1: PairWindow(workspaceList[1])
+		case 2: PairWindow(workspaceList[2])
+		case 3: PairWindow(workspaceList[3])
+		case 4: PairWindow(workspaceList[4])
+		case 5: PairWindow(workspaceList[5])
 	}
 }
 
 GuiUnpairWindow(num) {
 	switch num {
-		case 1: UnpairWindow("IsWinPaired1", "workspace", "Main Workspace")
-		case 2: UnpairWindow("IsWinPaired2", "win2", "Window 2")
-		case 3: UnpairWindow("IsWinPaired3", "win3", "Window 3")
-		case 4: UnpairWindow("IsWinPaired4", "win4", "Window 4")
-		case 5: UnpairWindow("IsWinPaired5", "win5", "Window 5")
+		case 1: UnpairWindow(workspaceList[1])
+		case 2: UnpairWindow(workspaceList[2])
+		case 3: UnpairWindow(workspaceList[3])
+		case 4: UnpairWindow(workspaceList[4])
+		case 5: UnpairWindow(workspaceList[5])
 		case 10: UnpairAllWindows()
 	}
 }
