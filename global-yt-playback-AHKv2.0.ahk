@@ -266,7 +266,13 @@ UpdateWinList(workspaceObject) {
 	workspaceObject.ddl.Choose(1)
 }
 
-
+IdToDisplayString(hwnd) {
+	windowTitle := WinGetTitle(hwnd)
+	windowProcess := StrReplace(WinGetProcessName(hwnd), ".exe")
+	if (windowTitle != "") { ; if not an blank title window
+		return displayString := "[" windowProcess "] " windowTitle
+	}
+}
 
 GuiPairWindow(num) {
 	switch num {
