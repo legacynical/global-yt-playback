@@ -27,39 +27,59 @@ InstallKeybdHook ; Allow use of additional special keys
 ; SetTitleMatchMode 2 ; (AHKv2 default) Allow WinTitle to be matched anywhere from a window's title
 
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
-workspace := win2 := win3 := win4 := win5 := ""
-IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
+guiHwnd := ""
+;workspace := win2 := win3 := win4 := win5 := ""
+;IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
+
+class Workspace {
+	__New(id, isPaired, label) {
+		this.id := id
+		this.isPaired := isPaired
+		this.label := label
+		this.ddl := ""
+		this.changeEvent := ""
+	}
+}
+
+workspaceList := [
+	Workspace("", false, "Main Workspace"),
+	Workspace("", false, "Window 2"),
+	Workspace("", false, "Window 3"),
+	Workspace("", false, "Window 4"),
+	Workspace("", false, "Window 5")
+]
 inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
 
-Media_Prev:: YoutubeControl("rewind 5 sec", "{left}")
-^Media_Prev:: YoutubeControl("rewind 10 sec", "{j}")
-Media_Next:: YoutubeControl("fast forward 5 sec", "{Right}")
-^Media_Next:: YoutubeControl("fast forward 10 sec", "{l}")
-; Most browsers allow Media_Play_Pause by default but this ensures that it targets a YouTube tab
-Media_Play_Pause:: YoutubeControl("play/pause", "{k}")
+Media_Prev:: YoutubeControl("{left}") ; rewind 5 sec
+^Media_Prev:: YoutubeControl("{j}") ; rewind 10 sec
+Media_Next:: YoutubeControl("{Right}") ; fast forward 5 sec
+^Media_Next:: YoutubeControl("{l}") ; fast forward 10 sec
+Media_Play_Pause:: YoutubeControl("{k}") ; play/pause
+	; Most browsers allow Media_Play_Pause by default but this ensures that it targets a YouTube tab
 
 ; If you don't have Media_Play_Pause key, uncomment and set hotkey
 ; hotkey::Media_Play_Pause
 
 ; action param not used but added for clarity future use
-YoutubeControl(action, keyPress) {
-	global video, workspace
+YoutubeControl(keyPress) {
+	global video, workspaceList
 	if WinExist(video) {
 		WinActivate
 		sleep 11 ; Delay rounds to nearest multiple of 10 or 15.6 ms
 		Send keyPress
 		sleep 11
-		if WinExist(workspace)
+		if WinExist(workspaceList[1].id) ; YT playback will return window focus back to main workspace
 			WinActivate
 	}
 }
 
 GetWinInfo() {
 	global
-	winTitle := WinGetTitle("A")
-	winId := WinGetID("A")
-	winClass := WinGetClass("A")
-	winProcess := WinGetProcessName("A")
+	local active := WinExist("A") ? "A" : "" ; get info of active window if it exists, else get info of last found window
+	winTitle := WinGetTitle(active)
+	winId := WinGetID(active)
+	winClass := WinGetClass(active)
+	winProcess := WinGetProcessName(active)
 	currentID := "ahk_id " winId
 }
 
@@ -79,61 +99,63 @@ you DON'T use a depreciated ByRef keyword (which is CLEARLY STATED IN THE DOCS F
 and instead the global vars have to be wrapped in "" for it to be
 properly dereferenced with %% and assigned values (which is NOT CLEARLY STATED IN THE DOCS FOR AHKv2)
 */
-<#1:: PairWindow("IsWinPaired1", "workspace", "Main Workspace")
-<#2:: PairWindow("IsWinPaired2", "win2", "Window 2")
-<#3:: PairWindow("IsWinPaired3", "win3", "Window 3")
-<#4:: PairWindow("IsWinPaired4", "win4", "Window 4")
-<#5:: PairWindow("IsWinPaired5", "win5", "Window 5")
+<#1:: PairWindow(workspaceList[1])
+<#2:: PairWindow(workspaceList[2])
+<#3:: PairWindow(workspaceList[3])
+<#4:: PairWindow(workspaceList[4])
+<#5:: PairWindow(workspaceList[5])
 
-PairWindow(pairedStatus, window, windowName) {
+PairWindow(workspaceObject) {
 	global
 	GetWinInfo()
-	if (%window% == "") {
-		%window% := "ahk_id " winId ;
-		%pairedStatus% := true
-		MsgBox "[Pairing " windowName "]`n"
+	local window := workspaceObject.id ; only used for readability
+	if (window == "") {
+		workspaceObject.id := "ahk_id " winId
+		workspaceObject.isPaired := true
+		MsgBox "[Pairing " workspaceObject.label "]`n"
 			. "title: " winTitle "`n"
-			. "workspace: " workspace "`n"
+			. "workspace: " winId "`n"
 			. "process: " winProcess, , "T3"
-	} else if (currentID != %window%) {
-		if WinExist(%window%) {
+	} else if (currentID != window) {
+		if WinExist(window) {
 			inputBuffer := maxInputBuffer
 			WinActivate
 		}
-	} else if (currentID == %window%) {
+	} else if (currentID == window) {
 		inputBuffer--
-		if (WinExist(%window%) && (inputBuffer == 0)) {
+		if (WinExist(window) && (inputBuffer == 0)) {
 			inputBuffer := maxInputBuffer
 			WinMinimize
 		}
 	}
 }
 
-^<#1:: UnpairWindow("IsWinPaired1", "workspace", "Main Workspace")
-^<#2:: UnpairWindow("IsWinPaired2", "win2", "Window 2")
-^<#3:: UnpairWindow("IsWinPaired3", "win3", "Window 3")
-^<#4:: UnpairWindow("IsWinPaired4", "win4", "Window 4")
-^<#5:: UnpairWindow("IsWinPaired5", "win5", "Window 5")
+^<#1:: UnpairWindow(workspaceList[1])
+^<#2:: UnpairWindow(workspaceList[2])
+^<#3:: UnpairWindow(workspaceList[3])
+^<#4:: UnpairWindow(workspaceList[4])
+^<#5:: UnpairWindow(workspaceList[5])
 ^<#0:: UnpairAllWindows()
 
-UnpairWindow(pairedStatus, window, windowName) {
-	global
-	if (%pairedStatus%) {
-		%window% := ""
-		%pairedStatus% := false
-		MsgBox "[Unpaired " windowName "]", , "T1"
+UnpairWindow(workspaceObject) {
+	local windowLabel := workspaceObject.label
+	if (workspaceObject.isPaired) {
+		workspaceObject.id := ""
+		workspaceObject.isPaired := false
+		MsgBox "[Unpaired " windowLabel "]", , "T1"
 	} else {
-		MsgBox "" windowName " is already unpaired!", , "T1"
+		MsgBox "" windowLabel " is already unpaired!", , "T1"
 	}
 }
 
 UnpairAllWindows() {
+	global
 	confirmUnpair := MsgBox("Are you sure you want to unpair all windows?", , "YesNo")
 	if confirmUnpair = "Yes" {
-		global workspace, win2, win3, win4, win5, IsWinPaired1, IsWinPaired2,
-			IsWinPaired3, IsWinPaired4, IsWinPaired5
-		workspace := win2 := win3 := win4 := win5 := ""
-		IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
+		for workspaceObject in workspaceList {
+			workspaceObject.id := ""
+			workspaceObject.isPaired := false
+		}		
 		MsgBox "[Unpaired All Windows]", , "T1"
 	}
 }
@@ -141,106 +163,136 @@ UnpairAllWindows() {
 ;=========== GUI ===========
 ; currently under development, limited functionality
 
-^`:: OpenGUI()
-
-OpenGUI() {
-	; Create the main GUI
-	MainGui := Gui("+Resize", "Window Pairing")
-	MainGui.Opt("-MaximizeBox")
-
-	; Active Window Information Section
-	GetWinInfo()
-	MainGui.AddText("w240 Section", "Active Window Details:")
-	MainGui.AddEdit("w240 vActiveTitle ReadOnly", winTitle)
-	MainGui.AddEdit("w240 vActiveProcess ReadOnly", winProcess)
-	MainGui.AddEdit("w240 vActiveClass ReadOnly", winClass)
-	MainGui.AddEdit("w240 vActiveID ReadOnly", winId)
+^`:: {
+	MainGui.Show("w500 h450")
+	global guiHwnd := MainGui.Hwnd
+	UpdateGUI()
+}
 
 
-	; Window Pairing Section
-	; MainGui.AddText("w200", "Window Pairing:")
-	/*
-	MainGui.AddButton("w100", "Set as Window 2").OnEvent("Click", (*) => GuiPairWindow(2))
-	MainGui.AddButton("w100", "Set as Window 3").OnEvent("Click", (*) => GuiPairWindow(3))
-	MainGui.AddButton("w100", "Set as Window 4").OnEvent("Click", (*) => GuiPairWindow(4))
-	MainGui.AddButton("w100", "Set as Window 5").OnEvent("Click", (*) => GuiPairWindow(5))
+; Create the main GUI
+MainGui := Gui("+Resize", "Window Pairing")
+MainGui.Opt("-MaximizeBox")
+
+; Add Controls for active window stats
+MainGui.AddText("w240 Section", "Focused Window Details:")
+activeWinTitle := MainGui.AddEdit("w400 vActiveTitle ReadOnly", "[Active Window Title]")
+; activeWinClass := MainGui.AddEdit("w240 vActiveClass ReadOnly", "[Active Window Class]")
+; activeWinId := MainGui.AddEdit("w240 vActiveID ReadOnly", "[Active Window Id]")
+
+; Add controls for window DropDownList select
+AddDropDownListControls()
+
+AddDropDownListControls() {
+	for space in workspaceList {
+		MainGui.AddText("w100 Section", space.label)
+		space.ddl := MainGui.AddDDL("w400")
+		UpdateWinList(space)
+		AssignWorkspaceOnEvent(space)
+	}
+}
+
+/*
+MainGui.AddButton("w100", "Set as Window 2").OnEvent("Click", (*) => GuiPairWindow(2))
+MainGui.AddButton("w100", "Set as Window 3").OnEvent("Click", (*) => GuiPairWindow(3))
+MainGui.AddButton("w100", "Set as Window 4").OnEvent("Click", (*) => GuiPairWindow(4))
+MainGui.AddButton("w100", "Set as Window 5").OnEvent("Click", (*) => GuiPairWindow(5))
+
+MainGui.AddButton("YS w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(1))
+MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(2))
+MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(3))
+MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(4))
+MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(5))
+
+MainGui.Add("Text", "XM w240", "Unpair Options and Quick Actions:")
+MainGui.AddDDL("w240 vWindowChoice", ["test title 1", "test title 2", "test title 3"])
+MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpairWindow(10))
+MainGui.AddButton("w240", "Show Window Stats").OnEvent("Click", ShowWindowStats)
+MainGui.AddButton("w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
+*/
+isGuiRefresh := true ;TODO make this a gui toggle
+
+SetGuiRefreshTimer(isGuiRefresh)
+
+SetGuiRefreshTimer(bool) {
+	SetTimer UpdateGUI, (bool ? 250 : 0) ; calls UpdateGUI() every 250ms or disables timer
+}
+
+
+UpdateGUI() {
+	; if the GUI window doesn't exist or is minimized...
+	if (!(WinExist("ahk_id " guiHwnd)) || (WinGetMinMax("ahk_id " guiHwnd) == -1)) {
+		return
+	}
 	
-	*/
+	GetWinInfo() ; called to get latest win info
+	activeWinTitle.Value := "[" StrReplace(winProcess, ".exe") "] " winTitle
+	; activeWinClass.Value := winClass
+	; activeWinId.Value := winId
+}
 
-	MainGui.AddText("w100 Section", "Workspace")
-	WorkspaceSelect := MainGui.AddDDL("w240")
+; Assign event handlers
+AssignWorkspaceOnEvent(workspaceObject) {
+	workspaceObject.changeEvent := workspaceObject.ddl.OnEvent("Change", (*) => WorkspaceSelected(workspaceObject))
+	MsgBox "updated: " workspaceObject.label
+}
 
-	UpdateWinList()
+WorkspaceSelected(workspaceObject) {
+	MsgBox workspaceObject.ddl.Text
+	UpdateWinList(workspaceObject)
+}
 
-
-	WorkspaceSelect.OnEvent("Change", WindowSelected)
-
-	WindowSelected(Ctrl, *) {
-		SelectedTitle := Ctrl.Text
-		SelectedID := "ahk_id " WinGetId(SelectedTitle)
-		global workspace := SelectedID
-		global IsWinPaired1 := true
+UpdateAllWinList(workspaceList) {
+	for space in workspaceList {
+		UpdateWinList(space)
 	}
+}
 
-	UpdateWinList() {
-
-		for Win in WinGetList()
-		{
-			windowTitle := WinGetTitle(Win)
-			windowProcess := WinGetProcessName(Win)
-			if (windowTitle != "")
-				; WorkspaceSelect.Add(["[" windowProcess "] " windowTitle])
-				WorkspaceSelect.Add([windowTitle])
-		}
+UpdateWinList(workspaceObject) {
+	MsgBox "UpdateWinList fired"
+	if workspaceObject.isPaired {
+		workspaceObject.ddl.Delete()
+		workspaceObject.ddl.Add([IdToDisplayString(workspaceObject.id)])
+	} else {
+		workspaceObject.ddl.Add(["[Select Window...]"])
 	}
-
-	/*
-	; Unpair Options
-	MainGui.AddButton("YS w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(1))
-	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(2))
-	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(3))
-	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(4))
-	MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(5))
 	
-	MainGui.Add("Text", "XM w240", "Unpair Options and Quick Actions:")
-	MainGui.AddDDL("w240 vWindowChoice", [winTitle, "test title 2", "test title 3"])
-	MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpairWindow(10))
-	MainGui.AddButton("w240", "Show Window Stats").OnEvent("Click", ShowWindowStats)
-	MainGui.AddButton("w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
-	*/
-
-	; Show the GUI
-	MainGui.Show("w280 h450")
-
-
-	; Defined event handlers
-	GuiPairWindow(num) {
-		switch num {
-			case 1: PairWindow("IsWinPaired1", "workspace", "Main Workspace")
-			case 2: PairWindow("IsWinPaired2", "win2", "Window 2")
-			case 3: PairWindow("IsWinPaired3", "win3", "Window 3")
-			case 4: PairWindow("IsWinPaired4", "win4", "Window 4")
-			case 5: PairWindow("IsWinPaired5", "win5", "Window 5")
-		}
-
-		MainGui.Destroy()
+	for hwnd in WinGetList() { ; hwnd is the unique window handle
+		if (hwnd != workspaceObject.id && WinGetTitle(hwnd) != "") ; filters out paired window and blank windows
+			workspaceObject.ddl.Add([IdToDisplayString(hwnd)]) ; populates rest of options
 	}
+	workspaceObject.ddl.Choose(1)
+}
 
-	GuiUnpairWindow(num) {
-		switch num {
-			case 1: UnpairWindow("IsWinPaired1", "workspace", "Main Workspace")
-			case 2: UnpairWindow("IsWinPaired2", "win2", "Window 2")
-			case 3: UnpairWindow("IsWinPaired3", "win3", "Window 3")
-			case 4: UnpairWindow("IsWinPaired4", "win4", "Window 4")
-			case 5: UnpairWindow("IsWinPaired5", "win5", "Window 5")
-			case 10: UnpairAllWindows()
-		}
-
-		MainGui.Destroy()
+IdToDisplayString(hwnd) {
+	windowTitle := WinGetTitle(hwnd)
+	windowProcess := StrReplace(WinGetProcessName(hwnd), ".exe")
+	if (windowTitle != "") { ; if not an blank title window
+		return displayString := "[" windowProcess "] " windowTitle
 	}
+}
 
-	ShowWindowStats(*) {
-		DisplayActiveWindowStats()
+GuiPairWindow(num) {
+	switch num {
+		case 1: PairWindow(workspaceList[1])
+		case 2: PairWindow(workspaceList[2])
+		case 3: PairWindow(workspaceList[3])
+		case 4: PairWindow(workspaceList[4])
+		case 5: PairWindow(workspaceList[5])
 	}
+}
 
+GuiUnpairWindow(num) {
+	switch num {
+		case 1: UnpairWindow(workspaceList[1])
+		case 2: UnpairWindow(workspaceList[2])
+		case 3: UnpairWindow(workspaceList[3])
+		case 4: UnpairWindow(workspaceList[4])
+		case 5: UnpairWindow(workspaceList[5])
+		case 10: UnpairAllWindows()
+	}
+}
+
+ShowWindowStats(*) {
+	DisplayActiveWindowStats()
 }
