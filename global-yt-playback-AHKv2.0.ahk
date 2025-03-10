@@ -36,6 +36,7 @@ class Workspace {
 		this.isPaired := isPaired
 		this.label := label
 		this.ddl := ""
+		this.changeEvent := ""
 	}
 }
 
@@ -196,6 +197,7 @@ AddDropDownListControls() {
 		MainGui.AddText("w100 Section", space.label)
 		space.ddl := MainGui.AddDDL("w400")
 		UpdateWinList(space)
+		AssignWorkspaceOnEvent(space)
 	}
 }
 
@@ -239,19 +241,15 @@ UpdateGUI() {
 }
 
 ; Assign event handlers
-;Win1Select.OnEvent("Change", (*) => WindowSelected(WorkspaceSelect, workspace, IsWinPaired1))
-	;TODO refactor this after globals refactor
-
-;TODO refactor this
-WindowSelected(dropDownListCtrl, selectedWin*) {
-	extractTitle := StrSplit(dropDownListCtrl.Text, "] ", 2)
-	targetTitle := (extractTitle.Length >= 2) ? extractTitle[2] : ""
-	if WinExist(targetTitle) {
-		selectedWin[1] := "ahk_id" WinGetID(targetTitle)
-		selectedWin[2] := true
-	}
+AssignWorkspaceOnEvent(workspaceObject) {
+	workspaceObject.changeEvent := workspaceObject.ddl.OnEvent("Change", (*) => WorkspaceSelected(workspaceObject))
+	MsgBox "updated: " workspaceObject.label
 }
 
+WorkspaceSelected(workspaceObject) {
+	MsgBox workspaceObject.ddl.Text
+	UpdateWinList(workspaceObject)
+}
 
 UpdateAllWinList(workspaceList) {
 	for space in workspaceList {
@@ -260,6 +258,7 @@ UpdateAllWinList(workspaceList) {
 }
 
 UpdateWinList(workspaceObject) {
+	MsgBox "UpdateWinList fired"
 	if workspaceObject.isPaired {
 		workspaceObject.ddl.Delete()
 		workspaceObject.ddl.Add([IdToDisplayString(workspaceObject.id)])
