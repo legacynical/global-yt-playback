@@ -163,16 +163,6 @@ UnpairAllWindows() {
 ;=========== GUI ===========
 ; currently under development, limited functionality
 
-;TODO remove this deprecated code
-; global winSelectList := [
-; 	{	control: "WorkspaceSelect", workspace: workspace, label: "Workspace" },  
-; 	{	control: "Win2Select", workspace: win2, label: "Window 2" }, 
-; 	{	control: "Win3Select", workspace: win3, label: "Window 3" }, 
-; 	{	control: "Win4Select", workspace: win4, label: "Window 4"	}, 
-; 	{ control: "Win5Select", workspace: win5, label: "Window 5" }
-; ]
-
-
 ^`:: {
 	MainGui.Show("w500 h450")
 	global guiHwnd := MainGui.Hwnd
