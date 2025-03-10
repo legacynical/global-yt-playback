@@ -108,7 +108,7 @@ properly dereferenced with %% and assigned values (which is NOT CLEARLY STATED I
 PairWindow(workspaceObject) {
 	global
 	GetWinInfo()
-	local window := workspaceObject.id ; only used for readability
+	local window := workspaceObject.id ; only used for read-only operations
 	if (window == "") {
 		workspaceObject.id := "ahk_id " winId
 		workspaceObject.isPaired := true
@@ -238,7 +238,13 @@ AssignWorkspaceOnEvent(workspaceObject) {
 }
 
 WorkspaceSelected(workspaceObject) {
-	MsgBox workspaceObject.ddl.Text
+	extractTitle := StrSplit(workspaceObject.ddl.Text, "] ", 2)
+	targetTitle := (extractTitle.Length >= 2) ? extractTitle[2] : ""
+	if WinExist(targetTitle) {
+		workspaceObject.id := "ahk_id" WinGetID(targetTitle)
+		workspaceObject.isPaired := true
+	}
+	; MsgBox workspaceObject.ddl.Text
 	UpdateWinList(workspaceObject)
 }
 
