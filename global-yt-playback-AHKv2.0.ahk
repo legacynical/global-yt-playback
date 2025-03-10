@@ -27,6 +27,7 @@ InstallKeybdHook ; Allow use of additional special keys
 ; SetTitleMatchMode 2 ; (AHKv2 default) Allow WinTitle to be matched anywhere from a window's title
 
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
+guiHwnd := ""
 ;workspace := win2 := win3 := win4 := win5 := ""
 ;IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
 
