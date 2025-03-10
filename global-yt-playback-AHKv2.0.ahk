@@ -27,6 +27,7 @@ InstallKeybdHook ; Allow use of additional special keys
 ; SetTitleMatchMode 2 ; (AHKv2 default) Allow WinTitle to be matched anywhere from a window's title
 
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
+guiHwnd := ""
 ;workspace := win2 := win3 := win4 := win5 := ""
 ;IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
 
@@ -36,6 +37,7 @@ class Workspace {
 		this.isPaired := isPaired
 		this.label := label
 		this.ddl := ""
+		this.changeEvent := ""
 	}
 }
 
@@ -161,18 +163,9 @@ UnpairAllWindows() {
 ;=========== GUI ===========
 ; currently under development, limited functionality
 
-;TODO remove this deprecated code
-; global winSelectList := [
-; 	{	control: "WorkspaceSelect", workspace: workspace, label: "Workspace" },  
-; 	{	control: "Win2Select", workspace: win2, label: "Window 2" }, 
-; 	{	control: "Win3Select", workspace: win3, label: "Window 3" }, 
-; 	{	control: "Win4Select", workspace: win4, label: "Window 4"	}, 
-; 	{ control: "Win5Select", workspace: win5, label: "Window 5" }
-; ]
-
-
 ^`:: {
 	MainGui.Show("w500 h450")
+	global guiHwnd := MainGui.Hwnd
 	UpdateGUI()
 }
 
@@ -195,6 +188,7 @@ AddDropDownListControls() {
 		MainGui.AddText("w100 Section", space.label)
 		space.ddl := MainGui.AddDDL("w400")
 		UpdateWinList(space)
+		AssignWorkspaceOnEvent(space)
 	}
 }
 
@@ -216,14 +210,21 @@ MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpai
 MainGui.AddButton("w240", "Show Window Stats").OnEvent("Click", ShowWindowStats)
 MainGui.AddButton("w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
 */
+isGuiRefresh := true ;TODO make this a gui toggle
 
-SetTimer UpdateGUI, 250 ; calls UpdateGUI() every 500ms
+SetGuiRefreshTimer(isGuiRefresh)
+
+SetGuiRefreshTimer(bool) {
+	SetTimer UpdateGUI, (bool ? 250 : 0) ; calls UpdateGUI() every 250ms or disables timer
+}
+
 
 UpdateGUI() {
 	; if the GUI window doesn't exist or is minimized...
-	if (!(WinExist("ahk_id " MainGui.Hwnd)) || (WinGetMinMax("ahk_id " MainGui.Hwnd) == -1)) {
-		return ; ...then don't update the GUI
+	if (!(WinExist("ahk_id " guiHwnd)) || (WinGetMinMax("ahk_id " guiHwnd) == -1)) {
+		return
 	}
+	
 	GetWinInfo() ; called to get latest win info
 	activeWinTitle.Value := "[" StrReplace(winProcess, ".exe") "] " winTitle
 	; activeWinClass.Value := winClass
@@ -231,19 +232,15 @@ UpdateGUI() {
 }
 
 ; Assign event handlers
-;Win1Select.OnEvent("Change", (*) => WindowSelected(WorkspaceSelect, workspace, IsWinPaired1))
-	;TODO refactor this after globals refactor
-
-;TODO refactor this
-WindowSelected(dropDownListCtrl, selectedWin*) {
-	extractTitle := StrSplit(dropDownListCtrl.Text, "] ", 2)
-	targetTitle := (extractTitle.Length >= 2) ? extractTitle[2] : ""
-	if WinExist(targetTitle) {
-		selectedWin[1] := "ahk_id" WinGetID(targetTitle)
-		selectedWin[2] := true
-	}
+AssignWorkspaceOnEvent(workspaceObject) {
+	workspaceObject.changeEvent := workspaceObject.ddl.OnEvent("Change", (*) => WorkspaceSelected(workspaceObject))
+	MsgBox "updated: " workspaceObject.label
 }
 
+WorkspaceSelected(workspaceObject) {
+	MsgBox workspaceObject.ddl.Text
+	UpdateWinList(workspaceObject)
+}
 
 UpdateAllWinList(workspaceList) {
 	for space in workspaceList {
@@ -252,6 +249,7 @@ UpdateAllWinList(workspaceList) {
 }
 
 UpdateWinList(workspaceObject) {
+	MsgBox "UpdateWinList fired"
 	if workspaceObject.isPaired {
 		workspaceObject.ddl.Delete()
 		workspaceObject.ddl.Add([IdToDisplayString(workspaceObject.id)])
