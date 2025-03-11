@@ -172,7 +172,7 @@ UnpairAllWindows() {
 	UpdateGUI()
 }
 
-
+; TODO: Prevent scroll select for DDLs
 ; Create the main GUI
 MainGui := Gui("+Resize", "Window Pairing")
 MainGui.Opt("-MaximizeBox")
@@ -294,7 +294,8 @@ UpdateWinList(workspaceObject) {
 	}
 	
 	for hwnd in WinGetList() { ; hwnd is the unique window handle
-		if (hwnd != workspaceObject.id && WinGetTitle(hwnd) != "") ; filters out paired window and blank windows
+		; TODO: this conditional lets some explorer processes slip past likely due to non-printables characters in the title
+		if (hwnd != workspaceObject.id && Trim(WinGetTitle(hwnd)) != "") ; filters out paired window and blank windows
 			workspaceObject.ddl.Add([IdToDisplayString(hwnd)]) ; populates rest of options
 			workspaceObject.options.Push(
 				{
@@ -317,6 +318,7 @@ IdToDisplayString(hwnd) {
 	if (windowTitle != "") { ; if not an blank title window
 		return displayString := "[" windowProcess "] " windowTitle
 	}
+	return displayString := "[" windowProcess "] non-empty title[" windowTitle "]"  
 }
 
 GuiPairWindow(num) {
