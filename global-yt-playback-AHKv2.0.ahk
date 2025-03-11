@@ -26,6 +26,7 @@ InstallKeybdHook ; Allow use of additional special keys
 ; SetWorkingDir A_ScriptDir ; (AHKv2 default) Force script to use its own folder as working directory.
 ; SetTitleMatchMode 2 ; (AHKv2 default) Allow WinTitle to be matched anywhere from a window's title
 
+DetectHiddenWindows(false)
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 guiHwnd := ""
 ;workspace := win2 := win3 := win4 := win5 := ""
@@ -38,6 +39,7 @@ class Workspace {
 		this.label := label
 		this.ddl := ""
 		this.changeEvent := ""
+		this.options := []
 	}
 }
 
@@ -108,22 +110,23 @@ properly dereferenced with %% and assigned values (which is NOT CLEARLY STATED I
 PairWindow(workspaceObject) {
 	global
 	GetWinInfo()
-	local window := workspaceObject.id ; only used for read-only operations
-	if (window == "") {
+	; TODO: revert this refactor after debugging to test functionality
+	;local window := workspaceObject.id ; only used for read-only operations
+	if (workspaceObject.id == "") {
 		workspaceObject.id := "ahk_id " winId
 		workspaceObject.isPaired := true
 		MsgBox "[Pairing " workspaceObject.label "]`n"
 			. "title: " winTitle "`n"
 			. "workspace: " winId "`n"
 			. "process: " winProcess, , "T3"
-	} else if (currentID != window) {
-		if WinExist(window) {
+	} else if (currentID != workspaceObject.id) {
+		if WinExist(workspaceObject.id) {
 			inputBuffer := maxInputBuffer
 			WinActivate
 		}
-	} else if (currentID == window) {
+	} else if (currentID == workspaceObject.id) {
 		inputBuffer--
-		if (WinExist(window) && (inputBuffer == 0)) {
+		if (WinExist(workspaceObject.id) && (inputBuffer == 0)) {
 			inputBuffer := maxInputBuffer
 			WinMinimize
 		}
@@ -180,6 +183,8 @@ activeWinTitle := MainGui.AddEdit("w400 vActiveTitle ReadOnly", "[Active Window 
 ; activeWinClass := MainGui.AddEdit("w240 vActiveClass ReadOnly", "[Active Window Class]")
 ; activeWinId := MainGui.AddEdit("w240 vActiveID ReadOnly", "[Active Window Id]")
 
+debugLabel := MainGui.AddEdit("w400 h150 ReadOnly", "[Debug]")
+
 ; Add controls for window DropDownList select
 AddDropDownListControls()
 
@@ -234,16 +239,24 @@ UpdateGUI() {
 ; Assign event handlers
 AssignWorkspaceOnEvent(workspaceObject) {
 	workspaceObject.changeEvent := workspaceObject.ddl.OnEvent("Change", (*) => WorkspaceSelected(workspaceObject))
-	MsgBox "updated: " workspaceObject.label
+	; MsgBox "updated: " workspaceObject.label
 }
 
 WorkspaceSelected(workspaceObject) {
-	extractTitle := StrSplit(workspaceObject.ddl.Text, "] ", 2)
-	targetTitle := (extractTitle.Length >= 2) ? extractTitle[2] : ""
-	if WinExist(targetTitle) {
-		workspaceObject.id := "ahk_id" WinGetID(targetTitle)
-		workspaceObject.isPaired := true
-	}
+	global
+	; UnpairWindow(workspaceObject)
+	index := workspaceObject.ddl.Value ; get selected index value
+	workspaceObject.id := "ahk_id " workspaceObject.options[index].id
+	MsgBox "index: " index "`n"
+		. "id: " workspaceObject.id
+	workspaceObject.isPaired := true
+	; extractTitle := StrSplit(workspaceObject.ddl.Text, "] ", 2)
+	; targetTitle := (extractTitle.Length >= 2) ? extractTitle[2] : ""
+	; if WinExist(targetTitle) {
+	; 	workspaceObject.id := "ahk_id" WinGetID(targetTitle)
+	; 	workspaceObject.isPaired := true
+	; }
+	; PairWindow(workspaceObject)
 	; MsgBox workspaceObject.ddl.Text
 	UpdateWinList(workspaceObject)
 }
@@ -255,18 +268,46 @@ UpdateAllWinList(workspaceList) {
 }
 
 UpdateWinList(workspaceObject) {
-	MsgBox "UpdateWinList fired"
+	; MsgBox "UpdateWinList fired"
 	if workspaceObject.isPaired {
 		workspaceObject.ddl.Delete()
 		workspaceObject.ddl.Add([IdToDisplayString(workspaceObject.id)])
+		MsgBox "UpdateWinList: workspaceObject.isPaired = true`n" 
+			. "adding id: " workspaceObject.id "`n"
+			. "adding displayText: " IdToDisplayString(workspaceObject.id)
+		workspaceObject.options := []
+		workspaceObject.options.Push(
+			{
+				displayTitle: IdToDisplayString(workspaceObject.id), id: workspaceObject.id
+			}
+		)
+		
 	} else {
+		workspaceObject.ddl.Delete()
 		workspaceObject.ddl.Add(["[Select Window...]"])
+		workspaceObject.options := []
+		workspaceObject.options.Push(
+			{
+				displayTitle: "[Select Window...]", id: ""
+			}
+		)
 	}
 	
 	for hwnd in WinGetList() { ; hwnd is the unique window handle
 		if (hwnd != workspaceObject.id && WinGetTitle(hwnd) != "") ; filters out paired window and blank windows
 			workspaceObject.ddl.Add([IdToDisplayString(hwnd)]) ; populates rest of options
+			workspaceObject.options.Push(
+				{
+					displayTitle: IdToDisplayString(hwnd), id: hwnd
+				}
+			)
 	}
+
+	msg := ""
+	for obj in workspaceObject.options {
+		msg .= "displayTitle: " . obj.displayTitle . ", id: " . obj.id . "`n"
+	}
+	debugLabel.Value := msg
 	workspaceObject.ddl.Choose(1)
 }
 
