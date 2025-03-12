@@ -77,6 +77,10 @@ YoutubeControl(keyPress) {
 
 GetWinInfo() {
 	global
+	; TODO: investigate bug [084] `winProcess := WinGetProcessName(active)`' access is denied
+		; I think this bug triggers when my pc goes to sleep and the gui refresh for focused window details calls this function.
+		; Interestingly only the WinGetProcessName() throws the error and not the get functions above it so I need to research that.
+		; possible fix would be to exit return if active window `WinExist("A")` to ensure expected behavior
 	local active := WinExist("A") ? "A" : "" ; get info of active window if it exists, else get info of last found window
 	winTitle := WinGetTitle(active)
 	winId := WinGetID(active)
