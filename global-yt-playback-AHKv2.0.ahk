@@ -299,13 +299,23 @@ UpdateWinList(workspaceObject) {
 	
 	for hwnd in WinGetList() { ; hwnd is the unique window handle
 		; TODO: this conditional lets some explorer processes slip past likely due to non-printables characters in the title
-		if (hwnd != workspaceObject.id && Trim(WinGetTitle(hwnd)) != "") ; filters out paired window and blank windows
+		; TODO research what non-printable control characters are for in empty titles of explorer.exe processes
+		if (hwnd != workspaceObject.id ; filters out paired window
+				&& RegExMatch(WinGetTitle(hwnd), "\S") ; ensures at least one non-whitespace anywhere in the title (doesn't account for non-printable control characters) 
+				&& DllCall("IsWindowVisible", "Ptr", hwnd) ; ensures processing of only visible windows
+					; NOTE: above 3 conditional checks is enough to prevent explorer processes leaking into workspaceObject.options
+				; Optional conditional checks for future ref
+					;&& !RegExMatch(WinGetTitle(hwnd), "^[\s\x00-\x1F\x7F]*$") ; filters out empty, whitespace only, and control-only titles
+					;&& Trim(WinGetTitle(hwnd)) != "") ; filters out blank windows (doesn't account for non-printable control characters)
+			)
+		{
 			workspaceObject.ddl.Add([IdToDisplayString(hwnd)]) ; populates rest of options
 			workspaceObject.options.Push(
 				{
 					displayTitle: IdToDisplayString(hwnd), id: hwnd
 				}
 			)
+		}
 	}
 
 	msg := ""
