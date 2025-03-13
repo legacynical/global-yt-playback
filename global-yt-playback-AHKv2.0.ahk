@@ -249,19 +249,29 @@ AssignWorkspaceOnEvent(workspaceObject) {
 WorkspaceSelected(workspaceObject) {
 	global
 	; UnpairWindow(workspaceObject)
+	
 	index := workspaceObject.ddl.Value ; get selected index value
-	workspaceObject.id := "ahk_id " workspaceObject.options[index].id
-	MsgBox "index: " index "`n"
+	; if selected window exists, pair it to workspace
+	if WinExist(workspaceObject.options[index].id) {
+		workspaceObject.id := "ahk_id " workspaceObject.options[index].id
+		MsgBox "index: " index "`n"
 		. "id: " workspaceObject.id
-	workspaceObject.isPaired := true
-	; extractTitle := StrSplit(workspaceObject.ddl.Text, "] ", 2)
-	; targetTitle := (extractTitle.Length >= 2) ? extractTitle[2] : ""
-	; if WinExist(targetTitle) {
-	; 	workspaceObject.id := "ahk_id" WinGetID(targetTitle)
-	; 	workspaceObject.isPaired := true
-	; }
-	; PairWindow(workspaceObject)
-	; MsgBox workspaceObject.ddl.Text
+		workspaceObject.isPaired := true
+	} else {
+		MsgBox "[Error] That window no longer exists!`n"
+		. "Attempting to refresh options, please select again..."
+	}
+
+	; TODO: remove this deprecated code
+		; extractTitle := StrSplit(workspaceObject.ddl.Text, "] ", 2)
+		; targetTitle := (extractTitle.Length >= 2) ? extractTitle[2] : ""
+		; if WinExist(targetTitle) {
+		; 	workspaceObject.id := "ahk_id" WinGetID(targetTitle)
+		; 	workspaceObject.isPaired := true
+		; }
+		; PairWindow(workspaceObject)
+		; MsgBox workspaceObject.ddl.Text
+		
 	UpdateWinList(workspaceObject)
 }
 
