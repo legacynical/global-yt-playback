@@ -27,7 +27,7 @@ InstallKeybdHook ; Allow use of additional special keys
 ; SetTitleMatchMode 2 ; (AHKv2 default) Allow WinTitle to be matched anywhere from a window's title
 
 DetectHiddenWindows(false)
-guiDebugMode := true ; Toggle for GUI debug prints
+guiDebugMode := false ; Toggle for GUI debug prints
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 guiHwnd := ""
 
@@ -138,6 +138,7 @@ PairWindow(workspaceObject) {
 			WinMinimize
 		}
 	}
+	UpdateWinList(workspaceObject)
 }
 
 ^<#1:: UnpairWindow(workspaceList[1])
@@ -156,6 +157,7 @@ UnpairWindow(workspaceObject) {
 	} else {
 		MsgBox "" windowLabel " is already unpaired!", , "T1"
 	}
+	UpdateWinList(workspaceObject)
 }
 
 UnpairAllWindows() {
