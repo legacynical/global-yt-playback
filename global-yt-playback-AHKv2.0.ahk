@@ -243,6 +243,7 @@ UpdateGUI() {
 
 ; Assign event handlers
 AssignWorkspaceOnEvent(workspaceObject) {
+	workspaceObject.changeEvent := workspaceObject.ddl.OnEvent("Focus", (*) => UpdateWinList(workspaceObject))
 	workspaceObject.changeEvent := workspaceObject.ddl.OnEvent("Change", (*) => WorkspaceSelected(workspaceObject))
 	; MsgBox "updated: " workspaceObject.label
 }
