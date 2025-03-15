@@ -16,7 +16,7 @@
 ;    Ctrl + Win + 4 = unpair window 4
 ;    Ctrl + Win + 5 = unpair window 5
 ;    Ctrl + Win + 0 = unpair all windows
-;          Ctrl + ` = open GUI (currently under development)
+;          Ctrl + ` = open GUI
 
 #Requires AutoHotkey v2.0
 #SingleInstance ; Prompt to replace instance if already running
@@ -30,11 +30,6 @@ DetectHiddenWindows(false)
 guiDebugMode := false ; Toggle for GUI debug prints
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 guiHwnd := ""
-
-; TODO: remove deprecated var declares below
-	; workspace := win2 := win3 := win4 := win5 := ""
-	; IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
-
 class Workspace {
 	__New(id, isPaired, label) {
 		this.id := id
@@ -102,12 +97,6 @@ DisplayActiveWindowStats() {
 		. "Active window process: " winProcess
 }
 
-/*
-Contrary to what Claude and ChatGPT suggests for AHKv2,
-you DON'T use a depreciated ByRef keyword (which is CLEARLY STATED IN THE DOCS FOR AHKv2)
-and instead the global vars have to be wrapped in "" for it to be
-properly dereferenced with %% and assigned values (which is NOT CLEARLY STATED IN THE DOCS FOR AHKv2)
-*/
 <#1:: PairWindow(workspaceList[1])
 <#2:: PairWindow(workspaceList[2])
 <#3:: PairWindow(workspaceList[3])
@@ -173,7 +162,6 @@ UnpairAllWindows() {
 }
 
 ;=========== GUI ===========
-; currently under development, limited functionality
 
 ^`:: {
 	guiDebugMode ? MainGui.Show("w500 h450") : MainGui.Show("w500 h300")
@@ -241,8 +229,6 @@ AssignWorkspaceOnEvent(workspaceObject) {
 
 WorkspaceSelected(workspaceObject) {
 	global
-	; UnpairWindow(workspaceObject)
-	
 	index := workspaceObject.ddl.Value ; get selected index value
 	; if selected window exists, pair it to workspace
 	if WinExist(workspaceObject.options[index].id) {
@@ -256,17 +242,6 @@ WorkspaceSelected(workspaceObject) {
 		MsgBox "[Error] That window no longer exists!`n"
 		. "Attempting to refresh options, please select again..."
 	}
-
-	; TODO: remove this deprecated code
-		; extractTitle := StrSplit(workspaceObject.ddl.Text, "] ", 2)
-		; targetTitle := (extractTitle.Length >= 2) ? extractTitle[2] : ""
-		; if WinExist(targetTitle) {
-		; 	workspaceObject.id := "ahk_id" WinGetID(targetTitle)
-		; 	workspaceObject.isPaired := true
-		; }
-		; PairWindow(workspaceObject)
-		; MsgBox workspaceObject.ddl.Text
-		
 	UpdateWinList(workspaceObject)
 }
 
@@ -382,9 +357,4 @@ GuiUnpairWindow(num) {
 		case 5: UnpairWindow(workspaceList[5])
 		case 10: UnpairAllWindows()
 	}
-}
-
-; TODO: remove this deprecated function shadowed by activeWinTitle control
-ShowWindowStats(*) {
-	DisplayActiveWindowStats()
 }
