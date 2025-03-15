@@ -276,6 +276,13 @@ UpdateAllWinList(workspaceList) {
 
 UpdateWinList(workspaceObject) {
 	; MsgBox "UpdateWinList fired"
+
+	; Ensure pair state is freed if window no longer exists
+		; NOTE: potential fix for target not found error in IdToDisplayString(hwnd)
+	if !WinExist(workspaceObject.id) {
+		workspaceObject.isPaired := false 
+	}
+
 	if workspaceObject.isPaired {
 		workspaceObject.ddl.Delete()
 		workspaceObject.ddl.Add([IdToDisplayString(workspaceObject.id)])
