@@ -27,11 +27,13 @@ InstallKeybdHook ; Allow use of additional special keys
 ; SetTitleMatchMode 2 ; (AHKv2 default) Allow WinTitle to be matched anywhere from a window's title
 
 DetectHiddenWindows(false)
-guiDebugMode := false ; Toggle for GUI debug prints
+guiDebugMode := true ; Toggle for GUI debug prints
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 guiHwnd := ""
-;workspace := win2 := win3 := win4 := win5 := ""
-;IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
+
+; TODO: remove deprecated var declares below
+	; workspace := win2 := win3 := win4 := win5 := ""
+	; IsWinPaired1 := IsWinPaired2 := IsWinPaired3 := IsWinPaired4 := IsWinPaired5 := false
 
 class Workspace {
 	__New(id, isPaired, label) {
@@ -202,24 +204,11 @@ AddDropDownListControls() {
 	}
 }
 
-/* TODO: Remove deprecated code below
-MainGui.AddButton("w100", "Set as Window 2").OnEvent("Click", (*) => GuiPairWindow(2))
-MainGui.AddButton("w100", "Set as Window 3").OnEvent("Click", (*) => GuiPairWindow(3))
-MainGui.AddButton("w100", "Set as Window 4").OnEvent("Click", (*) => GuiPairWindow(4))
-MainGui.AddButton("w100", "Set as Window 5").OnEvent("Click", (*) => GuiPairWindow(5))
-
+/* TODO: integrate these functions into gui control generation
 MainGui.AddButton("YS w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(1))
-MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(2))
-MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(3))
-MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(4))
-MainGui.AddButton("w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(5))
-
-MainGui.Add("Text", "XM w240", "Unpair Options and Quick Actions:")
-MainGui.AddDDL("w240 vWindowChoice", ["test title 1", "test title 2", "test title 3"])
 MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpairWindow(10))
-MainGui.AddButton("w240", "Show Window Stats").OnEvent("Click", ShowWindowStats)
-MainGui.AddButton("w240", "Close").OnEvent("Click", (*) => MainGui.Destroy())
 */
+
 isGuiRefresh := true ;TODO make this a gui toggle
 
 SetGuiRefreshTimer(isGuiRefresh)
@@ -344,8 +333,17 @@ UpdateWinList(workspaceObject) {
 	workspaceObject.ddl.Choose(1)
 }
 
+; 
 IdToDisplayString(hwnd) {
 	windowTitle := WinGetTitle(hwnd)
+		; TODO: investigate target window not found error: ahk_id 28772592
+			/* call stack
+				(335) : [WinGetTitle] windowTitle := WinGetTitle(hwnd)
+				(335) : [IdToDisplayString] windowTitle := WinGetTitle(hwnd)
+				(279) : [UpdateWinList] workspaceObject.ddl.Add([IdToDisplayString(workspaceObject.id)])
+				[] Return  UpdateWinList(workspaceObject)
+			*/
+				; potentially  
 	windowProcess := StrReplace(WinGetProcessName(hwnd), ".exe")
 	if (windowTitle != "") { ; if not an blank title window
 		return displayString := "[" windowProcess "] " windowTitle
