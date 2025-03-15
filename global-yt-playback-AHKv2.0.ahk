@@ -353,6 +353,7 @@ IdToDisplayString(hwnd) {
 	return displayString := "[" windowProcess "] non-empty title[" windowTitle "]"  
 }
 
+; This function will likely be deprecated as DDL controls/event listeners already handle this
 GuiPairWindow(num) {
 	switch num {
 		case 1: PairWindow(workspaceList[1])
@@ -363,6 +364,8 @@ GuiPairWindow(num) {
 	}
 }
 
+; TODO: add unpair buttons to gui, this will probably be a redundant method if I opt to create
+; the controls dynamically along side the DDL controls being generated.
 GuiUnpairWindow(num) {
 	switch num {
 		case 1: UnpairWindow(workspaceList[1])
@@ -374,6 +377,7 @@ GuiUnpairWindow(num) {
 	}
 }
 
+; TODO: remove this deprecated function shadowed by activeWinTitle control
 ShowWindowStats(*) {
 	DisplayActiveWindowStats()
 }
