@@ -24,11 +24,11 @@ Might add compiled script (.exe standalone) after further improvements.
   Media_Play_Pause = YT toggle play/pause (should work w/o script, see line 98)<br>
         Media_Next = YT fast forward 5 sec<br>
  Ctrl + Media_Next = YT fast forward 10 sec<br>
-          Win + \` = display active window stats<br>
+           Win + ` = display active window stats<br>
            Win + 1 = pair active as workspace<br>
        Win + [2-5] = pair active as window [2-5]<br>
     Ctrl + Win + 1 = unpair workspace<br>
 Ctrl + Win + [2-5] = unpair window [2-5]<br>
     Ctrl + Win + 0 = unpair all windows<br>
-         Ctrl + \` = open GUI (not currently functional)<br>
+          Ctrl + ` = open GUI<br>
 </pre>
