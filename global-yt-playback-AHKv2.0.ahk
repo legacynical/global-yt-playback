@@ -27,6 +27,7 @@ InstallKeybdHook ; Allow use of additional special keys
 ; SetTitleMatchMode 2 ; (AHKv2 default) Allow WinTitle to be matched anywhere from a window's title
 
 DetectHiddenWindows(false)
+guiDebugMode := false ; Toggle for GUI debug prints
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 guiHwnd := ""
 ;workspace := win2 := win3 := win4 := win5 := ""
@@ -171,7 +172,7 @@ UnpairAllWindows() {
 ; currently under development, limited functionality
 
 ^`:: {
-	MainGui.Show("w500 h450")
+	guiDebugMode ? MainGui.Show("w500 h450") : MainGui.Show("w500 h300")
 	global guiHwnd := MainGui.Hwnd
 	UpdateGUI()
 }
@@ -187,7 +188,7 @@ activeWinTitle := MainGui.AddEdit("w400 vActiveTitle ReadOnly", "[Active Window 
 ; activeWinClass := MainGui.AddEdit("w240 vActiveClass ReadOnly", "[Active Window Class]")
 ; activeWinId := MainGui.AddEdit("w240 vActiveID ReadOnly", "[Active Window Id]")
 
-debugLabel := MainGui.AddEdit("w400 h150 ReadOnly", "[Debug]")
+debugLabel := guiDebugMode ? MainGui.AddEdit("w400 h150 ReadOnly", "[Debug]") : ""
 
 ; Add controls for window DropDownList select
 AddDropDownListControls()
@@ -201,7 +202,7 @@ AddDropDownListControls() {
 	}
 }
 
-/*
+/* TODO: Remove deprecated code below
 MainGui.AddButton("w100", "Set as Window 2").OnEvent("Click", (*) => GuiPairWindow(2))
 MainGui.AddButton("w100", "Set as Window 3").OnEvent("Click", (*) => GuiPairWindow(3))
 MainGui.AddButton("w100", "Set as Window 4").OnEvent("Click", (*) => GuiPairWindow(4))
@@ -254,9 +255,11 @@ WorkspaceSelected(workspaceObject) {
 	; if selected window exists, pair it to workspace
 	if WinExist(workspaceObject.options[index].id) {
 		workspaceObject.id := "ahk_id " workspaceObject.options[index].id
-		MsgBox "index: " index "`n"
-		. "id: " workspaceObject.id
 		workspaceObject.isPaired := true
+		if guiDebugMode { ; DEBUG print
+			MsgBox "index: " index "`n"
+			. "id: " workspaceObject.id
+		}
 	} else {
 		MsgBox "[Error] That window no longer exists!`n"
 		. "Attempting to refresh options, please select again..."
@@ -286,9 +289,11 @@ UpdateWinList(workspaceObject) {
 	if workspaceObject.isPaired {
 		workspaceObject.ddl.Delete()
 		workspaceObject.ddl.Add([IdToDisplayString(workspaceObject.id)])
-		MsgBox "UpdateWinList: workspaceObject.isPaired = true`n" 
-			. "adding id: " workspaceObject.id "`n"
-			. "adding displayText: " IdToDisplayString(workspaceObject.id)
+		if guiDebugMode { ; DEBUG print
+			MsgBox "UpdateWinList: workspaceObject.isPaired = true`n" 
+				. "adding id: " workspaceObject.id "`n"
+				. "adding displayText: " IdToDisplayString(workspaceObject.id)
+		}
 		workspaceObject.options := []
 		workspaceObject.options.Push(
 			{
@@ -308,7 +313,7 @@ UpdateWinList(workspaceObject) {
 	}
 	
 	for hwnd in WinGetList() { ; hwnd is the unique window handle
-		; TODO: this conditional lets some explorer processes slip past likely due to non-printables characters in the title
+		; TODO: this conditional lets some explorer processes slip past likely due to non-printable characters in the title
 		; TODO research what non-printable control characters are for in empty titles of explorer.exe processes
 		if (hwnd != workspaceObject.id ; filters out paired window
 				&& RegExMatch(WinGetTitle(hwnd), "\S") ; ensures at least one non-whitespace anywhere in the title (doesn't account for non-printable control characters) 
@@ -328,11 +333,13 @@ UpdateWinList(workspaceObject) {
 		}
 	}
 
-	msg := ""
-	for obj in workspaceObject.options {
-		msg .= "displayTitle: " . obj.displayTitle . ", id: " . obj.id . "`n"
+	if guiDebugMode {
+		msg := ""
+		for obj in workspaceObject.options {
+			msg .= "displayTitle: " . obj.displayTitle . ", id: " . obj.id . "`n"
+		}
+		debugLabel.Value := msg
 	}
-	debugLabel.Value := msg
 	workspaceObject.ddl.Choose(1)
 }
 
