@@ -1,4 +1,4 @@
-## Description
+## Global YouTube Playback
 **An AutoHotkey script to rewind/fast-forward youtube videos while focused on a different window.** <br>
 **Creates hotkey macros for global youtube playback and paired window focus toggling.**
 
