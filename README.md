@@ -12,7 +12,8 @@ it more and work longer.*
 > [!TIP]
 > Place script file (or script shortcut) in ` %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup ` to autorun on startup.
 ### Running without AHK Installation
-Might add compiled script (.exe standalone) after further improvements.
+1. Download [latest GYTP release](https://github.com/legacynical/global-yt-playback/releases)<br>
+2. run the GYTP.exe (right-click in system tray for ahk related settings/options, ``` Ctrl + ` ``` for GUI)
 ## Controls
 > [!TIP]
 > Change hotkeys in code if you don't have media keys or want to use different ones. <br>
