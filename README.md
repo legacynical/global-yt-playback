@@ -31,5 +31,5 @@ it more and work longer.*
     Ctrl + Win + 1 = unpair workspace<br>
 Ctrl + Win + [2-5] = unpair window [2-5]<br>
     Ctrl + Win + 0 = unpair all windows<br>
-          Ctrl + ` = open GUI<br>
+          Ctrl + ` = open GUI (hint: ` is same key as ~)<br>
 </pre>
