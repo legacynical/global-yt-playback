@@ -106,8 +106,6 @@ DisplayActiveWindowStats() {
 PairWindow(workspaceObject) {
 	global
 	GetWinInfo()
-	; TODO: revert this refactor after debugging to test functionality
-	;local window := workspaceObject.id ; only used for read-only operations
 	if (workspaceObject.id == "") {
 		workspaceObject.id := "ahk_id " winId
 		workspaceObject.isPaired := true
@@ -288,8 +286,6 @@ UpdateWinList(workspaceObject) {
 	}
 	
 	for hwnd in WinGetList() { ; hwnd is the unique window handle
-		; TODO: this conditional lets some explorer processes slip past likely due to non-printable characters in the title
-		; TODO research what non-printable control characters are for in empty titles of explorer.exe processes
 		if (hwnd != workspaceObject.id ; filters out paired window
 				&& RegExMatch(WinGetTitle(hwnd), "\S") ; ensures at least one non-whitespace anywhere in the title (doesn't account for non-printable control characters) 
 				&& DllCall("IsWindowVisible", "Ptr", hwnd) ; ensures processing of only visible windows
@@ -336,7 +332,7 @@ IdToDisplayString(hwnd) {
 	return displayString := "[" windowProcess "] non-empty title[" windowTitle "]"  
 }
 
-; This function will likely be deprecated as DDL controls/event listeners already handle this
+; NOTE: This function will likely be deprecated as DDL controls/event listeners already handle this
 GuiPairWindow(num) {
 	switch num {
 		case 1: PairWindow(workspaceList[1])
@@ -347,8 +343,9 @@ GuiPairWindow(num) {
 	}
 }
 
-; TODO: add unpair buttons to gui, this will probably be a redundant method if I opt to create
+; TODO: Add unpair buttons to gui, this will probably be a redundant method if I opt to create
 ; the controls dynamically along side the DDL controls being generated.
+	; It could also be more simple/maintainable to utilize this, will have to consider.
 GuiUnpairWindow(num) {
 	switch num {
 		case 1: UnpairWindow(workspaceList[1])
