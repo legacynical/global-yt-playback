@@ -60,7 +60,6 @@ Media_Play_Pause:: YoutubeControl("{k}") ; play/pause
 ; If you don't have Media_Play_Pause key, uncomment and set hotkey
 ; hotkey::Media_Play_Pause
 
-; action param not used but added for clarity future use
 YoutubeControl(keyPress) {
 	global video, workspaceList
 	if WinExist(video) {
