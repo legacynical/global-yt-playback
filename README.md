@@ -33,3 +33,5 @@ Ctrl + Win + [2-5] = unpair window [2-5]<br>
     Ctrl + Win + 0 = unpair all windows<br>
           Ctrl + ` = open GUI (hint: ` is same key as ~)<br>
 </pre>
+## License
+While I'm providing this AHK script under the MIT license, please note that the AHK interpreter is under the [GPL-2.0 license](https://github.com/AutoHotkey/AutoHotkey?tab=GPL-2.0-1-ov-file). This applies to compiled builds (.exe) as it packages both the AHK script and the AHK interpreter. For most users or developers, this shouldn't be of concern as the GPL-2.0 license itself is also quite permissive.
