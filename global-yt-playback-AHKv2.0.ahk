@@ -82,7 +82,7 @@ GetWinInfo() {
 	winTitle := WinGetTitle(active)
 	winId := WinGetID(active)
 	winClass := WinGetClass(active)
-	winProcess := WinGetProcessName(active) ?? "" ; potential fix to handle WinGetProcessName() error
+	winProcess := WinGetProcessName(active)
 	currentID := "ahk_id " winId
 }
 
