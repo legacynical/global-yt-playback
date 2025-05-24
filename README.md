@@ -1,4 +1,4 @@
-## Global YouTube Playback
+## Global YouTube Playback   [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/legacynical/global-yt-playback)
 **An AutoHotkey script to rewind/fast-forward youtube videos while focused on a different window.** <br>
 **Creates hotkey macros for global youtube playback and paired window focus toggling.**
 
