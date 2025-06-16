@@ -123,16 +123,23 @@ DisplayActiveWindowStats() {
 <#4:: PairWindow(workspaceList[4])
 <#5:: PairWindow(workspaceList[5])
 
-PairWindow(workspaceObject) {
-	global
-	GetWinInfo()
+PairWindow(workspaceObject, maxInputBuffer) {
+	static inputBuffer := maxInputBuffer
+	
+	local currentWin := GetWinInfo()
+	if !currentWin
+		MsgBox "No active window found!"
+		return
+
+	local currentID := "ahk_id" currentWin.id
+
 	if (workspaceObject.id == "") {
-		workspaceObject.id := "ahk_id " winId
+		workspaceObject.id := currentID
 		workspaceObject.isPaired := true
 		MsgBox "[Pairing " workspaceObject.label "]`n"
-			. "title: " winTitle "`n"
-			. "workspace: " winId "`n"
-			. "process: " winProcess, , "T3"
+			. "title: " currentWin.title "`n"
+			. "workspace: " currentWin.id "`n"
+			. "process: " currentWin.process, , "T3"
 	} else if (currentID != workspaceObject.id) {
 		if WinExist(workspaceObject.id) {
 			inputBuffer := maxInputBuffer
@@ -140,12 +147,13 @@ PairWindow(workspaceObject) {
 		}
 	} else if (currentID == workspaceObject.id) {
 		inputBuffer--
-		if (WinExist(workspaceObject.id) && (inputBuffer == 0)) {
+		if (WinExist(workspaceObject.id) && (inputBuffer <= 0)) {
 			inputBuffer := maxInputBuffer
 			WinMinimize
 		}
 	}
-	UpdateWinList(workspaceObject)
+	if WinExist("ahk_id" guiHwnd)
+		UpdateWinList(workspaceObject)
 }
 
 ^<#1:: UnpairWindow(workspaceList[1])
