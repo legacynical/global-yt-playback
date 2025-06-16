@@ -28,7 +28,6 @@ InstallKeybdHook ; Allow use of additional special keys
 
 DetectHiddenWindows(false) ; ideal setting for ux
 guiDebugMode := false ; Toggle for GUI debug prints
-video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
 guiHwnd := ""
 workspaceList := [
@@ -50,18 +49,19 @@ class Workspace {
 	}
 }
 
-Media_Prev:: YoutubeControl("{left}", video) ; rewind 5 sec
-^Media_Prev:: YoutubeControl("{j}", video) ; rewind 10 sec
-Media_Next:: YoutubeControl("{Right}", video) ; fast forward 5 sec
-^Media_Next:: YoutubeControl("{l}", video) ; fast forward 10 sec
-Media_Play_Pause:: YoutubeControl("{k}", video) ; play/pause
+Media_Prev:: YoutubeControl("{left}") ; rewind 5 sec
+^Media_Prev:: YoutubeControl("{j}") ; rewind 10 sec
+Media_Next:: YoutubeControl("{Right}") ; fast forward 5 sec
+^Media_Next:: YoutubeControl("{l}") ; fast forward 10 sec
+Media_Play_Pause:: YoutubeControl("{k}") ; play/pause
 	; Most browsers allow Media_Play_Pause by default but this ensures that it targets a YouTube tab
 
 ; If you don't have Media_Play_Pause key, uncomment and set hotkey
 ; hotkey::Media_Play_Pause
 
-YoutubeControl(keyPress, targetWin) {
-	if WinExist(targetWin) {
+YoutubeControl(keyPress) {
+local targetWin := "YouTube" ; Alternatively use "ahk_exe chrome.exe" (use your browser.exe)
+	if WinExist(targetWin) { 
 		local lastActiveHwnd := WinGetID("A")
 		WinActivate(targetWin)
 		sleep 11 ; Delay rounds to nearest multiple of 10 or 15.6 ms, I just use 11 bc I like
