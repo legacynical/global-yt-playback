@@ -108,11 +108,13 @@ GetWinInfo(hwnd := "A") {
 <#`:: DisplayActiveWindowStats()
 
 DisplayActiveWindowStats() {
-	GetWinInfo()
-	MsgBox "Active window title: " winTitle "`n"
-		. "Active window ID: " winId "`n"
-		. "Active window class: " winClass "`n"
-		. "Active window process: " winProcess
+	local winInfo := GetWinInfo()
+	If (winInfo) {
+		MsgBox "Active window title: " winInfo.title "`n"
+		. "Active window ID: " winInfo.id "`n"
+		. "Active window class: " winInfo.class "`n"
+		. "Active window process: " winInfo.process
+	}
 }
 
 <#1:: PairWindow(workspaceList[1])
