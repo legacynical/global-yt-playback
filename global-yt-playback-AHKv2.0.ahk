@@ -72,8 +72,27 @@ YoutubeControl(keyPress) {
 	}
 }
 
-GetWinInfo() {
-	global
+GetWinInfo(hwnd := "A") {
+	try {
+		if !WinExist(hwnd)
+			return false
+		activeHwnd := WinGetID(hwnd)
+		return {
+			title: WinGetTitle(activeHwnd),
+      id: activeHwnd,
+      class: WinGetClass(activeHwnd),
+      process: WinGetProcessName(activeHwnd)
+		}
+	}	catch Error {
+		return {
+			title: "[Error]",
+			id: 0,
+			class: "[Error]",
+			process: "[Access Denied]"
+		}
+	}
+	
+	
 	; TODO: investigate bug [084] `winProcess := WinGetProcessName(active)`' access is denied
 		; I think this bug triggers when my pc goes to sleep and the gui refresh for focused window details calls this function.
 		; Interestingly only the WinGetProcessName() throws the error and not the get functions above it so I need to research that.
