@@ -332,20 +332,15 @@ UpdateWinList(workspaceObject) {
 
 ; 
 IdToDisplayString(hwnd) {
-	windowTitle := WinGetTitle(hwnd)
-		; TODO: investigate target window not found error: ahk_id 28772592
-			/* call stack
-				(335) : [WinGetTitle] windowTitle := WinGetTitle(hwnd)
-				(335) : [IdToDisplayString] windowTitle := WinGetTitle(hwnd)
-				(279) : [UpdateWinList] workspaceObject.ddl.Add([IdToDisplayString(workspaceObject.id)])
-				[] Return  UpdateWinList(workspaceObject)
-			*/
-				; potentially  
-	windowProcess := StrReplace(WinGetProcessName(hwnd), ".exe")
-	if (windowTitle != "") { ; if not an blank title window
-		return displayString := "[" windowProcess "] " windowTitle
+	local winInfo := GetWinInfo("ahk_id " hwnd)
+
+	if !winInfo
+		return "[Missing Info] Window may have recently closed!"
+	local windowProcess := StrReplace(winInfo.process, ".exe")
+	if (winInfo.title != "") { ; if not an blank title window
+		return "[" windowProcess "] " winInfo.title
 	}
-	return displayString := "[" windowProcess "] non-empty title[" windowTitle "]"  
+	return "[" windowProcess "] non-empty title[" winInfo.title "]"  
 }
 
 ; NOTE: This function will likely be deprecated as DDL controls/event listeners already handle this
