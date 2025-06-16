@@ -63,7 +63,7 @@ Media_Play_Pause:: YoutubeControl("{k}", video) ; play/pause
 YoutubeControl(keyPress, targetWin) {
 	if WinExist(targetWin) {
 		local lastActiveHwnd := WinGetID("A")
-		WinActivate
+		WinActivate(targetWin)
 		sleep 11 ; Delay rounds to nearest multiple of 10 or 15.6 ms, I just use 11 bc I like
 		Send keyPress
 		sleep 11
@@ -131,13 +131,13 @@ PairWindow(workspaceObject, maxInputBuffer) {
 	} else if (currentID != workspaceObject.id) {
 		if WinExist(workspaceObject.id) {
 			inputBuffer := maxInputBuffer
-			WinActivate
+			WinActivate(workspaceObject.id)
 		}
 	} else if (currentID == workspaceObject.id) {
 		inputBuffer--
 		if (WinExist(workspaceObject.id) && (inputBuffer <= 0)) {
 			inputBuffer := maxInputBuffer
-			WinMinimize
+			WinMinimize(workspaceObject.id)
 		}
 	}
 	if WinExist("ahk_id" guiHwnd)
