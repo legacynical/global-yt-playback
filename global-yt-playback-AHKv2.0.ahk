@@ -31,6 +31,13 @@ guiDebugMode := false ; Toggle for GUI debug prints
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
 guiHwnd := ""
+workspaceList := [
+	Workspace("", false, "Main Workspace"),
+	Workspace("", false, "Window 2"),
+	Workspace("", false, "Window 3"),
+	Workspace("", false, "Window 4"),
+	Workspace("", false, "Window 5")
+]
 class Workspace {
 	__New(id, isPaired, label) {
 		this.id := id
@@ -42,15 +49,6 @@ class Workspace {
 		this.options := []
 	}
 }
-
-workspaceList := [
-	Workspace("", false, "Main Workspace"),
-	Workspace("", false, "Window 2"),
-	Workspace("", false, "Window 3"),
-	Workspace("", false, "Window 4"),
-	Workspace("", false, "Window 5")
-]
-
 
 Media_Prev:: YoutubeControl("{left}", video) ; rewind 5 sec
 ^Media_Prev:: YoutubeControl("{j}", video) ; rewind 10 sec
@@ -117,9 +115,10 @@ PairWindow(workspaceObject, maxInputBuffer) {
 	static inputBuffer := maxInputBuffer
 	
 	local currentWin := GetWinInfo()
-	if !currentWin
+	if (!currentWin) {
 		MsgBox "No active window found!"
 		return
+	}
 
 	local currentID := "ahk_id" currentWin.id
 
