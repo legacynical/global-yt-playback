@@ -149,7 +149,7 @@ PairWindow(workspaceObject, maxInputBuffer) {
 ^<#3:: UnpairWindow(workspaceList[3])
 ^<#4:: UnpairWindow(workspaceList[4])
 ^<#5:: UnpairWindow(workspaceList[5])
-^<#0:: UnpairAllWindows()
+^<#0:: UnpairAllWindows(workspaceList)
 
 UnpairWindow(workspaceObject) {
 	local windowLabel := workspaceObject.label
@@ -364,6 +364,6 @@ GuiUnpairWindow(num) {
 		case 3: UnpairWindow(workspaceList[3])
 		case 4: UnpairWindow(workspaceList[4])
 		case 5: UnpairWindow(workspaceList[5])
-		case 10: UnpairAllWindows()
+		case 10: UnpairAllWindows(workspaceList)
 	}
 }
