@@ -163,8 +163,7 @@ UnpairWindow(workspaceObject) {
 	UpdateWinList(workspaceObject)
 }
 
-UnpairAllWindows() {
-	global
+UnpairAllWindows(workspaceList) {
 	confirmUnpair := MsgBox("Are you sure you want to unpair all windows?", , "YesNo")
 	if confirmUnpair = "Yes" {
 		for workspaceObject in workspaceList {
@@ -228,10 +227,11 @@ UpdateGUI() {
 		return
 	}
 	
-	GetWinInfo() ; called to get latest win info
-	activeWinTitle.Value := "[" StrReplace(winProcess, ".exe") "] " winTitle
-	; activeWinClass.Value := winClass
-	; activeWinId.Value := winId
+	local winInfo := GetWinInfo()
+	if (winInfo)
+		activeWinTitle.Value := "[" StrReplace(winInfo.process, ".exe") "] " winInfo.title
+	; activeWinClass.Value := winInfo.class
+	; activeWinId.Value := winInfo.id
 }
 
 ; Assign event handlers
