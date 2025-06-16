@@ -16,7 +16,7 @@
 ;    Ctrl + Win + 4 = unpair window 4
 ;    Ctrl + Win + 5 = unpair window 5
 ;    Ctrl + Win + 0 = unpair all windows
-;          Ctrl + ` = open GUI
+;    Ctrl + Win + ` = open GUI
 
 #Requires AutoHotkey v2.0
 #SingleInstance ; Prompt to replace instance if already running
@@ -159,8 +159,7 @@ UnpairAllWindows() {
 }
 
 ;=========== GUI ===========
-
-^`:: {
+^<#`:: {
 	guiDebugMode ? MainGui.Show("w500 h450") : MainGui.Show("w500 h300")
 	global guiHwnd := MainGui.Hwnd
 	UpdateGUI()
