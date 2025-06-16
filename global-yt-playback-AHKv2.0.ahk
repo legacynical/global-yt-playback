@@ -37,6 +37,7 @@ class Workspace {
 		this.isPaired := isPaired
 		this.label := label
 		this.ddl := ""
+		this.focusEvent := ""
 		this.changeEvent := ""
 		this.options := []
 	}
@@ -237,7 +238,7 @@ UpdateGUI() {
 
 ; Assign event handlers
 AssignWorkspaceOnEvent(workspaceObject) {
-	workspaceObject.changeEvent := workspaceObject.ddl.OnEvent("Focus", (*) => UpdateWinList(workspaceObject))
+	workspaceObject.focusEvent := workspaceObject.ddl.OnEvent("Focus", (*) => UpdateWinList(workspaceObject))
 	workspaceObject.changeEvent := workspaceObject.ddl.OnEvent("Change", (*) => WorkspaceSelected(workspaceObject))
 	; MsgBox "updated: " workspaceObject.label
 }
