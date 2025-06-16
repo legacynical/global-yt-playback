@@ -50,11 +50,11 @@ workspaceList := [
 ]
 inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
 
-Media_Prev:: YoutubeControl("{left}") ; rewind 5 sec
-^Media_Prev:: YoutubeControl("{j}") ; rewind 10 sec
-Media_Next:: YoutubeControl("{Right}") ; fast forward 5 sec
-^Media_Next:: YoutubeControl("{l}") ; fast forward 10 sec
-Media_Play_Pause:: YoutubeControl("{k}") ; play/pause
+Media_Prev:: YoutubeControl("{left}", video) ; rewind 5 sec
+^Media_Prev:: YoutubeControl("{j}", video) ; rewind 10 sec
+Media_Next:: YoutubeControl("{Right}", video) ; fast forward 5 sec
+^Media_Next:: YoutubeControl("{l}", video) ; fast forward 10 sec
+Media_Play_Pause:: YoutubeControl("{k}", video) ; play/pause
 	; Most browsers allow Media_Play_Pause by default but this ensures that it targets a YouTube tab
 
 ; If you don't have Media_Play_Pause key, uncomment and set hotkey
@@ -117,11 +117,11 @@ DisplayActiveWindowStats() {
 	}
 }
 
-<#1:: PairWindow(workspaceList[1])
-<#2:: PairWindow(workspaceList[2])
-<#3:: PairWindow(workspaceList[3])
-<#4:: PairWindow(workspaceList[4])
-<#5:: PairWindow(workspaceList[5])
+<#1:: PairWindow(workspaceList[1], maxInputBuffer)
+<#2:: PairWindow(workspaceList[2], maxInputBuffer)
+<#3:: PairWindow(workspaceList[3], maxInputBuffer)
+<#4:: PairWindow(workspaceList[4], maxInputBuffer)
+<#5:: PairWindow(workspaceList[5], maxInputBuffer)
 
 PairWindow(workspaceObject, maxInputBuffer) {
 	static inputBuffer := maxInputBuffer
@@ -363,11 +363,11 @@ IdToDisplayString(hwnd) {
 ; NOTE: This function will likely be deprecated as DDL controls/event listeners already handle this
 GuiPairWindow(num) {
 	switch num {
-		case 1: PairWindow(workspaceList[1])
-		case 2: PairWindow(workspaceList[2])
-		case 3: PairWindow(workspaceList[3])
-		case 4: PairWindow(workspaceList[4])
-		case 5: PairWindow(workspaceList[5])
+		case 1: PairWindow(workspaceList[1], maxInputBuffer)
+		case 2: PairWindow(workspaceList[2], maxInputBuffer)
+		case 3: PairWindow(workspaceList[3], maxInputBuffer)
+		case 4: PairWindow(workspaceList[4], maxInputBuffer)
+		case 5: PairWindow(workspaceList[5], maxInputBuffer)
 	}
 }
 
