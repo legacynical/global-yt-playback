@@ -60,15 +60,15 @@ Media_Play_Pause:: YoutubeControl("{k}") ; play/pause
 ; If you don't have Media_Play_Pause key, uncomment and set hotkey
 ; hotkey::Media_Play_Pause
 
-YoutubeControl(keyPress) {
-	global video, workspaceList
-	if WinExist(video) {
+YoutubeControl(keyPress, targetWin) {
+	if WinExist(targetWin) {
+		local lastActiveHwnd := WinGetID("A")
 		WinActivate
-		sleep 11 ; Delay rounds to nearest multiple of 10 or 15.6 ms
+		sleep 11 ; Delay rounds to nearest multiple of 10 or 15.6 ms, I just use 11 bc I like
 		Send keyPress
 		sleep 11
-		if WinExist(workspaceList[1].id) ; YT playback will return window focus back to main workspace
-			WinActivate
+		if WinExist("ahk_id " lastActiveHwnd) ; YT playback will return window focus back to main workspace
+			WinActivate("ahk_id " lastActiveHwnd)
 	}
 }
 
