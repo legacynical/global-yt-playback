@@ -26,7 +26,7 @@ InstallKeybdHook ; Allow use of additional special keys
 ; SetWorkingDir A_ScriptDir ; (AHKv2 default) Force script to use its own folder as working directory.
 ; SetTitleMatchMode 2 ; (AHKv2 default) Allow WinTitle to be matched anywhere from a window's title
 
-DetectHiddenWindows(false)
+DetectHiddenWindows(false) ; ideal setting for ux
 guiDebugMode := false ; Toggle for GUI debug prints
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
 guiHwnd := ""
@@ -91,18 +91,6 @@ GetWinInfo(hwnd := "A") {
 			process: "[Access Denied]"
 		}
 	}
-	
-	
-	; TODO: investigate bug [084] `winProcess := WinGetProcessName(active)`' access is denied
-		; I think this bug triggers when my pc goes to sleep and the gui refresh for focused window details calls this function.
-		; Interestingly only the WinGetProcessName() throws the error and not the get functions above it so I need to research that.
-		; possible fix would be to exit return if active window `WinExist("A")` to ensure expected behavior
-	local active := WinExist("A") ? "A" : "" ; get info of active window if it exists, else get info of last found window
-	winTitle := WinGetTitle(active)
-	winId := WinGetID(active)
-	winClass := WinGetClass(active)
-	winProcess := WinGetProcessName(active)
-	currentID := "ahk_id " winId
 }
 
 <#`:: DisplayActiveWindowStats()
