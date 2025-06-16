@@ -29,6 +29,7 @@ InstallKeybdHook ; Allow use of additional special keys
 DetectHiddenWindows(false) ; ideal setting for ux
 guiDebugMode := false ; Toggle for GUI debug prints
 video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
+inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
 guiHwnd := ""
 class Workspace {
 	__New(id, isPaired, label) {
@@ -48,7 +49,7 @@ workspaceList := [
 	Workspace("", false, "Window 4"),
 	Workspace("", false, "Window 5")
 ]
-inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
+
 
 Media_Prev:: YoutubeControl("{left}", video) ; rewind 5 sec
 ^Media_Prev:: YoutubeControl("{j}", video) ; rewind 10 sec
@@ -212,9 +213,9 @@ MainGui.AddButton("YS w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(1)
 MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpairWindow(10))
 */
 
-isGuiRefresh := true ;TODO make this a gui toggle
+; isGuiRefresh := true ;TODO make this a gui toggle
 
-SetGuiRefreshTimer(isGuiRefresh)
+SetGuiRefreshTimer(true)
 
 SetGuiRefreshTimer(bool) {
 	SetTimer UpdateGUI, (bool ? 250 : 0) ; calls UpdateGUI() every 250ms or disables timer
@@ -242,16 +243,13 @@ AssignWorkspaceOnEvent(workspaceObject) {
 }
 
 WorkspaceSelected(workspaceObject) {
-	global
 	index := workspaceObject.ddl.Value ; get selected index value
 	; if selected window exists, pair it to workspace
 	if WinExist(workspaceObject.options[index].id) {
 		workspaceObject.id := "ahk_id " workspaceObject.options[index].id
 		workspaceObject.isPaired := true
-		if guiDebugMode { ; DEBUG print
-			MsgBox "index: " index "`n"
-			. "id: " workspaceObject.id
-		}
+		; DEBUG print
+		; MsgBox "index: " index "`nid: " workspaceObject.id
 	} else {
 		MsgBox "[Error] That window no longer exists!`n"
 		. "Attempting to refresh options, please select again..."
@@ -266,10 +264,6 @@ UpdateAllWinList(workspaceList) {
 }
 
 UpdateWinList(workspaceObject) {
-	; MsgBox "UpdateWinList fired"
-
-	; Ensure pair state is freed and clears id if window no longer exists
-		; NOTE: potential fix for target not found error in IdToDisplayString(hwnd)
 	if !WinExist(workspaceObject.id) {
 		workspaceObject.isPaired := false
 		workspaceObject.id := ""
