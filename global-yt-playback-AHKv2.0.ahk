@@ -22,21 +22,29 @@
 #SingleInstance ; Prompt to replace instance if already running
 #Warn ; For debugging
 InstallKeybdHook ; Allow use of additional special keys
+DetectHiddenWindows(false) ; ideal setting for ux, esp. for gui ddl
 ; SendMode Input ; (AHKv2 default) Recommended for new scripts due to its superior speed and reliability.
 ; SetWorkingDir A_ScriptDir ; (AHKv2 default) Force script to use its own folder as working directory.
 ; SetTitleMatchMode 2 ; (AHKv2 default) Allow WinTitle to be matched anywhere from a window's title
 
-DetectHiddenWindows(false) ; ideal setting for ux
-guiDebugMode := false ; Toggle for GUI debug prints
-inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
-guiHwnd := ""
-workspaceList := [
+app := GTYP([
 	Workspace("", false, "Main Workspace"),
 	Workspace("", false, "Window 2"),
 	Workspace("", false, "Window 3"),
 	Workspace("", false, "Window 4"),
 	Workspace("", false, "Window 5")
-]
+	],
+	true
+)
+class GTYP {
+	__New(workspaceList, guiDebugMode) {
+		this.workspaceList := workspaceList
+		this.guiDebugMode := guiDebugMode
+		this.isGuiRefresh := true
+		this.maxInputBuffer := 2
+		this.guiHwnd := ""
+	}
+}
 class Workspace {
 	__New(id, isPaired, label) {
 		this.id := id
@@ -105,13 +113,14 @@ DisplayActiveWindowStats() {
 	}
 }
 
-<#1:: PairWindow(workspaceList[1], maxInputBuffer)
-<#2:: PairWindow(workspaceList[2], maxInputBuffer)
-<#3:: PairWindow(workspaceList[3], maxInputBuffer)
-<#4:: PairWindow(workspaceList[4], maxInputBuffer)
-<#5:: PairWindow(workspaceList[5], maxInputBuffer)
+<#1:: PairWindow(app.workspaceList[1])
+<#2:: PairWindow(app.workspaceList[2])
+<#3:: PairWindow(app.workspaceList[3])
+<#4:: PairWindow(app.workspaceList[4])
+<#5:: PairWindow(app.workspaceList[5])
 
-PairWindow(workspaceObject, maxInputBuffer) {
+PairWindow(workspaceObject) {
+	local maxInputBuffer := app.maxInputBuffer
 	static inputBuffer := maxInputBuffer
 	
 	local currentWin := GetWinInfo()
@@ -141,16 +150,16 @@ PairWindow(workspaceObject, maxInputBuffer) {
 			WinMinimize(workspaceObject.id)
 		}
 	}
-	if WinExist("ahk_id" guiHwnd)
+	if WinExist("ahk_id" app.guiHwnd)
 		UpdateWinList(workspaceObject)
 }
 
-^<#1:: UnpairWindow(workspaceList[1])
-^<#2:: UnpairWindow(workspaceList[2])
-^<#3:: UnpairWindow(workspaceList[3])
-^<#4:: UnpairWindow(workspaceList[4])
-^<#5:: UnpairWindow(workspaceList[5])
-^<#0:: UnpairAllWindows(workspaceList)
+^<#1:: UnpairWindow(app.workspaceList[1])
+^<#2:: UnpairWindow(app.workspaceList[2])
+^<#3:: UnpairWindow(app.workspaceList[3])
+^<#4:: UnpairWindow(app.workspaceList[4])
+^<#5:: UnpairWindow(app.workspaceList[5])
+^<#0:: UnpairAllWindows(app.workspaceList)
 
 UnpairWindow(workspaceObject) {
 	local windowLabel := workspaceObject.label
@@ -167,7 +176,7 @@ UnpairWindow(workspaceObject) {
 UnpairAllWindows(workspaceList) {
 	confirmUnpair := MsgBox("Are you sure you want to unpair all windows?", , "YesNo")
 	if confirmUnpair = "Yes" {
-		for workspaceObject in workspaceList {
+		for workspaceObject in app.workspaceList {
 			workspaceObject.id := ""
 			workspaceObject.isPaired := false
 		}		
@@ -178,14 +187,16 @@ UnpairAllWindows(workspaceList) {
 ;=========== GUI ===========
 
 ^`:: {
-	guiDebugMode ? MainGui.Show("w500 h450") : MainGui.Show("w500 h300")
-	global guiHwnd := MainGui.Hwnd
+	local isDebugMode := app.guiDebugMode
+	isDebugMode ? MainGui.Show("w500 h450") : MainGui.Show("w500 h300")
+	app.guiHwnd := MainGui.Hwnd
 	UpdateGUI()
 }
 
-; TODO: Prevent scroll select for DDLs
+; TODO: Prevent scroll select for DDLs (this needs more lower level implementations)
 ; Create the main GUI
 MainGui := Gui("+Resize", "Window Pairing")
+
 MainGui.Opt("-MaximizeBox")
 
 ; Add Controls for active window stats
@@ -194,13 +205,14 @@ activeWinTitle := MainGui.AddEdit("w400 vActiveTitle ReadOnly", "[Active Window 
 ; activeWinClass := MainGui.AddEdit("w240 vActiveClass ReadOnly", "[Active Window Class]")
 ; activeWinId := MainGui.AddEdit("w240 vActiveID ReadOnly", "[Active Window Id]")
 
-debugLabel := guiDebugMode ? MainGui.AddEdit("w400 h150 ReadOnly", "[Debug]") : ""
+
+debugLabel := app.guiDebugMode ? MainGui.AddEdit("w400 h150 ReadOnly", "[Debug]") : ""
 
 ; Add controls for window DropDownList select
 AddDropDownListControls()
 
 AddDropDownListControls() {
-	for space in workspaceList {
+	for space in app.workspaceList {
 		MainGui.AddText("w100 Section", space.label)
 		space.ddl := MainGui.AddDDL("w400")
 		UpdateWinList(space)
@@ -213,9 +225,9 @@ MainGui.AddButton("YS w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(1)
 MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpairWindow(10))
 */
 
-; isGuiRefresh := true ;TODO make this a gui toggle
 
-SetGuiRefreshTimer(true)
+; TODO: make this a gui toggle
+SetGuiRefreshTimer(app.isGuiRefresh) ; default true
 
 SetGuiRefreshTimer(bool) {
 	SetTimer UpdateGUI, (bool ? 250 : 0) ; calls UpdateGUI() every 250ms or disables timer
@@ -224,7 +236,7 @@ SetGuiRefreshTimer(bool) {
 
 UpdateGUI() {
 	; if the GUI window doesn't exist or is minimized...
-	if (!(WinExist("ahk_id " guiHwnd)) || (WinGetMinMax("ahk_id " guiHwnd) == -1)) {
+	if (!(WinExist("ahk_id " app.guiHwnd)) || (WinGetMinMax("ahk_id " app.guiHwnd) == -1)) {
 		return
 	}
 	
@@ -243,13 +255,14 @@ AssignWorkspaceOnEvent(workspaceObject) {
 }
 
 WorkspaceSelected(workspaceObject) {
+	local isDebugMode := app.guiDebugMode
 	index := workspaceObject.ddl.Value ; get selected index value
 	; if selected window exists, pair it to workspace
 	if WinExist(workspaceObject.options[index].id) {
 		workspaceObject.id := "ahk_id " workspaceObject.options[index].id
 		workspaceObject.isPaired := true
-		; DEBUG print
-		; MsgBox "index: " index "`nid: " workspaceObject.id
+		if isDebugMode
+			MsgBox "index: " index "`nid: " workspaceObject.id
 	} else {
 		MsgBox "[Error] That window no longer exists!`n"
 		. "Attempting to refresh options, please select again..."
@@ -258,7 +271,7 @@ WorkspaceSelected(workspaceObject) {
 }
 
 UpdateAllWinList(workspaceList) {
-	for space in workspaceList {
+	for space in app.workspaceList {
 		UpdateWinList(space)
 	}
 }
@@ -272,7 +285,7 @@ UpdateWinList(workspaceObject) {
 	if workspaceObject.isPaired {
 		workspaceObject.ddl.Delete()
 		workspaceObject.ddl.Add([IdToDisplayString(workspaceObject.id)])
-		if guiDebugMode { ; DEBUG print
+		if app.guiDebugMode { ; DEBUG print
 			MsgBox "UpdateWinList: workspaceObject.isPaired = true`n" 
 				. "adding id: " workspaceObject.id "`n"
 				. "adding displayText: " IdToDisplayString(workspaceObject.id)
@@ -314,7 +327,7 @@ UpdateWinList(workspaceObject) {
 		}
 	}
 
-	if guiDebugMode {
+	if app.guiDebugMode {
 		msg := ""
 		for obj in workspaceObject.options {
 			msg .= "displayTitle: " . obj.displayTitle . ", id: " . obj.id . "`n"
@@ -326,11 +339,8 @@ UpdateWinList(workspaceObject) {
 
 ; 
 IdToDisplayString(hwnd) {
-	local winInfo := GetWinInfo("ahk_id " hwnd)
-
-	if !winInfo
-		return "[Missing Info] Window may have recently closed!"
-	local windowProcess := StrReplace(winInfo.process, ".exe")
+	local winInfo := GetWinInfo(hwnd)
+	local windowProcess := StrReplace(WinGetProcessName(hwnd), ".exe")
 	if (winInfo.title != "") { ; if not an blank title window
 		return "[" windowProcess "] " winInfo.title
 	}
@@ -340,11 +350,11 @@ IdToDisplayString(hwnd) {
 ; NOTE: This function will likely be deprecated as DDL controls/event listeners already handle this
 GuiPairWindow(num) {
 	switch num {
-		case 1: PairWindow(workspaceList[1], maxInputBuffer)
-		case 2: PairWindow(workspaceList[2], maxInputBuffer)
-		case 3: PairWindow(workspaceList[3], maxInputBuffer)
-		case 4: PairWindow(workspaceList[4], maxInputBuffer)
-		case 5: PairWindow(workspaceList[5], maxInputBuffer)
+		case 1: PairWindow(app.workspaceList[1])
+		case 2: PairWindow(app.workspaceList[2])
+		case 3: PairWindow(app.workspaceList[3])
+		case 4: PairWindow(app.workspaceList[4])
+		case 5: PairWindow(app.workspaceList[5])
 	}
 }
 
@@ -353,11 +363,11 @@ GuiPairWindow(num) {
 	; It could also be more simple/maintainable to utilize this, will have to consider.
 GuiUnpairWindow(num) {
 	switch num {
-		case 1: UnpairWindow(workspaceList[1])
-		case 2: UnpairWindow(workspaceList[2])
-		case 3: UnpairWindow(workspaceList[3])
-		case 4: UnpairWindow(workspaceList[4])
-		case 5: UnpairWindow(workspaceList[5])
-		case 10: UnpairAllWindows(workspaceList)
+		case 1: UnpairWindow(app.workspaceList[1])
+		case 2: UnpairWindow(app.workspaceList[2])
+		case 3: UnpairWindow(app.workspaceList[3])
+		case 4: UnpairWindow(app.workspaceList[4])
+		case 5: UnpairWindow(app.workspaceList[5])
+		case 10: UnpairAllWindows(app.workspaceList)
 	}
 }
