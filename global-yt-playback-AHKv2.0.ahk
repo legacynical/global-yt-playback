@@ -1,26 +1,14 @@
 ; ========== [CONTROLS] ===========
-;        Media_Prev = YT rewind 5 sec
-; Ctrl + Media_Prev = YT rewind 10 sec
-;  Media_Play_Pause = YT toggle play/pause
-;        Media_Next = YT fast forward 5 sec
-; Ctrl + Media_Next = YT fast forward 10 sec
-;           Win + ` = display active window stats
-;           Win + 1 = pair active as workspace
-;           Win + 2 = pair active as window 2
-;           Win + 3 = pair active as window 3
-;           Win + 4 = pair active as window 4
-;           Win + 5 = pair active as window 5
-;    Ctrl + Win + 1 = unpair workspace
-;    Ctrl + Win + 2 = unpair window 2
-;    Ctrl + Win + 3 = unpair window 3
-;    Ctrl + Win + 4 = unpair window 4
-;    Ctrl + Win + 5 = unpair window 5
-;    Ctrl + Win + 6 = unpair window 6
-;    Ctrl + Win + 7 = unpair window 7
-;    Ctrl + Win + 8 = unpair window 8
-;    Ctrl + Win + 9 = unpair window 9
-;    Ctrl + Win + 0 = unpair all windows
-;    Ctrl + Win + ` = open GUI
+;         Media_Prev = YT rewind 5 sec
+;  Ctrl + Media_Prev = YT rewind 10 sec
+;   Media_Play_Pause = YT toggle play/pause
+;         Media_Next = YT fast forward 5 sec
+;  Ctrl + Media_Next = YT fast forward 10 sec
+;            Win + ` = display active window stats
+;        Win + [1-9] = pair active as window [1-9]
+; Ctrl + Win + [1-9] = unpair window [1-9]
+;     Ctrl + Win + 0 = unpair all windows
+;     Ctrl + Win + ` = open GUI
 
 #Requires AutoHotkey v2.0
 #SingleInstance ; Prompt to replace instance if already running

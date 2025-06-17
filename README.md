@@ -9,17 +9,18 @@
 
 ## Windows
 
+> [!TIP]
+> Place script ahk/exe (or shortcut) in `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup` to autorun on startup.
+
 ### Running with AHK Installation
 
 1. Install [AutoHotkey v2.0](https://www.autohotkey.com/)<br>
 2. run the `global-yt-playback-AHKv2.0.ahk` script<br>
-   > [!TIP]
-   > Place script file (or script shortcut) in `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup` to autorun on startup.
 
 ### Running without AHK Installation
 
 1. Download [latest GYTP release](https://github.com/legacynical/global-yt-playback/releases)<br>
-2. run the GYTP.exe (right-click in system tray for ahk related settings/options, `` Ctrl + ` `` for GUI)
+2. run the GYTP.exe (right-click in system tray for ahk related settings/options, `` Ctrl + Win + ` `` for GUI)
 
 ## Controls
 
@@ -34,10 +35,8 @@
         Media_Next = YT fast forward 5 sec<br>
  Ctrl + Media_Next = YT fast forward 10 sec<br>
            Win + ` = display active window stats<br>
-           Win + 1 = pair active as workspace<br>
-       Win + [2-5] = pair active as window [2-5]<br>
-    Ctrl + Win + 1 = unpair workspace<br>
-Ctrl + Win + [2-5] = unpair window [2-5]<br>
+       Win + [1-9] = pair active as window [1-9]<br>
+Ctrl + Win + [1-9] = unpair window [1-9]<br>
     Ctrl + Win + 0 = unpair all windows<br>
     Ctrl + Win + ` = open GUI (hint: ` is same key as ~)<br>
 </pre>
