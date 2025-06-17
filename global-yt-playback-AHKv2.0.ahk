@@ -129,7 +129,7 @@ PairWindow(workspaceObject) {
 		return
 	}
 
-	local currentID := "ahk_id" currentWin.id
+	local currentID := currentWin.id
 
 	if (workspaceObject.id == "") {
 		workspaceObject.id := currentID
@@ -259,7 +259,7 @@ WorkspaceSelected(workspaceObject) {
 	index := workspaceObject.ddl.Value ; get selected index value
 	; if selected window exists, pair it to workspace
 	if WinExist(workspaceObject.options[index].id) {
-		workspaceObject.id := "ahk_id " workspaceObject.options[index].id
+		workspaceObject.id := workspaceObject.options[index].id
 		workspaceObject.isPaired := true
 		if isDebugMode
 			MsgBox "index: " index "`nid: " workspaceObject.id
