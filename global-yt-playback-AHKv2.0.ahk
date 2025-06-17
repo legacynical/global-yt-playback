@@ -15,6 +15,10 @@
 ;    Ctrl + Win + 3 = unpair window 3
 ;    Ctrl + Win + 4 = unpair window 4
 ;    Ctrl + Win + 5 = unpair window 5
+;    Ctrl + Win + 6 = unpair window 6
+;    Ctrl + Win + 7 = unpair window 7
+;    Ctrl + Win + 8 = unpair window 8
+;    Ctrl + Win + 9 = unpair window 9
 ;    Ctrl + Win + 0 = unpair all windows
 ;    Ctrl + Win + ` = open GUI
 
@@ -28,11 +32,15 @@ DetectHiddenWindows(false) ; ideal setting for ux, esp. for gui ddl
 ; SetTitleMatchMode 2 ; (AHKv2 default) Allow WinTitle to be matched anywhere from a window's title
 
 app := GTYP([
-	Workspace("", false, "Main Workspace"),
+	Workspace("", false, "Window 1"),
 	Workspace("", false, "Window 2"),
 	Workspace("", false, "Window 3"),
 	Workspace("", false, "Window 4"),
-	Workspace("", false, "Window 5")
+	Workspace("", false, "Window 5"),
+	Workspace("", false, "Window 6"),
+	Workspace("", false, "Window 7"),
+	Workspace("", false, "Window 8"),
+	Workspace("", false, "Window 9")
 	],
 	false ; set guiDebugMode
 )
@@ -73,7 +81,7 @@ YoutubeControl(keyPress) {
 	
 	if (!targetID or !WinExist(targetID))
 		targetID := WinGetID(targetWin)
-	
+
 	if WinExist(targetID) { 
 		local lastActiveHwnd := WinGetID("A")
 		WinActivate(targetWin)
@@ -122,6 +130,10 @@ DisplayActiveWindowStats() {
 <#3:: PairWindow(app.workspaceList[3])
 <#4:: PairWindow(app.workspaceList[4])
 <#5:: PairWindow(app.workspaceList[5])
+<#6:: PairWindow(app.workspaceList[6])
+<#7:: PairWindow(app.workspaceList[7])
+<#8:: PairWindow(app.workspaceList[8])
+<#9:: PairWindow(app.workspaceList[9])
 
 PairWindow(workspaceObject) {
 	local maxInputBuffer := app.maxInputBuffer
@@ -163,6 +175,10 @@ PairWindow(workspaceObject) {
 ^<#3:: UnpairWindow(app.workspaceList[3])
 ^<#4:: UnpairWindow(app.workspaceList[4])
 ^<#5:: UnpairWindow(app.workspaceList[5])
+^<#6:: UnpairWindow(app.workspaceList[6])
+^<#7:: UnpairWindow(app.workspaceList[7])
+^<#8:: UnpairWindow(app.workspaceList[8])
+^<#9:: UnpairWindow(app.workspaceList[9])
 ^<#0:: UnpairAllWindows(app.workspaceList)
 
 UnpairWindow(workspaceObject) {
@@ -191,7 +207,7 @@ UnpairAllWindows(workspaceList) {
 ;=========== GUI ===========
 ^<#`:: {
 	local isDebugMode := app.guiDebugMode
-	isDebugMode ? MainGui.Show("w500 h450") : MainGui.Show("w500 h300")
+	isDebugMode ? MainGui.Show("w500 h450") : MainGui.Show("w500 h500")
 	app.guiHwnd := MainGui.Hwnd
 	UpdateGUI()
 }
