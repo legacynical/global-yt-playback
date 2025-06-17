@@ -34,7 +34,7 @@ app := GTYP([
 	Workspace("", false, "Window 4"),
 	Workspace("", false, "Window 5")
 	],
-	true
+	false ; set guiDebugMode
 )
 class GTYP {
 	__New(workspaceList, guiDebugMode) {
