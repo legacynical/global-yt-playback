@@ -68,15 +68,19 @@ Media_Play_Pause:: YoutubeControl("{k}") ; play/pause
 ; hotkey::Media_Play_Pause
 
 YoutubeControl(keyPress) {
-local targetWin := "YouTube" ; Alternatively use "ahk_exe chrome.exe" (use your browser.exe)
-	if WinExist(targetWin) { 
+	local targetWin := "YouTube" ; Alternatively use "ahk_exe chrome.exe" (use your browser.exe)
+	static targetID := "" 
+	
+	if (!targetID or !WinExist(targetID))
+		targetID := WinGetID(targetWin)
+	
+	if WinExist(targetID) { 
 		local lastActiveHwnd := WinGetID("A")
 		WinActivate(targetWin)
-		sleep 11 ; Delay rounds to nearest multiple of 10 or 15.6 ms, I just use 11 bc I like
+		sleep 15 ; Delay rounds to nearest multiple of 10 or 15.6 ms, values too low can lead to misfires
 		Send keyPress
-		sleep 11
-		if WinExist("ahk_id " lastActiveHwnd) ; YT playback will return window focus back to main workspace
-			WinActivate("ahk_id " lastActiveHwnd)
+		sleep 15
+		WinActivate(lastActiveHwnd)
 	}
 }
 
