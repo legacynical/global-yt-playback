@@ -22,33 +22,40 @@
 #SingleInstance ; Prompt to replace instance if already running
 #Warn ; For debugging
 InstallKeybdHook ; Allow use of additional special keys
+DetectHiddenWindows(false) ; ideal setting for ux, esp. for gui ddl
 ; SendMode Input ; (AHKv2 default) Recommended for new scripts due to its superior speed and reliability.
 ; SetWorkingDir A_ScriptDir ; (AHKv2 default) Force script to use its own folder as working directory.
 ; SetTitleMatchMode 2 ; (AHKv2 default) Allow WinTitle to be matched anywhere from a window's title
 
-DetectHiddenWindows(false)
-guiDebugMode := false ; Toggle for GUI debug prints
-video := "YouTube" ; Replace with "ahk_exe chrome.exe" if not working (use your browser.exe)
-guiHwnd := ""
+app := GTYP([
+	Workspace("", false, "Main Workspace"),
+	Workspace("", false, "Window 2"),
+	Workspace("", false, "Window 3"),
+	Workspace("", false, "Window 4"),
+	Workspace("", false, "Window 5")
+	],
+	false ; set guiDebugMode
+)
+class GTYP {
+	__New(workspaceList, guiDebugMode) {
+		this.workspaceList := workspaceList
+		this.guiDebugMode := guiDebugMode
+		this.isGuiRefresh := true
+		this.maxInputBuffer := 2
+		this.guiHwnd := ""
+	}
+}
 class Workspace {
 	__New(id, isPaired, label) {
 		this.id := id
 		this.isPaired := isPaired
 		this.label := label
 		this.ddl := ""
+		this.focusEvent := ""
 		this.changeEvent := ""
 		this.options := []
 	}
 }
-
-workspaceList := [
-	Workspace("", false, "Main Workspace"),
-	Workspace("", false, "Window 2"),
-	Workspace("", false, "Window 3"),
-	Workspace("", false, "Window 4"),
-	Workspace("", false, "Window 5")
-]
-inputBuffer := maxInputBuffer := 2 ; Used to reduce unwanted window minimize
 
 Media_Prev:: YoutubeControl("{left}") ; rewind 5 sec
 ^Media_Prev:: YoutubeControl("{j}") ; rewind 10 sec
@@ -61,78 +68,98 @@ Media_Play_Pause:: YoutubeControl("{k}") ; play/pause
 ; hotkey::Media_Play_Pause
 
 YoutubeControl(keyPress) {
-	global video, workspaceList
-	if WinExist(video) {
-		WinActivate
-		sleep 11 ; Delay rounds to nearest multiple of 10 or 15.6 ms
+local targetWin := "YouTube" ; Alternatively use "ahk_exe chrome.exe" (use your browser.exe)
+	if WinExist(targetWin) { 
+		local lastActiveHwnd := WinGetID("A")
+		WinActivate(targetWin)
+		sleep 11 ; Delay rounds to nearest multiple of 10 or 15.6 ms, I just use 11 bc I like
 		Send keyPress
 		sleep 11
-		if WinExist(workspaceList[1].id) ; YT playback will return window focus back to main workspace
-			WinActivate
+		if WinExist("ahk_id " lastActiveHwnd) ; YT playback will return window focus back to main workspace
+			WinActivate("ahk_id " lastActiveHwnd)
 	}
 }
 
-GetWinInfo() {
-	global
-	; TODO: investigate bug [084] `winProcess := WinGetProcessName(active)`' access is denied
-		; I think this bug triggers when my pc goes to sleep and the gui refresh for focused window details calls this function.
-		; Interestingly only the WinGetProcessName() throws the error and not the get functions above it so I need to research that.
-		; possible fix would be to exit return if active window `WinExist("A")` to ensure expected behavior
-	local active := WinExist("A") ? "A" : "" ; get info of active window if it exists, else get info of last found window
-	winTitle := WinGetTitle(active)
-	winId := WinGetID(active)
-	winClass := WinGetClass(active)
-	winProcess := WinGetProcessName(active)
-	currentID := "ahk_id " winId
+GetWinInfo(hwnd := "A") {
+	try {
+		if !WinExist(hwnd)
+			return false
+		activeHwnd := WinGetID(hwnd)
+		return {
+			title: WinGetTitle(activeHwnd),
+      id: activeHwnd,
+      class: WinGetClass(activeHwnd),
+      process: WinGetProcessName(activeHwnd)
+		}
+	}	catch Error {
+		return {
+			title: "[Error]",
+			id: 0,
+			class: "[Error]",
+			process: "[Access Denied]"
+		}
+	}
 }
 
 <#`:: DisplayActiveWindowStats()
 
 DisplayActiveWindowStats() {
-	GetWinInfo()
-	MsgBox "Active window title: " winTitle "`n"
-		. "Active window ID: " winId "`n"
-		. "Active window class: " winClass "`n"
-		. "Active window process: " winProcess
+	local winInfo := GetWinInfo()
+	If (winInfo) {
+		MsgBox "Active window title: " winInfo.title "`n"
+		. "Active window ID: " winInfo.id "`n"
+		. "Active window class: " winInfo.class "`n"
+		. "Active window process: " winInfo.process
+	}
 }
 
-<#1:: PairWindow(workspaceList[1])
-<#2:: PairWindow(workspaceList[2])
-<#3:: PairWindow(workspaceList[3])
-<#4:: PairWindow(workspaceList[4])
-<#5:: PairWindow(workspaceList[5])
+<#1:: PairWindow(app.workspaceList[1])
+<#2:: PairWindow(app.workspaceList[2])
+<#3:: PairWindow(app.workspaceList[3])
+<#4:: PairWindow(app.workspaceList[4])
+<#5:: PairWindow(app.workspaceList[5])
 
 PairWindow(workspaceObject) {
-	global
-	GetWinInfo()
+	local maxInputBuffer := app.maxInputBuffer
+	static inputBuffer := maxInputBuffer
+	
+	local currentWin := GetWinInfo()
+	if (!currentWin) {
+		MsgBox "No active window found!"
+		return
+	}
+
+	local currentID := currentWin.id
+
 	if (workspaceObject.id == "") {
-		workspaceObject.id := "ahk_id " winId
+		workspaceObject.id := currentID
 		workspaceObject.isPaired := true
 		MsgBox "[Pairing " workspaceObject.label "]`n"
-			. "title: " winTitle "`n"
-			. "workspace: " winId "`n"
-			. "process: " winProcess, , "T3"
+			. "title: " currentWin.title "`n"
+			. "workspace: " currentWin.id "`n"
+			. "process: " currentWin.process, , "T3"
 	} else if (currentID != workspaceObject.id) {
 		if WinExist(workspaceObject.id) {
 			inputBuffer := maxInputBuffer
-			WinActivate
+			WinActivate(workspaceObject.id)
 		}
 	} else if (currentID == workspaceObject.id) {
 		inputBuffer--
-		if (WinExist(workspaceObject.id) && (inputBuffer == 0)) {
+		if (WinExist(workspaceObject.id) && (inputBuffer <= 0)) {
 			inputBuffer := maxInputBuffer
-			WinMinimize
+			WinMinimize(workspaceObject.id)
 		}
 	}
-	UpdateWinList(workspaceObject)
+	if WinExist(app.guiHwnd)
+		UpdateWinList(workspaceObject)
 }
 
-^<#1:: UnpairWindow(workspaceList[1])
-^<#2:: UnpairWindow(workspaceList[2])
-^<#3:: UnpairWindow(workspaceList[3])
-^<#4:: UnpairWindow(workspaceList[4])
-^<#5:: UnpairWindow(workspaceList[5])
-^<#0:: UnpairAllWindows()
+^<#1:: UnpairWindow(app.workspaceList[1])
+^<#2:: UnpairWindow(app.workspaceList[2])
+^<#3:: UnpairWindow(app.workspaceList[3])
+^<#4:: UnpairWindow(app.workspaceList[4])
+^<#5:: UnpairWindow(app.workspaceList[5])
+^<#0:: UnpairAllWindows(app.workspaceList)
 
 UnpairWindow(workspaceObject) {
 	local windowLabel := workspaceObject.label
@@ -146,11 +173,10 @@ UnpairWindow(workspaceObject) {
 	UpdateWinList(workspaceObject)
 }
 
-UnpairAllWindows() {
-	global
+UnpairAllWindows(workspaceList) {
 	confirmUnpair := MsgBox("Are you sure you want to unpair all windows?", , "YesNo")
 	if confirmUnpair = "Yes" {
-		for workspaceObject in workspaceList {
+		for workspaceObject in app.workspaceList {
 			workspaceObject.id := ""
 			workspaceObject.isPaired := false
 		}		
@@ -160,14 +186,16 @@ UnpairAllWindows() {
 
 ;=========== GUI ===========
 ^<#`:: {
-	guiDebugMode ? MainGui.Show("w500 h450") : MainGui.Show("w500 h300")
-	global guiHwnd := MainGui.Hwnd
+	local isDebugMode := app.guiDebugMode
+	isDebugMode ? MainGui.Show("w500 h450") : MainGui.Show("w500 h300")
+	app.guiHwnd := MainGui.Hwnd
 	UpdateGUI()
 }
 
-; TODO: Prevent scroll select for DDLs
+; TODO: Prevent scroll select for DDLs (this needs more lower level implementations)
 ; Create the main GUI
 MainGui := Gui("+Resize", "Window Pairing")
+
 MainGui.Opt("-MaximizeBox")
 
 ; Add Controls for active window stats
@@ -176,13 +204,14 @@ activeWinTitle := MainGui.AddEdit("w400 vActiveTitle ReadOnly", "[Active Window 
 ; activeWinClass := MainGui.AddEdit("w240 vActiveClass ReadOnly", "[Active Window Class]")
 ; activeWinId := MainGui.AddEdit("w240 vActiveID ReadOnly", "[Active Window Id]")
 
-debugLabel := guiDebugMode ? MainGui.AddEdit("w400 h150 ReadOnly", "[Debug]") : ""
+
+debugLabel := app.guiDebugMode ? MainGui.AddEdit("w400 h150 ReadOnly", "[Debug]") : ""
 
 ; Add controls for window DropDownList select
 AddDropDownListControls()
 
 AddDropDownListControls() {
-	for space in workspaceList {
+	for space in app.workspaceList {
 		MainGui.AddText("w100 Section", space.label)
 		space.ddl := MainGui.AddDDL("w400")
 		UpdateWinList(space)
@@ -195,9 +224,9 @@ MainGui.AddButton("YS w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(1)
 MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpairWindow(10))
 */
 
-isGuiRefresh := true ;TODO make this a gui toggle
 
-SetGuiRefreshTimer(isGuiRefresh)
+; TODO: make this a gui toggle
+SetGuiRefreshTimer(app.isGuiRefresh) ; default true
 
 SetGuiRefreshTimer(bool) {
 	SetTimer UpdateGUI, (bool ? 250 : 0) ; calls UpdateGUI() every 250ms or disables timer
@@ -206,34 +235,33 @@ SetGuiRefreshTimer(bool) {
 
 UpdateGUI() {
 	; if the GUI window doesn't exist or is minimized...
-	if (!(WinExist("ahk_id " guiHwnd)) || (WinGetMinMax("ahk_id " guiHwnd) == -1)) {
+	if (!(WinExist("ahk_id " app.guiHwnd)) || (WinGetMinMax("ahk_id " app.guiHwnd) == -1)) {
 		return
 	}
 	
-	GetWinInfo() ; called to get latest win info
-	activeWinTitle.Value := "[" StrReplace(winProcess, ".exe") "] " winTitle
-	; activeWinClass.Value := winClass
-	; activeWinId.Value := winId
+	local winInfo := GetWinInfo()
+	if (winInfo)
+		activeWinTitle.Value := "[" StrReplace(winInfo.process, ".exe") "] " winInfo.title
+	; activeWinClass.Value := winInfo.class
+	; activeWinId.Value := winInfo.id
 }
 
 ; Assign event handlers
 AssignWorkspaceOnEvent(workspaceObject) {
-	workspaceObject.changeEvent := workspaceObject.ddl.OnEvent("Focus", (*) => UpdateWinList(workspaceObject))
+	workspaceObject.focusEvent := workspaceObject.ddl.OnEvent("Focus", (*) => UpdateWinList(workspaceObject))
 	workspaceObject.changeEvent := workspaceObject.ddl.OnEvent("Change", (*) => WorkspaceSelected(workspaceObject))
 	; MsgBox "updated: " workspaceObject.label
 }
 
 WorkspaceSelected(workspaceObject) {
-	global
+	local isDebugMode := app.guiDebugMode
 	index := workspaceObject.ddl.Value ; get selected index value
 	; if selected window exists, pair it to workspace
 	if WinExist(workspaceObject.options[index].id) {
-		workspaceObject.id := "ahk_id " workspaceObject.options[index].id
+		workspaceObject.id := workspaceObject.options[index].id
 		workspaceObject.isPaired := true
-		if guiDebugMode { ; DEBUG print
-			MsgBox "index: " index "`n"
-			. "id: " workspaceObject.id
-		}
+		if isDebugMode
+			MsgBox "index: " index "`nid: " workspaceObject.id
 	} else {
 		MsgBox "[Error] That window no longer exists!`n"
 		. "Attempting to refresh options, please select again..."
@@ -242,16 +270,12 @@ WorkspaceSelected(workspaceObject) {
 }
 
 UpdateAllWinList(workspaceList) {
-	for space in workspaceList {
+	for space in app.workspaceList {
 		UpdateWinList(space)
 	}
 }
 
 UpdateWinList(workspaceObject) {
-	; MsgBox "UpdateWinList fired"
-
-	; Ensure pair state is freed and clears id if window no longer exists
-		; NOTE: potential fix for target not found error in IdToDisplayString(hwnd)
 	if !WinExist(workspaceObject.id) {
 		workspaceObject.isPaired := false
 		workspaceObject.id := ""
@@ -260,7 +284,7 @@ UpdateWinList(workspaceObject) {
 	if workspaceObject.isPaired {
 		workspaceObject.ddl.Delete()
 		workspaceObject.ddl.Add([IdToDisplayString(workspaceObject.id)])
-		if guiDebugMode { ; DEBUG print
+		if app.guiDebugMode { ; DEBUG print
 			MsgBox "UpdateWinList: workspaceObject.isPaired = true`n" 
 				. "adding id: " workspaceObject.id "`n"
 				. "adding displayText: " IdToDisplayString(workspaceObject.id)
@@ -302,7 +326,7 @@ UpdateWinList(workspaceObject) {
 		}
 	}
 
-	if guiDebugMode {
+	if app.guiDebugMode {
 		msg := ""
 		for obj in workspaceObject.options {
 			msg .= "displayTitle: " . obj.displayTitle . ", id: " . obj.id . "`n"
@@ -314,30 +338,22 @@ UpdateWinList(workspaceObject) {
 
 ; 
 IdToDisplayString(hwnd) {
-	windowTitle := WinGetTitle(hwnd)
-		; TODO: investigate target window not found error: ahk_id 28772592
-			/* call stack
-				(335) : [WinGetTitle] windowTitle := WinGetTitle(hwnd)
-				(335) : [IdToDisplayString] windowTitle := WinGetTitle(hwnd)
-				(279) : [UpdateWinList] workspaceObject.ddl.Add([IdToDisplayString(workspaceObject.id)])
-				[] Return  UpdateWinList(workspaceObject)
-			*/
-				; potentially  
-	windowProcess := StrReplace(WinGetProcessName(hwnd), ".exe")
-	if (windowTitle != "") { ; if not an blank title window
-		return displayString := "[" windowProcess "] " windowTitle
+	local winInfo := GetWinInfo(hwnd)
+	local windowProcess := StrReplace(WinGetProcessName(hwnd), ".exe")
+	if (winInfo.title != "") { ; if not an blank title window
+		return "[" windowProcess "] " winInfo.title
 	}
-	return displayString := "[" windowProcess "] non-empty title[" windowTitle "]"  
+	return "[" windowProcess "] non-empty title[" winInfo.title "]"  
 }
 
 ; NOTE: This function will likely be deprecated as DDL controls/event listeners already handle this
 GuiPairWindow(num) {
 	switch num {
-		case 1: PairWindow(workspaceList[1])
-		case 2: PairWindow(workspaceList[2])
-		case 3: PairWindow(workspaceList[3])
-		case 4: PairWindow(workspaceList[4])
-		case 5: PairWindow(workspaceList[5])
+		case 1: PairWindow(app.workspaceList[1])
+		case 2: PairWindow(app.workspaceList[2])
+		case 3: PairWindow(app.workspaceList[3])
+		case 4: PairWindow(app.workspaceList[4])
+		case 5: PairWindow(app.workspaceList[5])
 	}
 }
 
@@ -346,11 +362,11 @@ GuiPairWindow(num) {
 	; It could also be more simple/maintainable to utilize this, will have to consider.
 GuiUnpairWindow(num) {
 	switch num {
-		case 1: UnpairWindow(workspaceList[1])
-		case 2: UnpairWindow(workspaceList[2])
-		case 3: UnpairWindow(workspaceList[3])
-		case 4: UnpairWindow(workspaceList[4])
-		case 5: UnpairWindow(workspaceList[5])
-		case 10: UnpairAllWindows()
+		case 1: UnpairWindow(app.workspaceList[1])
+		case 2: UnpairWindow(app.workspaceList[2])
+		case 3: UnpairWindow(app.workspaceList[3])
+		case 4: UnpairWindow(app.workspaceList[4])
+		case 5: UnpairWindow(app.workspaceList[5])
+		case 10: UnpairAllWindows(app.workspaceList)
 	}
 }
