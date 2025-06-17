@@ -20,7 +20,7 @@
 ### Running without AHK Installation
 
 1. Download [latest GYTP release](https://github.com/legacynical/global-yt-playback/releases)<br>
-2. run the GYTP.exe (right-click in system tray for ahk related settings/options, `` Ctrl + Win + ` `` for GUI)
+2. run the `GYTP.exe` (right-click in system tray for ahk related settings/options, `` Ctrl + Win + ` `` for GUI)
 
 ## Controls
 
