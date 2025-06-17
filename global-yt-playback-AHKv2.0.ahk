@@ -367,26 +367,26 @@ IdToDisplayString(hwnd) {
 }
 
 ; NOTE: This function will likely be deprecated as DDL controls/event listeners already handle this
-GuiPairWindow(num) {
-	switch num {
-		case 1: PairWindow(app.workspaceList[1])
-		case 2: PairWindow(app.workspaceList[2])
-		case 3: PairWindow(app.workspaceList[3])
-		case 4: PairWindow(app.workspaceList[4])
-		case 5: PairWindow(app.workspaceList[5])
-	}
-}
+; GuiPairWindow(num) {
+; 	switch num {
+; 		case 1: PairWindow(app.workspaceList[1])
+; 		case 2: PairWindow(app.workspaceList[2])
+; 		case 3: PairWindow(app.workspaceList[3])
+; 		case 4: PairWindow(app.workspaceList[4])
+; 		case 5: PairWindow(app.workspaceList[5])
+; 	}
+; }
 
 ; TODO: Add unpair buttons to gui, this will probably be a redundant method if I opt to create
 ; the controls dynamically along side the DDL controls being generated.
 	; It could also be more simple/maintainable to utilize this, will have to consider.
-GuiUnpairWindow(num) {
-	switch num {
-		case 1: UnpairWindow(app.workspaceList[1])
-		case 2: UnpairWindow(app.workspaceList[2])
-		case 3: UnpairWindow(app.workspaceList[3])
-		case 4: UnpairWindow(app.workspaceList[4])
-		case 5: UnpairWindow(app.workspaceList[5])
-		case 10: UnpairAllWindows(app.workspaceList)
-	}
-}
+; GuiUnpairWindow(num) {
+; 	switch num {
+; 		case 1: UnpairWindow(app.workspaceList[1])
+; 		case 2: UnpairWindow(app.workspaceList[2])
+; 		case 3: UnpairWindow(app.workspaceList[3])
+; 		case 4: UnpairWindow(app.workspaceList[4])
+; 		case 5: UnpairWindow(app.workspaceList[5])
+; 		case 10: UnpairAllWindows(app.workspaceList)
+; 	}
+; }
