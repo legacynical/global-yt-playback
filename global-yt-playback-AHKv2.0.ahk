@@ -150,7 +150,7 @@ PairWindow(workspaceObject) {
 			WinMinimize(workspaceObject.id)
 		}
 	}
-	if WinExist("ahk_id" app.guiHwnd)
+	if WinExist(app.guiHwnd)
 		UpdateWinList(workspaceObject)
 }
 
