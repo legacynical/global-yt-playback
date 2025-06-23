@@ -45,6 +45,9 @@ Ctrl + Win + [1-9] = unpair window [1-9]<br>
     Ctrl + Win + ` = open GUI (hint: ` is same key as ~)<br>
 </pre>
 
+![image](https://github.com/user-attachments/assets/74b8b738-bf9c-4cf7-aa7a-0f064c5dd7ea)
+
+
 ## License
 
 While I'm providing this AHK script under the MIT license, please note that the AHK interpreter is under the [GPL-2.0 license](https://github.com/AutoHotkey/AutoHotkey?tab=GPL-2.0-1-ov-file). This applies to compiled builds (.exe) as it packages both the AHK script and the AHK interpreter. For most users or developers, this shouldn't be of concern as the GPL-2.0 license itself is also quite permissive.
