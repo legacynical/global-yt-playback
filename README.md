@@ -9,9 +9,6 @@
 
 ## Windows
 
-> [!TIP]
-> Place script ahk/exe (or shortcut) in `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup` to autorun on startup.
-
 ### Running with AHK Installation
 
 1. Install [AutoHotkey v2.0](https://www.autohotkey.com/)<br>
@@ -21,6 +18,13 @@
 
 1. Download [latest GYTP release](https://github.com/legacynical/global-yt-playback/releases)<br>
 2. run the `GYTP.exe` (right-click in system tray for ahk related settings/options, `` Ctrl + Win + ` `` for GUI)
+
+> [!TIP]
+> - Place script ahk/exe (or shortcut) in `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup` to autorun on startup.
+> - Applications running at admin level will ignore script functions, which can be fixed by also running the script ahk/exe as admin or setting its advanced properties to run as administrator.
+
+![image](https://github.com/user-attachments/assets/1d315525-54f0-4e9f-aa7c-cfecb1c60ed7)
+
 
 ## Controls
 
