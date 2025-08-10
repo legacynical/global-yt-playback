@@ -64,15 +64,44 @@ Media_Play_Pause:: YoutubeControl("{k}") ; play/pause
 ; hotkey::Media_Play_Pause
 
 YoutubeControl(keyPress) {
-	local targetWin := "YouTube" ; Alternatively use "ahk_exe chrome.exe" (use your browser.exe)
+	local targetProcesses := Map(
+		"chrome.exe", 1,
+		"msedge.exe", 1,
+		"firefox.exe", 1,
+		"brave.exe", 1,
+		"opera.exe", 1,
+		"opera_gx.exe", 1,
+		"vivaldi.exe", 1,
+		"chromium.exe", 1,
+		"waterfox.exe", 1,
+		"tor.exe", 1,
+		"yandex.exe", 1,
+		"maxthon.exe", 1,
+		"seamonkey.exe", 1,
+		"epic.exe", 1,
+		"slimjet.exe", 1,
+		"comodo_dragon.exe", 1,
+		"avast_secure_browser.exe", 1,
+		"srware_iron.exe", 1,
+		"falkon.exe", 1,
+
+	)
 	static targetID := "" 
 	
-	if (!targetID or !WinExist(targetID))
-		targetID := WinGetID(targetWin)
+	if (!targetID || !WinExist(targetID)) {
+		for hwnd in WinGetList("YouTube") {
+			proc := WinGetProcessName(hwnd)
+			if targetProcesses.Has(proc) {
+				targetID := hwnd
+				MsgBox "targetID set to window:" WinGetTitle(hwnd)
+				break
+			}	
+		}
+	}
 
-	if WinExist(targetID) { 
+	if (targetID && WinExist(targetID)) { 
 		local lastActiveHwnd := WinGetID("A")
-		WinActivate(targetWin)
+		WinActivate(targetID)
 		sleep 15 ; Delay rounds to nearest multiple of 10 or 15.6 ms, values too low can lead to misfires
 		Send keyPress
 		sleep 15
