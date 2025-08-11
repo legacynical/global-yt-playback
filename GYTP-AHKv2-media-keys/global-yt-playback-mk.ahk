@@ -53,15 +53,12 @@ class Workspace {
 	}
 }
 
-Media_Prev:: YoutubeControl("{left}") ; rewind 5 sec
-^Media_Prev:: YoutubeControl("{j}") ; rewind 10 sec
+Media_Prev:: YoutubeControl("{Left}") ; rewind 5 sec
+^Media_Prev:: YoutubeControl("j") ; rewind 10 sec
 Media_Next:: YoutubeControl("{Right}") ; fast forward 5 sec
-^Media_Next:: YoutubeControl("{l}") ; fast forward 10 sec
-Media_Play_Pause:: YoutubeControl("{k}") ; play/pause
+^Media_Next:: YoutubeControl("l") ; fast forward 10 sec
+Media_Play_Pause:: YoutubeControl("k") ; play/pause
 	; Most browsers allow Media_Play_Pause by default but this ensures that it targets a YouTube tab
-
-; If you don't have Media_Play_Pause key, uncomment and set hotkey
-; hotkey::Media_Play_Pause
 
 YoutubeControl(keyPress) {
 	local targetProcesses := Map(
@@ -84,7 +81,6 @@ YoutubeControl(keyPress) {
 		"avast_secure_browser.exe", 1,
 		"srware_iron.exe", 1,
 		"falkon.exe", 1,
-
 	)
 	static targetID := "" 
 	
@@ -102,9 +98,11 @@ YoutubeControl(keyPress) {
 	if (targetID && WinExist(targetID)) { 
 		local lastActiveHwnd := WinGetID("A")
 		WinActivate(targetID)
-		sleep 15 ; Delay rounds to nearest multiple of 10 or 15.6 ms, values too low can lead to misfires
-		Send keyPress
-		sleep 15
+		if WinWaitActive(targetID, , 1) {
+			Send keyPress
+		} else {
+			MsgBox "WinWaitActive did not find target in under 1 second", , "T1"
+		}
 		WinActivate(lastActiveHwnd)
 	}
 }
@@ -373,7 +371,6 @@ UpdateWinList(workspaceObject) {
 	workspaceObject.ddl.Choose(1)
 }
 
-; 
 IdToDisplayString(hwnd) {
 	local winInfo := GetWinInfo(hwnd)
 	local windowProcess := StrReplace(WinGetProcessName(hwnd), ".exe")
