@@ -12,7 +12,7 @@
 ### Running with AHK Installation
 
 1. Install [AutoHotkey v2.0](https://www.autohotkey.com/)<br>
-2. run the `global-yt-playback-AHKv2.0.ahk` script<br>
+2. run the `global-yt-playback-mk.ahk` script<br>
 
 ### Running without AHK Installation
 
