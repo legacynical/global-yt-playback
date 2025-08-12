@@ -56,6 +56,11 @@ F22:: SpotifyControl("!+b") ; like/unlike song (there is no mute shortcut in spo
 F23:: SpotifyControl("^{Down}") ; lower volume
 F24:: SpotifyControl("^{Up}") ; raise volume
 
+; alternate volume controls for keyboards without volume knobs
+^F22:: Send "{Volume_Mute}"
+^F23:: Send "{Volume_Down}"
+^F24:: Send "{Volume_Up}"
+
 YoutubeControl(keyPress) {
 	local targetProcesses := Map(
 		"chrome.exe", 1,
@@ -119,7 +124,6 @@ SpotifyControl(keyPress) {
 		WinActivate(targetID)
 		if WinWaitActive(targetID, , 1) {
 			Send keyPress
-			sleep 15 ; Delay rounds to nearest multiple of 10 or 15.6 ms, values too low can lead to misfires
 		} else {
 			MsgBox "WinWaitActive did not find target in under 1 second", , "T1"
 		}
