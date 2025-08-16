@@ -89,7 +89,7 @@ YoutubeControl(keyPress) {
 			proc := WinGetProcessName(hwnd)
 			if targetProcesses.Has(proc) {
 				targetID := hwnd
-				MsgBox "targetID set to window:" WinGetTitle(hwnd)
+				; MsgBox "targetID set to window:" WinGetTitle(hwnd)
 				break
 			}	
 		}
