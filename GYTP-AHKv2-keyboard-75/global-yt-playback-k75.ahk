@@ -65,6 +65,68 @@ class Workspace {
 	}
 }
 
+class DetectYouTubeWindow {
+	__New(browserMap) {
+		this.browserMap := browserMap
+		this.targetID := 0
+		this.cb := CallbackCreate(this.OnForegroundChange.Bind(this), "Fast")
+		this.hook := DllCall(
+		"SetWinEventHook",
+    "UInt", 0x0003, ; eventMin        	EVENT_SYSTEM_FOREGROUND 
+    "UInt", 0x0003, ; eventMax
+    "Ptr", 0,       ; hmodWinEventProc	(0 = none)
+    "Ptr", this.cb,	; callback pointer
+    "UInt", 0,      ; idProcess					(0 = all)
+    "UInt", 0,      ; idThread					(0 = all)
+    "UInt", 0,      ; dwFlags						(0 = out-of-context)
+		"Ptr"           ; return type				HWINEVENTHOOK
+		)
+
+		OnExit(ObjBindMethod(this, "Cleanup"))
+	}
+
+	OnForegroundChange(hWinEventHook, event, hwnd, idObject, idChild, dwEventThread, dwmsEventTime) {
+		try {
+			if !hwnd
+				return
+			if this.IsYouTubeWindow(hwnd) {
+				this.targetID := hwnd
+				if app.hotkeyDebugMode
+					MsgBox "YT Target Updated: " WinGetTitle(hwnd)
+			}
+		}
+	}
+
+	IsYouTubeWindow(hwnd) {
+		if !hwnd || !WinExist("ahk_id" hwnd)
+			return false
+		proc := WinGetProcessName(hwnd)
+		title := WinGetTitle(hwnd)
+		return InStr(title, "YouTube") && this.browserMap.Has(proc)
+	}
+
+	GetTarget() {
+		return (this.targetID && WinExist("ahk_id " this.targetID))
+			? this.targetID
+			: 0
+  }
+
+	FindAnyYouTubeWindow() {
+		for hwnd in WinGetList() {
+			if this.IsYouTubeWindow(hwnd)
+				return hwnd
+		}
+		return 0
+	}
+
+  Cleanup(*) {
+		if this.hook
+			DllCall("UnhookWinEvent", "Ptr", this.hook)
+		if this.cb
+			CallbackFree(this.cb)
+  }
+}
+
 F19:: YoutubeControl("{Left}") ; rewind 5 sec
 ^F19:: YoutubeControl("j") ; rewind 10 sec
 F21:: YoutubeControl("{Right}") ; fast forward 5 sec
