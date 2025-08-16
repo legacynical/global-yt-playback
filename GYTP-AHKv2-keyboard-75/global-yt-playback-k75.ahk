@@ -7,7 +7,7 @@ DetectHiddenWindows(false) ; ideal setting for ux, esp. for gui ddl
 ; SetWorkingDir A_ScriptDir ; (AHKv2 default) Force script to use its own folder as working directory.
 ; SetTitleMatchMode 2 ; (AHKv2 default) Allow WinTitle to be matched anywhere from a window's title
 
-app := GTYP([
+app := GYTP([
 	Workspace("", false, "Window 1"),
 	Workspace("", false, "Window 2"),
 	Workspace("", false, "Window 3"),
@@ -20,13 +20,37 @@ app := GTYP([
 	],
 	false ; set guiDebugMode
 )
-class GTYP {
-	__New(workspaceList, guiDebugMode) {
+class GYTP {
+	__New(workspaceList, guiDebugMode, hotkeyDebugMode) {
 		this.workspaceList := workspaceList
 		this.guiDebugMode := guiDebugMode
+		this.hotkeyDebugMode := hotkeyDebugMode
+
 		this.isGuiRefresh := true
 		this.maxInputBuffer := 2
 		this.guiHwnd := ""
+		this.browserMap := Map(
+			"chrome.exe", 1,
+			"msedge.exe", 1,
+			"firefox.exe", 1,
+			"brave.exe", 1,
+			"opera.exe", 1,
+			"opera_gx.exe", 1,
+			"vivaldi.exe", 1,
+			"chromium.exe", 1,
+			"waterfox.exe", 1,
+			"tor.exe", 1,
+			"yandex.exe", 1,
+			"maxthon.exe", 1,
+			"seamonkey.exe", 1,
+			"epic.exe", 1,
+			"slimjet.exe", 1,
+			"comodo_dragon.exe", 1,
+			"avast_secure_browser.exe", 1,
+			"srware_iron.exe", 1,
+			"falkon.exe", 1,
+		)
+		this.ytWin := DetectYouTubeWindow(this.browserMap)
 	}
 }
 class Workspace {
