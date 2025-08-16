@@ -18,7 +18,8 @@ app := GYTP([
 	Workspace("", false, "Window 8"),
 	Workspace("", false, "Window 9")
 	],
-	false ; set guiDebugMode
+	false, ; set guiDebugMode
+	true, ; set hotkeyDebugMode
 )
 class GYTP {
 	__New(workspaceList, guiDebugMode, hotkeyDebugMode) {
@@ -148,44 +149,19 @@ F24:: SpotifyControl("^{Up}") ; raise volume
 ^F24:: Send "{Volume_Up}"
 
 YoutubeControl(keyPress) {
-	local targetProcesses := Map(
-		"chrome.exe", 1,
-		"msedge.exe", 1,
-		"firefox.exe", 1,
-		"brave.exe", 1,
-		"opera.exe", 1,
-		"opera_gx.exe", 1,
-		"vivaldi.exe", 1,
-		"chromium.exe", 1,
-		"waterfox.exe", 1,
-		"tor.exe", 1,
-		"yandex.exe", 1,
-		"maxthon.exe", 1,
-		"seamonkey.exe", 1,
-		"epic.exe", 1,
-		"slimjet.exe", 1,
-		"comodo_dragon.exe", 1,
-		"avast_secure_browser.exe", 1,
-		"srware_iron.exe", 1,
-		"falkon.exe", 1,
-	)
-	static targetID := "" 
-	
-	if (!targetID || !WinExist(targetID)) {
-		for hwnd in WinGetList("YouTube") {
-			proc := WinGetProcessName(hwnd)
-			if targetProcesses.Has(proc) {
-				targetID := hwnd
-				; MsgBox "targetID set to window:" WinGetTitle(hwnd)
-				break
-			}	
-		}
+	static cachedYT := app.DetectYouTubeWindow.GetTarget()
+	hwnd := cachedYT
+
+	if !hwnd {
+		hwnd := app.FindAnyYouTubeWindow()
+		if hwnd
+			app.DetectYouTubeWindow.targetID := hwnd
 	}
 
-	if (targetID && WinExist(targetID)) { 
-		local lastActiveHwnd := WinGetID("A")
-		WinActivate(targetID)
-		if WinWaitActive(targetID, , 1) {
+	if hwnd {
+		lastActiveHwnd := WinGetID("A")
+		WinActivate("ahk_id " hwnd)
+		if WinWaitActive(hwnd, , 1) {
 			Send keyPress
 		} else {
 			MsgBox "WinWaitActive did not find target in under 1 seconds", , "T1"
