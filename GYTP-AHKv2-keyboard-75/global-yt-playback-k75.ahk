@@ -100,7 +100,7 @@ class DetectWindow {
 	}
 
 	IsYouTubeWindow(hwnd) {
-		if !hwnd || !WinExist("ahk_id" hwnd)
+		if !hwnd || !WinExist(hwnd)
 			return false
 		proc := WinGetProcessName(hwnd)
 		title := WinGetTitle(hwnd)
@@ -108,7 +108,7 @@ class DetectWindow {
 	}
 
 	GetTarget() {
-		return (this.targetID && WinExist("ahk_id " this.targetID))
+		return (this.targetID && WinExist(this.targetID))
 			? this.targetID
 			: 0
   }
@@ -160,7 +160,7 @@ YoutubeControl(keyPress) {
 
 	if hwnd {
 		lastActiveHwnd := WinGetID("A")
-		WinActivate("ahk_id " hwnd)
+		WinActivate(hwnd)
 		if WinWaitActive(hwnd, , 1) {
 			Send keyPress
 		} else {
