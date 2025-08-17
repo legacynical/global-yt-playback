@@ -19,7 +19,7 @@ app := GYTP([
 	Workspace("", false, "Window 9")
 	],
 	false, ; set guiDebugMode
-	true, ; set hotkeyDebugMode
+	false, ; set hotkeyDebugMode
 )
 class GYTP {
 	__New(workspaceList, guiDebugMode, hotkeyDebugMode) {
@@ -93,8 +93,8 @@ class DetectWindow {
 			UpdateGUI()
 			if this.IsYouTubeWindow(hwnd) && this.targetID != hwnd {
 				this.targetID := hwnd
-				if app.hotkeyDebugMode
-					MsgBox "YT Target Updated: " WinGetTitle(hwnd)
+				ToolTip "YT Target Updated: " WinGetTitle(hwnd)
+				SetTimer () => ToolTip(), -2000
 			}
 		}
 	}
