@@ -70,7 +70,7 @@ class DetectWindow {
 	__New(browserMap) {
 		this.browserMap := browserMap
 		this.targetID := 0
-		this.cb := CallbackCreate(this.OnForegroundChange.Bind(this), "Fast")
+		this.cb := CallbackCreate(this.OnForegroundChange.Bind(this), "Fast", 7)
 		this.hook := DllCall(
 			"SetWinEventHook",
 			"UInt", 0x0003, ; eventMin          EVENT_SYSTEM_FOREGROUND 
