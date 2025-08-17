@@ -27,7 +27,6 @@ class GYTP {
 		this.guiDebugMode := guiDebugMode
 		this.hotkeyDebugMode := hotkeyDebugMode
 
-		this.isGuiRefresh := false ; TODO: remove related deprecated code
 		this.maxInputBuffer := 2
 		this.guiHwnd := ""
 		this.browserMap := Map(
@@ -344,15 +343,6 @@ AddDropDownListControls() {
 MainGui.AddButton("YS w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(1))
 MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpairWindow(10))
 */
-
-
-; TODO: make this a gui toggle
-; SetGuiRefreshTimer(app.isGuiRefresh) ; default true
-
-; SetGuiRefreshTimer(bool) {
-; 	SetTimer UpdateGUI, (bool ? 250 : 0) ; calls UpdateGUI() every 250ms or disables timer
-; }
-
 
 UpdateGUI() {
 	; if the GUI window doesn't exist or is minimized...
