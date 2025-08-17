@@ -51,7 +51,7 @@ class GYTP {
 			"srware_iron.exe", 1,
 			"falkon.exe", 1,
 		)
-		this.ytWin := DetectYouTubeWindow(this.browserMap)
+		this.ytWin := DetectWindow(this.browserMap)
 	}
 }
 class Workspace {
@@ -66,21 +66,21 @@ class Workspace {
 	}
 }
 
-class DetectYouTubeWindow {
+class DetectWindow {
 	__New(browserMap) {
 		this.browserMap := browserMap
 		this.targetID := 0
 		this.cb := CallbackCreate(this.OnForegroundChange.Bind(this), "Fast")
 		this.hook := DllCall(
-		"SetWinEventHook",
-    "UInt", 0x0003, ; eventMin        	EVENT_SYSTEM_FOREGROUND 
-    "UInt", 0x0003, ; eventMax
-    "Ptr", 0,       ; hmodWinEventProc	(0 = none)
-    "Ptr", this.cb,	; callback pointer
-    "UInt", 0,      ; idProcess					(0 = all)
-    "UInt", 0,      ; idThread					(0 = all)
-    "UInt", 0,      ; dwFlags						(0 = out-of-context)
-		"Ptr"           ; return type				HWINEVENTHOOK
+			"SetWinEventHook",
+			"UInt", 0x0003, ; eventMin          EVENT_SYSTEM_FOREGROUND 
+			"UInt", 0x0003, ; eventMax
+			"Ptr", 0,       ; hmodWinEventProc  (0 = none)
+			"Ptr", this.cb,	; callback pointer
+			"UInt", 0,      ; idProcess         (0 = all)
+			"UInt", 0,      ; idThread          (0 = all)
+			"UInt", 0,      ; dwFlags           (0 = out-of-context)
+			"Ptr"           ; return type       HWINEVENTHOOK
 		)
 
 		OnExit(ObjBindMethod(this, "Cleanup"))
@@ -90,7 +90,8 @@ class DetectYouTubeWindow {
 		try {
 			if !hwnd
 				return
-			if this.IsYouTubeWindow(hwnd) {
+			UpdateGUI()
+			if this.IsYouTubeWindow(hwnd) && this.targetID != hwnd {
 				this.targetID := hwnd
 				if app.hotkeyDebugMode
 					MsgBox "YT Target Updated: " WinGetTitle(hwnd)
@@ -149,13 +150,12 @@ F24:: SpotifyControl("^{Up}") ; raise volume
 ^F24:: Send "{Volume_Up}"
 
 YoutubeControl(keyPress) {
-	static cachedYT := app.DetectYouTubeWindow.GetTarget()
-	hwnd := cachedYT
+	hwnd := app.ytWin.GetTarget()
 
 	if !hwnd {
-		hwnd := app.FindAnyYouTubeWindow()
+		hwnd := app.ytWin.FindAnyYouTubeWindow()
 		if hwnd
-			app.DetectYouTubeWindow.targetID := hwnd
+			app.ytWin.targetID := hwnd
 	}
 
 	if hwnd {
