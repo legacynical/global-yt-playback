@@ -459,7 +459,7 @@ UpdateWinList(workspaceObject) {
 
 IdToDisplayString(hwnd) {
 	local winInfo := GetWinInfo(hwnd)
-	local windowProcess := StrReplace(WinGetProcessName(hwnd), ".exe")
+	local windowProcess := WinGetProcessName(hwnd)
 	if (winInfo.title != "") { ; if not an blank title window
 		return "[" windowProcess "] " winInfo.title
 	}
