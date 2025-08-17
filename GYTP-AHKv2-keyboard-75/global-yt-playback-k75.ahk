@@ -92,8 +92,7 @@ class DetectWindow {
 			UpdateGUI()
 			if this.IsYouTubeWindow(hwnd) && this.targetID != hwnd {
 				this.targetID := hwnd
-				ToolTip "YT Target Updated: " WinGetTitle(hwnd)
-				SetTimer () => ToolTip(), -2000
+				CursorMsg "YT Target Updated: " WinGetTitle(hwnd)
 			}
 		}
 	}
@@ -163,7 +162,7 @@ YoutubeControl(keyPress) {
 		if WinWaitActive(hwnd, , 1) {
 			Send keyPress
 		} else {
-			MsgBox "WinWaitActive did not find target in under 1 seconds", , "T1"
+			CursorMsg "WinWaitActive did not find target"
 		}
 		WinActivate(lastActiveHwnd)
 	}
@@ -186,7 +185,7 @@ SpotifyControl(keyPress) {
 		if WinWaitActive(targetID, , 1) {
 			Send keyPress
 		} else {
-			MsgBox "WinWaitActive did not find target in under 1 second", , "T1"
+			CursorMsg "WinWaitActive did not find target"
 		}
 		WinActivate(lastActiveHwnd)
 	}
@@ -211,6 +210,11 @@ GetWinInfo(hwnd := "A") {
 			process: "[Access Denied]"
 		}
 	}
+}
+
+CursorMsg(msg, ms := 2000) {
+	ToolTip msg
+	SetTimer () => ToolTip(), -ms
 }
 
 <#`:: DisplayActiveWindowStats()
@@ -241,7 +245,7 @@ PairWindow(workspaceObject) {
 	
 	local currentWin := GetWinInfo()
 	if (!currentWin) {
-		MsgBox "No active window found!"
+		CursorMsg "No active window found!"
 		return
 	}
 
@@ -250,10 +254,10 @@ PairWindow(workspaceObject) {
 	if (workspaceObject.id == "") {
 		workspaceObject.id := currentID
 		workspaceObject.isPaired := true
-		MsgBox "[Pairing " workspaceObject.label "]`n"
+		CursorMsg "[Pairing " workspaceObject.label "]`n"
 			. "title: " currentWin.title "`n"
 			. "workspace: " currentWin.id "`n"
-			. "process: " currentWin.process, , "T3"
+			. "process: " currentWin.process
 	} else if (currentID != workspaceObject.id) {
 		if WinExist(workspaceObject.id) {
 			inputBuffer := maxInputBuffer
@@ -286,9 +290,9 @@ UnpairWindow(workspaceObject) {
 	if (workspaceObject.isPaired) {
 		workspaceObject.id := ""
 		workspaceObject.isPaired := false
-		MsgBox "[Unpaired " windowLabel "]", , "T1"
+		CursorMsg "[Unpaired " windowLabel "]"
 	} else {
-		MsgBox "" windowLabel " is already unpaired!", , "T1"
+		CursorMsg "" windowLabel " is already unpaired!"
 	}
 	UpdateWinList(workspaceObject)
 }
@@ -300,7 +304,7 @@ UnpairAllWindows(workspaceList) {
 			workspaceObject.id := ""
 			workspaceObject.isPaired := false
 		}		
-		MsgBox "[Unpaired All Windows]", , "T1"
+		CursorMsg "[Unpaired All Windows]"
 	}
 }
 
@@ -372,9 +376,9 @@ WorkspaceSelected(workspaceObject) {
 		workspaceObject.id := workspaceObject.options[index].id
 		workspaceObject.isPaired := true
 		if isDebugMode
-			MsgBox "index: " index "`nid: " workspaceObject.id
+			CursorMsg "index: " index "`nid: " workspaceObject.id
 	} else {
-		MsgBox "[Error] That window no longer exists!`n"
+		CursorMsg "[Error] That window no longer exists!`n"
 		. "Attempting to refresh options, please select again..."
 	}
 	UpdateWinList(workspaceObject)
@@ -396,7 +400,7 @@ UpdateWinList(workspaceObject) {
 		workspaceObject.ddl.Delete()
 		workspaceObject.ddl.Add([IdToDisplayString(workspaceObject.id)])
 		if app.guiDebugMode { ; DEBUG print
-			MsgBox "UpdateWinList: workspaceObject.isPaired = true`n" 
+			CursorMsg "UpdateWinList: workspaceObject.isPaired = true`n" 
 				. "adding id: " workspaceObject.id "`n"
 				. "adding displayText: " IdToDisplayString(workspaceObject.id)
 		}
