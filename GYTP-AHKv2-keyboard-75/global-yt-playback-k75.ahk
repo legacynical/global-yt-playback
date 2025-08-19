@@ -148,7 +148,7 @@ class DetectWindowEvent {
 		title := WinGetTitle(hwnd)
 		if InStr(title, "Subscriptions - YouTube")
 			return false
-		
+
 		return InStr(title, "- YouTube -") && this.browserMap.Has(proc)
 	}
 
@@ -211,6 +211,7 @@ YoutubeControl(keyPress) {
 		lastActiveHwnd := WinGetID("A")
 		WinActivate(hwnd)
 		if WinWaitActive(hwnd, , 1) {
+			Sleep 20 ; even with WinWaitActive, application input queue may need a small delay
 			Send keyPress
 		} else {
 			CursorMsg "WinWaitActive did not find target"
@@ -234,6 +235,7 @@ SpotifyControl(keyPress) {
 		local lastActiveHwnd := WinGetID("A")
 		WinActivate(targetID)
 		if WinWaitActive(targetID, , 1) {
+			Sleep 20
 			Send keyPress
 		} else {
 			CursorMsg "WinWaitActive did not find target"
