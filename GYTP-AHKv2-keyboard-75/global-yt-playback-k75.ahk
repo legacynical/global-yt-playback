@@ -19,17 +19,18 @@ app := GYTP([
 	Workspace("", false, "Window 9")
 	],
 	50,    ; set inputDelay (50-100 ideal for apps to accept input)
+	2,     ; set maxMinWinBuffer (presses needed to minimize if paired window already in focus)
 	false, ; set guiDebugMode
 	false, ; set hotkeyDebugMode
 )
 class GYTP {
-	__New(workspaceList, inputDelay, guiDebugMode, hotkeyDebugMode) {
+	__New(workspaceList, inputDelay, maxMinWinBuffer, guiDebugMode, hotkeyDebugMode) {
 		this.workspaceList := workspaceList
 		this.inputDelay := inputDelay
+		this.maxMinWinBuffer := maxMinWinBuffer
 		this.guiDebugMode := guiDebugMode
 		this.hotkeyDebugMode := hotkeyDebugMode
 
-		this.maxInputBuffer := 2 ; presses needed to minimize if paired window already in focus
 		this.guiHwnd := ""
 		this.browserMap := Map(
 			"chrome.exe", 1,
@@ -312,7 +313,7 @@ DisplayActiveWindowStats() {
 <#9:: PairWindow(app.workspaceList[9])
 
 PairWindow(workspaceObject) {
-	local maxInputBuffer := app.maxInputBuffer
+	local maxInputBuffer := app.maxMinWinBuffer
 	static inputBuffer := maxInputBuffer
 	
 	local currentWin := GetWinInfo()
