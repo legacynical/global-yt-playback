@@ -27,7 +27,7 @@ class GYTP {
 		this.guiDebugMode := guiDebugMode
 		this.hotkeyDebugMode := hotkeyDebugMode
 
-		this.maxInputBuffer := 2
+		this.maxInputBuffer := 2 ; presses needed to minimize if paired window already in focus
 		this.guiHwnd := ""
 		this.browserMap := Map(
 			"chrome.exe", 1,
@@ -50,7 +50,7 @@ class GYTP {
 			"srware_iron.exe", 1,
 			"falkon.exe", 1,
 		)
-		this.ytWin := DetectWindow(this.browserMap)
+		this.ytWin := DetectWindowEvent(this.browserMap)
 	}
 }
 class Workspace {
@@ -65,7 +65,7 @@ class Workspace {
 	}
 }
 
-class DetectWindow {
+class DetectWindowEvent {
 	__New(browserMap) {
 		this.browserMap := browserMap
 		this.targetID := 0
@@ -89,11 +89,13 @@ class DetectWindow {
 		try {
 			if !hwnd
 				return
-			UpdateGUI()
-			if this.IsYouTubeWindow(hwnd) && this.targetID != hwnd {
-				this.targetID := hwnd
+			if this.IsYouTubeWindow(hwnd) && this.targetYT != hwnd {
+				this.targetYT := hwnd
 				CursorMsg "YT Target Updated: " WinGetTitle(hwnd)
 			}
+			UpdateGUI()
+		}
+	}
 		}
 	}
 
@@ -102,12 +104,12 @@ class DetectWindow {
 			return false
 		proc := WinGetProcessName(hwnd)
 		title := WinGetTitle(hwnd)
-		return InStr(title, "YouTube") && this.browserMap.Has(proc)
+		return InStr(title, "- YouTube -") && this.browserMap.Has(proc)
 	}
 
-	GetTarget() {
-		return (this.targetID && WinExist(this.targetID))
-			? this.targetID
+	GetTargetYT() {
+		return (this.targetYT && WinExist(this.targetYT))
+			? this.targetYT
 			: 0
   }
 
@@ -148,7 +150,7 @@ F24:: SpotifyControl("^{Up}") ; raise volume
 ^F24:: Send "{Volume_Up}"
 
 YoutubeControl(keyPress) {
-	hwnd := app.ytWin.GetTarget()
+	hwnd := app.ytWin.GetTargetYT()
 
 	if !hwnd {
 		hwnd := app.ytWin.FindAnyYouTubeWindow()
