@@ -195,10 +195,9 @@ F24:: SpotifyControl("^{Up}") ; raise volume
 YoutubeControl(keyPress) {
 	hwnd := app.ytWin.GetTargetYT()
 
-	if !hwnd {
+	if !hwnd || !app.ytWin.IsYouTubeWindow(hwnd) {
 		hwnd := app.ytWin.FindAnyYouTubeWindow()
-		if hwnd
-			app.ytWin.targetID := hwnd
+		app.ytWin.targetYT := hwnd
 	}
 
 	if hwnd {
