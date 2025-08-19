@@ -30,16 +30,18 @@ app := GTYP([
 	Workspace("", false, "Window 8"),
 	Workspace("", false, "Window 9")
 	],
+	50,    ; set inputDelay (50-100 ideal for apps to accept input)
 	false, ; set guiDebugMode
 	false, ; set hotkeyDebugMode
 )
 class GTYP {
-	__New(workspaceList, guiDebugMode, hotkeyDebugMode) {
+	__New(workspaceList, inputDelay, guiDebugMode, hotkeyDebugMode) {
 		this.workspaceList := workspaceList
+		this.inputDelay := inputDelay
 		this.guiDebugMode := guiDebugMode
 		this.hotkeyDebugMode := hotkeyDebugMode
 
-		this.maxInputBuffer := 2
+		this.maxInputBuffer := 2 ; presses needed to minimize if paired window already in focus
 		this.guiHwnd := ""
 		this.browserMap := Map(
 			"chrome.exe", 1,
@@ -211,7 +213,7 @@ YoutubeControl(keyPress) {
 		lastActiveHwnd := WinGetID("A")
 		WinActivate(hwnd)
 		if WinWaitActive(hwnd, , 1) {
-			Sleep 20 ; even with WinWaitActive, application input queue may need a small delay
+			Sleep app.inputDelay
 			Send keyPress
 		} else {
 			CursorMsg "WinWaitActive did not find target"
