@@ -140,8 +140,15 @@ class DetectWindowEvent {
 	IsYouTubeWindow(hwnd) {
 		if !hwnd || !WinExist(hwnd)
 			return false
+		
 		proc := WinGetProcessName(hwnd)
+		if !this.browserMap.Has(proc)
+			return false
+		
 		title := WinGetTitle(hwnd)
+		if InStr(title, "Subscriptions - YouTube")
+			return false
+		
 		return InStr(title, "- YouTube -") && this.browserMap.Has(proc)
 	}
 
