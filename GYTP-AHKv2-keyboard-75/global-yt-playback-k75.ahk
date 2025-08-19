@@ -68,18 +68,32 @@ class Workspace {
 class DetectWindowEvent {
 	__New(browserMap) {
 		this.browserMap := browserMap
-		this.targetID := 0
-		this.cb := CallbackCreate(this.OnForegroundChange.Bind(this), "Fast", 7)
-		this.hook := DllCall(
+		this.targetYT := 0
+
+		this.cbForegroundChange := CallbackCreate(this.OnForegroundChange.Bind(this), "Fast", 7)
+		this.hookForegroundChange := DllCall(
 			"SetWinEventHook",
-			"UInt", 0x0003, ; eventMin          EVENT_SYSTEM_FOREGROUND 
-			"UInt", 0x0003, ; eventMax
-			"Ptr", 0,       ; hmodWinEventProc  (0 = none)
-			"Ptr", this.cb,	; callback pointer
-			"UInt", 0,      ; idProcess         (0 = all)
-			"UInt", 0,      ; idThread          (0 = all)
-			"UInt", 0,      ; dwFlags           (0 = out-of-context)
-			"Ptr"           ; return type       HWINEVENTHOOK
+			"UInt", 0x0003,                 ; eventMin          EVENT_SYSTEM_FOREGROUND 
+			"UInt", 0x0003,                 ; eventMax
+			"Ptr", 0,                       ; hmodWinEventProc  (0 = none)
+			"Ptr", this.cbForegroundChange,	; callback pointer
+			"UInt", 0,                      ; idProcess         (0 = all)
+			"UInt", 0,                      ; idThread          (0 = all)
+			"UInt", 0,                      ; dwFlags           (0 = out-of-context)
+			"Ptr"                           ; return type       HWINEVENTHOOK
+		)
+		
+		this.cbTitleChange := CallbackCreate(this.OnTitleChange.Bind(this), "Fast", 7)
+		this.hookTitleChange := DllCall(
+			"SetWinEventHook",
+			"UInt", 0x800C,                 ; eventMin          EVENT_OBJECT_NAMECHANGE 
+			"UInt", 0x800C,                 ; eventMax
+			"Ptr", 0,                       ; hmodWinEventProc  (0 = none)
+			"Ptr", this.cbTitleChange,	    ; callback pointer
+			"UInt", 0,                      ; idProcess         (0 = all)
+			"UInt", 0,                      ; idThread          (0 = all)
+			"UInt", 0,                      ; dwFlags           (0 = out-of-context)
+			"Ptr"                           ; return type       HWINEVENTHOOK
 		)
 
 		OnExit(ObjBindMethod(this, "Cleanup"))
@@ -96,6 +110,30 @@ class DetectWindowEvent {
 			UpdateGUI()
 		}
 	}
+
+	OnTitleChange(hWinEventHook, event, hwnd, idObject, idChild, dwEventThread, dwmsEventTime) {
+		try {
+			if !hwnd
+				return
+
+			; Only process top-level window for NAMECHANGE events
+			if idObject != 0
+				return
+
+			isYT := this.IsYouTubeWindow(hwnd)
+			newTitle := WinGetTitle(hwnd)
+
+			if hwnd == this.targetYT {
+				if app.hotkeyDebugMode
+					CursorMsg "Title changed: " newTitle
+				if !isYT
+					this.targetYT := 0
+			}
+			if isYT && this.targetYT != hwnd {
+				this.targetYT := hwnd
+				CursorMsg "YT Target Updated: " newTitle
+			}
+			UpdateGUI()
 		}
 	}
 
@@ -122,10 +160,15 @@ class DetectWindowEvent {
 	}
 
   Cleanup(*) {
-		if this.hook
-			DllCall("UnhookWinEvent", "Ptr", this.hook)
-		if this.cb
-			CallbackFree(this.cb)
+		if this.hookForegroundChange
+			DllCall("UnhookWinEvent", "Ptr", this.hookForegroundChange)
+		if this.cbForegroundChange
+			CallbackFree(this.cbForegroundChange)
+
+		if this.hookTitleChange
+			DllCall("UnhookWinEvent", "Ptr", this.hookTitleChange)
+		if this.cbTitleChange
+			CallbackFree(this.cbTitleChange)
   }
 }
 
