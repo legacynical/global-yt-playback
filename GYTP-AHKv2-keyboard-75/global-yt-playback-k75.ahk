@@ -257,8 +257,25 @@ GetWinInfo(hwnd := "A") {
 }
 
 CursorMsg(msg, ms := 2000) {
-	ToolTip msg
-	SetTimer () => ToolTip(), -ms
+	static text := ""
+	static timer := ""
+
+	if(text != "")
+		text .= "`n" msg
+	else
+		text := msg
+
+	ToolTip text
+
+	if (timer)
+		SetTimer timer, 0
+
+	timer := () => (
+		ToolTip(),
+		text := "",
+		timer := ""
+	)
+	SetTimer timer, -ms
 }
 
 <#`:: DisplayActiveWindowStats()
