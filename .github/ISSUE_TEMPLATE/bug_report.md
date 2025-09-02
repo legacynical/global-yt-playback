@@ -1,32 +1,29 @@
 ---
 name: Bug report
 about: Create a report to help us improve
-title: ''
-labels: ''
+title: "[BUG] "
+labels: bug
 assignees: ''
 
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+**Describe the bug** A clear and concise description of what the bug is.
+↳
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+**To Reproduce** Steps to reproduce the behavior.
+↳
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+**Expected behavior** A clear and concise description of what you expected to happen.
+↳ 
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
-
-**Desktop (please complete the following information):**
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+**Screenshots** If applicable, add screenshots to help explain your problem.
 
 
-**Additional context**
-Add any other context about the problem here.
+**Environment Info** 
+ex. Windows 11 (KB5064081) / Chrome / 139.0.7258.155 (Official Build) (64-bit)
+↳ Windows Version: 11
+↳ Browser: Chrome
+↳ Browser Version: 
+
+**Additional context** Add any other context about the problem here.
+↳
