@@ -128,11 +128,11 @@ class DetectWindowEvent {
 
 	OnTitleChange(hWinEventHook, event, hwnd, idObject, idChild, dwEventThread, dwmsEventTime) {
 		try {
-			if !hwnd
-				return
-
 			; Only process top-level window for NAMECHANGE events
 			if idObject != 0
+				return
+
+			if !hwnd
 				return
 
 			isYT := this.IsYouTubeWindow(hwnd)
