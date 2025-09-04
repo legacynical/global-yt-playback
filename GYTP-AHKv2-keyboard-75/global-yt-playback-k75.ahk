@@ -195,6 +195,7 @@ class DetectWindowEvent {
   }
 }
 
+; https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-appcommand
 class MediaAppCommand {
 	static WM_APPCOMMAND := 0x0319
 	static codes := Map(
@@ -234,11 +235,8 @@ F21:: YoutubeControl("{Right}") ; fast forward 5 sec
 F20:: YoutubeControl("k") ; play/pause
 
 Media_Prev:: SpotifyControlV2("APPCOMMAND_MEDIA_PREVIOUSTRACK") ; skip to previous
-; Media_Prev:: SpotifyControl("^{Left}") ; skip to previous
 Media_Play_Pause:: SpotifyControlV2("APPCOMMAND_MEDIA_PLAY_PAUSE") ; play/pause
-; Media_Play_Pause:: SpotifyControl("{Space}") ; play/pause
 Media_Next:: SpotifyControlV2("APPCOMMAND_MEDIA_NEXTTRACK") ; skip to next
-; Media_Next:: SpotifyControl("^{Right}") ; skip to next
 
 ; NOTE: modifier keys are inconsistent w/ special keys like Media_*
 ; If using a non-english keyboard layout, playback seeking doesn't work with right ctrl
@@ -250,10 +248,8 @@ Media_Next:: SpotifyControlV2("APPCOMMAND_MEDIA_NEXTTRACK") ; skip to next
 F22:: SpotifyControl("!+b") ; like/unlike song (there is no mute shortcut in spotify)
 F23:: SpotifyControl("^{Down}") ; lower volume
 ; F23:: SpotifyControlV2("APPCOMMAND_VOLUME_DOWN") ; (X) only affects system volume
-; F23:: SpotifyControlSend("^{Down}") ; (X) needs window focus to work
 F24:: SpotifyControl("^{Up}") ; raise volume
 ; F24:: SpotifyControlV2("APPCOMMAND_VOLUME_UP") ; (X) only affects system volume
-; F24:: SpotifyControlSend("^{Up}") ; (X) needs window focus to work
 
 ; alternate volume controls for keyboards without volume knobs
 ^F22:: Send "{Volume_Mute}"
@@ -296,15 +292,6 @@ SpotifyControl(keyPress) {
 		WinActivate(lastActiveHwnd)
 	}
 }
-
-; SpotifyControlSend(keyPress) {
-; 	spotifyWin := app.GetSpotifyWindow()
-; 	if (!spotifyWin) {
-; 		CursorMsg("Spotify window not found.")
-; 		return
-; 	}
-; 	ControlSend keyPress, , spotifyWin
-; }
 
 SpotifyControlV2(appCommand) {
 	spotifyWin := app.GetSpotifyWindow()
