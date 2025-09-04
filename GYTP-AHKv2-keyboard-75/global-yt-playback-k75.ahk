@@ -198,6 +198,8 @@ class DetectWindowEvent {
 class MediaAppCommand {
 	static WM_APPCOMMAND := 0x0319
 	static codes := Map(
+		"APPCOMMAND_MEDIA_REWIND", 50,
+		"APPCOMMAND_MEDIA_FAST_FORWARD", 49,
 		"APPCOMMAND_MEDIA_PLAY_PAUSE", 14,
 		"APPCOMMAND_MEDIA_STOP", 13,
 		"APPCOMMAND_MEDIA_PREVIOUSTRACK", 12,
@@ -231,17 +233,27 @@ F21:: YoutubeControl("{Right}") ; fast forward 5 sec
 ^F21:: YoutubeControl("l") ; fast forward 10 sec
 F20:: YoutubeControl("k") ; play/pause
 
-Media_Prev:: SpotifyControl("^{Left}") ; skip to previous
-^Media_Prev:: SpotifyControl("+{Left}") ; seek backward
-
-; Media_Play_Pause:: SpotifyControl("{Space}") ; play/pause
+Media_Prev:: SpotifyControlV2("APPCOMMAND_MEDIA_PREVIOUSTRACK") ; skip to previous
+; Media_Prev:: SpotifyControl("^{Left}") ; skip to previous
 Media_Play_Pause:: SpotifyControlV2("APPCOMMAND_MEDIA_PLAY_PAUSE") ; play/pause
+; Media_Play_Pause:: SpotifyControl("{Space}") ; play/pause
+Media_Next:: SpotifyControlV2("APPCOMMAND_MEDIA_NEXTTRACK") ; skip to next
+; Media_Next:: SpotifyControl("^{Right}") ; skip to next
 
-Media_Next:: SpotifyControl("^{Right}") ; skip to next
-^Media_Next:: SpotifyControl("+{Right}") ; seek forward
-F22:: SpotifyControl("!+b") ; like/unlike song (there is no mute shortcut in spotify, use play/pause instead)
+; NOTE: modifier keys are inconsistent w/ special keys like Media_*
+; If using a non-english keyboard layout, playback seeking doesn't work with right ctrl
+^Media_Prev:: SpotifyControlV2("APPCOMMAND_MEDIA_REWIND") ; seek backward
+; ^Media_Prev:: SpotifyControl("+{Left}") ; seek backward
+^Media_Next:: SpotifyControlV2("APPCOMMAND_MEDIA_FAST_FORWARD") ; seek forward
+; ^Media_Next:: SpotifyControl("+{Right}") ; seek forward
+
+F22:: SpotifyControl("!+b") ; like/unlike song (there is no mute shortcut in spotify)
 F23:: SpotifyControl("^{Down}") ; lower volume
+; F23:: SpotifyControlV2("APPCOMMAND_VOLUME_DOWN") ; (X) only affects system volume
+; F23:: SpotifyControlSend("^{Down}") ; (X) needs window focus to work
 F24:: SpotifyControl("^{Up}") ; raise volume
+; F24:: SpotifyControlV2("APPCOMMAND_VOLUME_UP") ; (X) only affects system volume
+; F24:: SpotifyControlSend("^{Up}") ; (X) needs window focus to work
 
 ; alternate volume controls for keyboards without volume knobs
 ^F22:: Send "{Volume_Mute}"
@@ -285,13 +297,21 @@ SpotifyControl(keyPress) {
 	}
 }
 
+; SpotifyControlSend(keyPress) {
+; 	spotifyWin := app.GetSpotifyWindow()
+; 	if (!spotifyWin) {
+; 		CursorMsg("Spotify window not found.")
+; 		return
+; 	}
+; 	ControlSend keyPress, , spotifyWin
+; }
+
 SpotifyControlV2(appCommand) {
 	spotifyWin := app.GetSpotifyWindow()
 	if (!spotifyWin) {
 		CursorMsg("Spotify window not found.")
 		return
 	}
-
 	MediaAppCommand.Send(spotifyWin, appCommand)
 }
 
