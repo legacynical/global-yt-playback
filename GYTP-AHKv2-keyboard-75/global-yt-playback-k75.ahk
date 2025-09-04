@@ -55,6 +55,19 @@ class GYTP {
 		)
 		this.ytWin := DetectWindowEvent(this.browserMap)
 	}
+
+	GetSpotifyWindow() {
+		static cachedID := 0
+		if (cachedID && WinExist(cachedID))
+			return cachedID
+
+		hwnd := 0
+		try hwnd := WinGetID("ahk_exe Spotify.exe")
+		if hwnd
+			cachedID := hwnd
+		
+		return hwnd
+	}
 }
 class Workspace {
 	__New(id, isPaired, label) {
@@ -182,6 +195,36 @@ class DetectWindowEvent {
   }
 }
 
+class MediaAppCommand {
+	static WM_APPCOMMAND := 0x0319
+	static codes := Map(
+		"APPCOMMAND_MEDIA_PLAY_PAUSE", 14,
+		"APPCOMMAND_MEDIA_STOP", 13,
+		"APPCOMMAND_MEDIA_PREVIOUSTRACK", 12,
+		"APPCOMMAND_MEDIA_NEXTTRACK", 11,
+		"APPCOMMAND_VOLUME_MUTE", 10,
+		"APPCOMMAND_VOLUME_DOWN", 9,
+		"APPCOMMAND_VOLUME_UP", 8,
+	)
+
+	static Send(hwnd, name) {
+		cmd := this.codes.Get(name, "")
+		if (cmd = "")
+			throw Error("Unknown AppCommand: " name)
+		lParam := cmd << 16 ; pack cmd into high word (low 32 bits)
+		return DllCall(
+			"SendMessage", 
+			"Ptr", hwnd,                    ; hWnd         (recipient window)
+			"UInt", this.WM_APPCOMMAND,     ; Msg          (WM_APPCOMMAND = 0x0319)
+			"Ptr", hwnd,                    ; wParam       (source hwnd, hwnd or 0 is fine)
+			"Ptr", lParam,                  ; lParam       (packed cmd << 16)
+			"Ptr"                           ; return type  LRESULT
+		)
+	}
+
+	; TODO: Consider possible fallback to previous implementation with focus toggle
+}
+
 F19:: YoutubeControl("{Left}") ; rewind 5 sec
 ^F19:: YoutubeControl("j") ; rewind 10 sec
 F21:: YoutubeControl("{Right}") ; fast forward 5 sec
@@ -190,7 +233,10 @@ F20:: YoutubeControl("k") ; play/pause
 
 Media_Prev:: SpotifyControl("^{Left}") ; skip to previous
 ^Media_Prev:: SpotifyControl("+{Left}") ; seek backward
-Media_Play_Pause:: SpotifyControl("{Space}") ; play/pause
+
+; Media_Play_Pause:: SpotifyControl("{Space}") ; play/pause
+Media_Play_Pause:: SpotifyControlV2("APPCOMMAND_MEDIA_PLAY_PAUSE") ; play/pause
+
 Media_Next:: SpotifyControl("^{Right}") ; skip to next
 ^Media_Next:: SpotifyControl("+{Right}") ; seek forward
 F22:: SpotifyControl("!+b") ; like/unlike song (there is no mute shortcut in spotify, use play/pause instead)
@@ -224,20 +270,12 @@ YoutubeControl(keyPress) {
 }
 
 SpotifyControl(keyPress) {
-	local targetProcess := "Spotify.exe"
-	static targetID := ""
+	spotifyWin := app.GetSpotifyWindow()
 
-	if (!targetID || !WinExist(targetID)) {
-		spotifyID := WinGetID("ahk_exe " targetProcess)
-		if spotifyID {
-			targetID := spotifyID
-		}
-	}
-
-	if (targetID && WinExist(targetID)) {
+	if (spotifyWin) {
 		local lastActiveHwnd := WinGetID("A")
-		WinActivate(targetID)
-		if WinWaitActive(targetID, , 1) {
+		WinActivate(spotifyWin)
+		if WinWaitActive(spotifyWin, , 1) {
 			Sleep app.inputDelay
 			Send keyPress
 		} else {
@@ -245,6 +283,16 @@ SpotifyControl(keyPress) {
 		}
 		WinActivate(lastActiveHwnd)
 	}
+}
+
+SpotifyControlV2(appCommand) {
+	spotifyWin := app.GetSpotifyWindow()
+	if (!spotifyWin) {
+		CursorMsg("Spotify window not found.")
+		return
+	}
+
+	MediaAppCommand.Send(spotifyWin, appCommand)
 }
 
 GetWinInfo(hwnd := "A") {
