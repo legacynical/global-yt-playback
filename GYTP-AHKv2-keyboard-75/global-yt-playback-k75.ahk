@@ -224,8 +224,6 @@ class MediaAppCommand {
 			"Ptr"                           ; return type  LRESULT
 		)
 	}
-
-	; TODO: Consider possible fallback to previous implementation with focus toggle
 }
 
 F19:: YoutubeControl("{Left}") ; rewind 5 sec
@@ -239,17 +237,16 @@ Media_Play_Pause:: SpotifyControlV2("APPCOMMAND_MEDIA_PLAY_PAUSE") ; play/pause
 Media_Next:: SpotifyControlV2("APPCOMMAND_MEDIA_NEXTTRACK") ; skip to next
 
 ; NOTE: modifier keys are inconsistent w/ special keys like Media_*
-; If using a non-english keyboard layout, playback seeking doesn't work with right ctrl
+; For few language keyboard layouts, playback seeking doesn't work with right ctrl (ex. korean microsoft IME)
 ^Media_Prev:: SpotifyControlV2("APPCOMMAND_MEDIA_REWIND") ; seek backward
 ; ^Media_Prev:: SpotifyControl("+{Left}") ; seek backward
 ^Media_Next:: SpotifyControlV2("APPCOMMAND_MEDIA_FAST_FORWARD") ; seek forward
 ; ^Media_Next:: SpotifyControl("+{Right}") ; seek forward
 
+; NOTE: AppCommand volume control only affects system level volume
 F22:: SpotifyControl("!+b") ; like/unlike song (there is no mute shortcut in spotify)
 F23:: SpotifyControl("^{Down}") ; lower volume
-; F23:: SpotifyControlV2("APPCOMMAND_VOLUME_DOWN") ; (X) only affects system volume
 F24:: SpotifyControl("^{Up}") ; raise volume
-; F24:: SpotifyControlV2("APPCOMMAND_VOLUME_UP") ; (X) only affects system volume
 
 ; alternate volume controls for keyboards without volume knobs
 ^F22:: Send "{Volume_Mute}"
