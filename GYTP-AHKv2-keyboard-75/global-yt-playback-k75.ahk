@@ -55,6 +55,19 @@ class GYTP {
 		)
 		this.ytWin := DetectWindowEvent(this.browserMap)
 	}
+
+	GetSpotifyWindow() {
+		static cachedID := 0
+		if (cachedID && WinExist(cachedID))
+			return cachedID
+
+		hwnd := 0
+		try hwnd := WinGetID("ahk_exe Spotify.exe")
+		if hwnd
+			cachedID := hwnd
+		
+		return hwnd
+	}
 }
 class Workspace {
 	__New(id, isPaired, label) {
@@ -182,18 +195,56 @@ class DetectWindowEvent {
   }
 }
 
+; https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-appcommand
+class MediaAppCommand {
+	static WM_APPCOMMAND := 0x0319
+	static codes := Map(
+		"APPCOMMAND_MEDIA_REWIND", 50,
+		"APPCOMMAND_MEDIA_FAST_FORWARD", 49,
+		"APPCOMMAND_MEDIA_PLAY_PAUSE", 14,
+		"APPCOMMAND_MEDIA_STOP", 13,
+		"APPCOMMAND_MEDIA_PREVIOUSTRACK", 12,
+		"APPCOMMAND_MEDIA_NEXTTRACK", 11,
+		"APPCOMMAND_VOLUME_UP", 10,
+		"APPCOMMAND_VOLUME_DOWN", 9,
+		"APPCOMMAND_VOLUME_MUTE", 8,
+	)
+
+	static Send(hwnd, name) {
+		cmd := this.codes.Get(name, "")
+		if (cmd = "")
+			throw Error("Unknown AppCommand: " name)
+		lParam := cmd << 16 ; pack cmd into high word (low 32 bits)
+		return DllCall(
+			"SendMessage", 
+			"Ptr", hwnd,                    ; hWnd         (recipient window)
+			"UInt", this.WM_APPCOMMAND,     ; Msg          (WM_APPCOMMAND = 0x0319)
+			"Ptr", hwnd,                    ; wParam       (source hwnd, hwnd or 0 is fine)
+			"Ptr", lParam,                  ; lParam       (packed cmd << 16)
+			"Ptr"                           ; return type  LRESULT
+		)
+	}
+}
+
 F19:: YoutubeControl("{Left}") ; rewind 5 sec
 ^F19:: YoutubeControl("j") ; rewind 10 sec
 F21:: YoutubeControl("{Right}") ; fast forward 5 sec
 ^F21:: YoutubeControl("l") ; fast forward 10 sec
 F20:: YoutubeControl("k") ; play/pause
 
-Media_Prev:: SpotifyControl("^{Left}") ; skip to previous
-^Media_Prev:: SpotifyControl("+{Left}") ; seek backward
-Media_Play_Pause:: SpotifyControl("{Space}") ; play/pause
-Media_Next:: SpotifyControl("^{Right}") ; skip to next
-^Media_Next:: SpotifyControl("+{Right}") ; seek forward
-F22:: SpotifyControl("!+b") ; like/unlike song (there is no mute shortcut in spotify, use play/pause instead)
+Media_Prev:: SpotifyControlV2("APPCOMMAND_MEDIA_PREVIOUSTRACK") ; skip to previous
+Media_Play_Pause:: SpotifyControlV2("APPCOMMAND_MEDIA_PLAY_PAUSE") ; play/pause
+Media_Next:: SpotifyControlV2("APPCOMMAND_MEDIA_NEXTTRACK") ; skip to next
+
+; NOTE: modifier keys are inconsistent w/ special keys like Media_*
+; For few language keyboard layouts, playback seeking doesn't work with right ctrl (ex. korean microsoft IME)
+^Media_Prev:: SpotifyControlV2("APPCOMMAND_MEDIA_REWIND") ; seek backward
+; ^Media_Prev:: SpotifyControl("+{Left}") ; seek backward
+^Media_Next:: SpotifyControlV2("APPCOMMAND_MEDIA_FAST_FORWARD") ; seek forward
+; ^Media_Next:: SpotifyControl("+{Right}") ; seek forward
+
+; NOTE: AppCommand volume control only affects system level volume
+F22:: SpotifyControl("!+b") ; like/unlike song (there is no mute shortcut in spotify)
 F23:: SpotifyControl("^{Down}") ; lower volume
 F24:: SpotifyControl("^{Up}") ; raise volume
 
@@ -224,20 +275,12 @@ YoutubeControl(keyPress) {
 }
 
 SpotifyControl(keyPress) {
-	local targetProcess := "Spotify.exe"
-	static targetID := ""
+	spotifyWin := app.GetSpotifyWindow()
 
-	if (!targetID || !WinExist(targetID)) {
-		spotifyID := WinGetID("ahk_exe " targetProcess)
-		if spotifyID {
-			targetID := spotifyID
-		}
-	}
-
-	if (targetID && WinExist(targetID)) {
+	if (spotifyWin) {
 		local lastActiveHwnd := WinGetID("A")
-		WinActivate(targetID)
-		if WinWaitActive(targetID, , 1) {
+		WinActivate(spotifyWin)
+		if WinWaitActive(spotifyWin, , 1) {
 			Sleep app.inputDelay
 			Send keyPress
 		} else {
@@ -245,6 +288,15 @@ SpotifyControl(keyPress) {
 		}
 		WinActivate(lastActiveHwnd)
 	}
+}
+
+SpotifyControlV2(appCommand) {
+	spotifyWin := app.GetSpotifyWindow()
+	if (!spotifyWin) {
+		CursorMsg("Spotify window not found.")
+		return
+	}
+	MediaAppCommand.Send(spotifyWin, appCommand)
 }
 
 GetWinInfo(hwnd := "A") {
