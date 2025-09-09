@@ -65,6 +65,7 @@ class GTYP {
 			"srware_iron.exe", 1,
 			"falkon.exe", 1,
 			"arc.exe", 1,
+			"dia.exe", 1,
 		)
 		this.ytWin := DetectWindowEvent(this.browserMap)
 	}
