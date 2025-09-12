@@ -64,10 +64,11 @@ class App {
 	}
 }
 class Workspace {
-	__New(id, isPaired, label) {
-		this.id := id
-		this.isPaired := isPaired
+	__New(label) {
 		this.label := label
+		this.id := ""
+		this.isPaired := false
+
 		this.ddl := ""
 		this.focusEvent := ""
 		this.changeEvent := ""
