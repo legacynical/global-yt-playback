@@ -7,55 +7,47 @@ DetectHiddenWindows(false) ; ideal setting for ux, esp. for gui ddl
 ; SetWorkingDir A_ScriptDir ; (AHKv2 default) Force script to use its own folder as working directory.
 ; SetTitleMatchMode 2 ; (AHKv2 default) Allow WinTitle to be matched anywhere from a window's title
 
-app := GYTP([
-	Workspace("", false, "Window 1"),
-	Workspace("", false, "Window 2"),
-	Workspace("", false, "Window 3"),
-	Workspace("", false, "Window 4"),
-	Workspace("", false, "Window 5"),
-	Workspace("", false, "Window 6"),
-	Workspace("", false, "Window 7"),
-	Workspace("", false, "Window 8"),
-	Workspace("", false, "Window 9")
-	],
-	50,    ; set inputDelay (50-100 ideal for apps to accept input)
-	2,     ; set maxMinWinBuffer (presses needed to minimize if paired window already in focus)
-	false, ; set guiDebugMode
-	false, ; set hotkeyDebugMode
-)
-class GYTP {
-	__New(workspaceList, inputDelay, maxMinWinBuffer, guiDebugMode, hotkeyDebugMode) {
-		this.workspaceList := workspaceList
-		this.inputDelay := inputDelay
-		this.maxMinWinBuffer := maxMinWinBuffer
-		this.guiDebugMode := guiDebugMode
-		this.hotkeyDebugMode := hotkeyDebugMode
+TAPSHOP := App(Config())
+
+class Config {
+  __New() {
+    this.inputDelay := 50               ; 50–100 recommended
+    this.minimizeThreshold := 2         ; presses before minimize
+    this.guiDebugMode := false
+    this.hotkeyDebugMode := false
+    this.browserProcesses := Map(
+      "chrome.exe", 1,
+      "msedge.exe", 1,
+      "firefox.exe", 1,
+      "brave.exe", 1,
+      "opera.exe", 1,
+      "opera_gx.exe", 1,
+      "vivaldi.exe", 1,
+      "chromium.exe", 1,
+      "waterfox.exe", 1,
+      "tor.exe", 1,
+      "yandex.exe", 1,
+      "maxthon.exe", 1,
+      "seamonkey.exe", 1,
+      "epic.exe", 1,
+      "slimjet.exe", 1,
+      "comodo_dragon.exe", 1,
+      "avast_secure_browser.exe", 1,
+      "srware_iron.exe", 1,
+      "falkon.exe", 1
+    )
+  }
+}
+
+class App {
+	__New(cfg) {
+		this.cfg := cfg
+		this.workspaceList := []
+		loop 9
+			this.workspaceList.Push(Workspace("Window" A_Index))
 
 		this.guiHwnd := ""
-		this.browserMap := Map(
-			"chrome.exe", 1,
-			"msedge.exe", 1,
-			"firefox.exe", 1,
-			"brave.exe", 1,
-			"opera.exe", 1,
-			"opera_gx.exe", 1,
-			"vivaldi.exe", 1,
-			"chromium.exe", 1,
-			"waterfox.exe", 1,
-			"tor.exe", 1,
-			"yandex.exe", 1,
-			"maxthon.exe", 1,
-			"seamonkey.exe", 1,
-			"epic.exe", 1,
-			"slimjet.exe", 1,
-			"comodo_dragon.exe", 1,
-			"avast_secure_browser.exe", 1,
-			"srware_iron.exe", 1,
-			"falkon.exe", 1,
-			"arc.exe", 1,
-			"dia.exe", 1,
-		)
-		this.ytWin := DetectWindowEvent(this.browserMap)
+		this.ytWin := DetectWindowEvent(this.cfg.browserProcesses)
 	}
 
 	GetSpotifyWindow() {
@@ -117,7 +109,7 @@ class DetectWindowEvent {
 		OnExit(ObjBindMethod(this, "Cleanup"))
 	}
 
-	OnForegroundChange(hWinEventHook, event, hwnd, idObject, idChild, dwEventThread, dwmsEventTime) {
+	_OnForegroundChange(hWinEventHook, event, hwnd, idObject, idChild, dwEventThread, dwmsEventTime) {
 		try {
 			if !hwnd
 				return
@@ -129,7 +121,7 @@ class DetectWindowEvent {
 		}
 	}
 
-	OnTitleChange(hWinEventHook, event, hwnd, idObject, idChild, dwEventThread, dwmsEventTime) {
+	_OnTitleChange(hWinEventHook, event, hwnd, idObject, idChild, dwEventThread, dwmsEventTime) {
 		try {
 			; Only process top-level window for NAMECHANGE events
 			if idObject != 0
@@ -142,7 +134,7 @@ class DetectWindowEvent {
 			newTitle := WinGetTitle(hwnd)
 
 			if hwnd == this.targetYT {
-				if app.hotkeyDebugMode
+				if TAPSHOP.cfg.hotkeyDebugMode
 					CursorMsg "Title changed: " newTitle
 				if !isYT
 					this.targetYT := 0
@@ -256,18 +248,18 @@ F24:: SpotifyControl("^{Up}") ; raise volume
 ^F24:: Send "{Volume_Up}"
 
 YoutubeControl(keyPress) {
-	hwnd := app.ytWin.GetTargetYT()
+	hwnd := TAPSHOP.ytWin.GetTargetYT()
 
-	if !hwnd || !app.ytWin.IsYouTubeWindow(hwnd) {
-		hwnd := app.ytWin.FindAnyYouTubeWindow()
-		app.ytWin.targetYT := hwnd
+	if !hwnd || !TAPSHOP.ytWin.IsYouTubeWindow(hwnd) {
+		hwnd := TAPSHOP.ytWin.FindAnyYouTubeWindow()
+		TAPSHOP.ytWin.targetYT := hwnd
 	}
 
 	if hwnd {
 		lastActiveHwnd := WinGetID("A")
 		WinActivate(hwnd)
 		if WinWaitActive(hwnd, , 1) {
-			Sleep app.inputDelay
+			Sleep TAPSHOP.cfg.inputDelay
 			Send keyPress
 		} else {
 			CursorMsg "WinWaitActive did not find target"
@@ -277,13 +269,13 @@ YoutubeControl(keyPress) {
 }
 
 SpotifyControl(keyPress) {
-	spotifyWin := app.GetSpotifyWindow()
+	spotifyWin := TAPSHOP.GetSpotifyWindow()
 
 	if (spotifyWin) {
 		local lastActiveHwnd := WinGetID("A")
 		WinActivate(spotifyWin)
 		if WinWaitActive(spotifyWin, , 1) {
-			Sleep app.inputDelay
+			Sleep TAPSHOP.cfg.inputDelay
 			Send keyPress
 		} else {
 			CursorMsg "WinWaitActive did not find target"
@@ -293,7 +285,7 @@ SpotifyControl(keyPress) {
 }
 
 SpotifyControlV2(appCommand) {
-	spotifyWin := app.GetSpotifyWindow()
+	spotifyWin := TAPSHOP.GetSpotifyWindow()
 	if (!spotifyWin) {
 		CursorMsg("Spotify window not found.")
 		return
@@ -356,18 +348,18 @@ DisplayActiveWindowStats() {
 	}
 }
 
-<#1:: PairWindow(app.workspaceList[1])
-<#2:: PairWindow(app.workspaceList[2])
-<#3:: PairWindow(app.workspaceList[3])
-<#4:: PairWindow(app.workspaceList[4])
-<#5:: PairWindow(app.workspaceList[5])
-<#6:: PairWindow(app.workspaceList[6])
-<#7:: PairWindow(app.workspaceList[7])
-<#8:: PairWindow(app.workspaceList[8])
-<#9:: PairWindow(app.workspaceList[9])
+<#1:: PairWindow(TAPSHOP.workspaceList[1])
+<#2:: PairWindow(TAPSHOP.workspaceList[2])
+<#3:: PairWindow(TAPSHOP.workspaceList[3])
+<#4:: PairWindow(TAPSHOP.workspaceList[4])
+<#5:: PairWindow(TAPSHOP.workspaceList[5])
+<#6:: PairWindow(TAPSHOP.workspaceList[6])
+<#7:: PairWindow(TAPSHOP.workspaceList[7])
+<#8:: PairWindow(TAPSHOP.workspaceList[8])
+<#9:: PairWindow(TAPSHOP.workspaceList[9])
 
 PairWindow(workspaceObject) {
-	local maxInputBuffer := app.maxMinWinBuffer
+	local maxInputBuffer := TAPSHOP.cfg.minimizeThreshold
 	static inputBuffer := maxInputBuffer
 	
 	local currentWin := GetWinInfo()
@@ -397,20 +389,20 @@ PairWindow(workspaceObject) {
 			WinMinimize(workspaceObject.id)
 		}
 	}
-	if WinExist(app.guiHwnd)
+	if WinExist(TAPSHOP.guiHwnd)
 		UpdateWinList(workspaceObject)
 }
 
-^<#1:: UnpairWindow(app.workspaceList[1])
-^<#2:: UnpairWindow(app.workspaceList[2])
-^<#3:: UnpairWindow(app.workspaceList[3])
-^<#4:: UnpairWindow(app.workspaceList[4])
-^<#5:: UnpairWindow(app.workspaceList[5])
-^<#6:: UnpairWindow(app.workspaceList[6])
-^<#7:: UnpairWindow(app.workspaceList[7])
-^<#8:: UnpairWindow(app.workspaceList[8])
-^<#9:: UnpairWindow(app.workspaceList[9])
-^<#0:: UnpairAllWindows(app.workspaceList)
+^<#1:: UnpairWindow(TAPSHOP.workspaceList[1])
+^<#2:: UnpairWindow(TAPSHOP.workspaceList[2])
+^<#3:: UnpairWindow(TAPSHOP.workspaceList[3])
+^<#4:: UnpairWindow(TAPSHOP.workspaceList[4])
+^<#5:: UnpairWindow(TAPSHOP.workspaceList[5])
+^<#6:: UnpairWindow(TAPSHOP.workspaceList[6])
+^<#7:: UnpairWindow(TAPSHOP.workspaceList[7])
+^<#8:: UnpairWindow(TAPSHOP.workspaceList[8])
+^<#9:: UnpairWindow(TAPSHOP.workspaceList[9])
+^<#0:: UnpairAllWindows(TAPSHOP.workspaceList)
 
 UnpairWindow(workspaceObject) {
 	local windowLabel := workspaceObject.label
@@ -427,7 +419,7 @@ UnpairWindow(workspaceObject) {
 UnpairAllWindows(workspaceList) {
 	confirmUnpair := MsgBox("Are you sure you want to unpair all windows?", , "YesNo")
 	if confirmUnpair = "Yes" {
-		for workspaceObject in app.workspaceList {
+		for workspaceObject in TAPSHOP.workspaceList {
 			workspaceObject.id := ""
 			workspaceObject.isPaired := false
 		}		
@@ -437,9 +429,9 @@ UnpairAllWindows(workspaceList) {
 
 ;=========== GUI ===========
 ^<#`:: {
-	local isDebugMode := app.guiDebugMode
+	local isDebugMode := TAPSHOP.cfg.guiDebugMode
 	isDebugMode ? MainGui.Show("w500 h450") : MainGui.Show("w500 h500")
-	app.guiHwnd := MainGui.Hwnd
+	TAPSHOP.guiHwnd := MainGui.Hwnd
 	UpdateGUI()
 }
 
@@ -456,13 +448,13 @@ activeWinTitle := MainGui.AddEdit("w400 vActiveTitle ReadOnly", "[Active Window 
 ; activeWinId := MainGui.AddEdit("w240 vActiveID ReadOnly", "[Active Window Id]")
 
 
-debugLabel := app.guiDebugMode ? MainGui.AddEdit("w400 h150 ReadOnly", "[Debug]") : ""
+debugLabel := TAPSHOP.cfg.guiDebugMode ? MainGui.AddEdit("w400 h150 ReadOnly", "[Debug]") : ""
 
 ; Add controls for window DropDownList select
 AddDropDownListControls()
 
 AddDropDownListControls() {
-	for space in app.workspaceList {
+	for space in TAPSHOP.workspaceList {
 		MainGui.AddText("w100 Section", space.label)
 		space.ddl := MainGui.AddDDL("w400")
 		UpdateWinList(space)
@@ -477,7 +469,7 @@ MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpai
 
 UpdateGUI() {
 	; if the GUI window doesn't exist or is minimized...
-	if (!(WinExist("ahk_id " app.guiHwnd)) || (WinGetMinMax("ahk_id " app.guiHwnd) == -1)) {
+	if (!(WinExist("ahk_id " TAPSHOP.guiHwnd)) || (WinGetMinMax("ahk_id " TAPSHOP.guiHwnd) == -1)) {
 		return
 	}
 	
@@ -496,7 +488,7 @@ AssignWorkspaceOnEvent(workspaceObject) {
 }
 
 WorkspaceSelected(workspaceObject) {
-	local isDebugMode := app.guiDebugMode
+	local isDebugMode := TAPSHOP.cfg.guiDebugMode
 	index := workspaceObject.ddl.Value ; get selected index value
 	; if selected window exists, pair it to workspace
 	if WinExist(workspaceObject.options[index].id) {
@@ -512,7 +504,7 @@ WorkspaceSelected(workspaceObject) {
 }
 
 UpdateAllWinList(workspaceList) {
-	for space in app.workspaceList {
+	for space in TAPSHOP.workspaceList {
 		UpdateWinList(space)
 	}
 }
@@ -526,7 +518,7 @@ UpdateWinList(workspaceObject) {
 	if workspaceObject.isPaired {
 		workspaceObject.ddl.Delete()
 		workspaceObject.ddl.Add([IdToDisplayString(workspaceObject.id)])
-		if app.guiDebugMode { ; DEBUG print
+		if TAPSHOP.cfg.guiDebugMode { ; DEBUG print
 			CursorMsg "UpdateWinList: workspaceObject.isPaired = true`n" 
 				. "adding id: " workspaceObject.id "`n"
 				. "adding displayText: " IdToDisplayString(workspaceObject.id)
@@ -568,7 +560,7 @@ UpdateWinList(workspaceObject) {
 		}
 	}
 
-	if app.guiDebugMode {
+	if TAPSHOP.cfg.guiDebugMode {
 		msg := ""
 		for obj in workspaceObject.options {
 			msg .= "displayTitle: " . obj.displayTitle . ", id: " . obj.id . "`n"
