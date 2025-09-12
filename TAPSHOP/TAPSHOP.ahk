@@ -13,8 +13,8 @@ class Config {
   __New() {
     this.inputDelay := 50               ; 50–100 recommended
     this.minimizeThreshold := 2         ; presses before minimize
-    this.guiDebugMode := false
-    this.hotkeyDebugMode := false
+    this.isGuiDebugMode := false
+    this.isHotkeyDebugMode := false
     this.browserProcesses := Map(
       "chrome.exe", 1,
       "msedge.exe", 1,
@@ -81,7 +81,7 @@ class DetectWindowEvent {
 		this.browserMap := browserMap
 		this.targetYT := 0
 
-		this.cbForegroundChange := CallbackCreate(this.OnForegroundChange.Bind(this), "Fast", 7)
+		this.cbForegroundChange := CallbackCreate(this._OnForegroundChange.Bind(this), "Fast", 7)
 		this.hookForegroundChange := DllCall(
 			"SetWinEventHook",
 			"UInt", 0x0003,                 ; eventMin          EVENT_SYSTEM_FOREGROUND 
@@ -94,7 +94,7 @@ class DetectWindowEvent {
 			"Ptr"                           ; return type       HWINEVENTHOOK
 		)
 		
-		this.cbTitleChange := CallbackCreate(this.OnTitleChange.Bind(this), "Fast", 7)
+		this.cbTitleChange := CallbackCreate(this._OnTitleChange.Bind(this), "Fast", 7)
 		this.hookTitleChange := DllCall(
 			"SetWinEventHook",
 			"UInt", 0x800C,                 ; eventMin          EVENT_OBJECT_NAMECHANGE 
@@ -135,7 +135,7 @@ class DetectWindowEvent {
 			newTitle := WinGetTitle(hwnd)
 
 			if hwnd == this.targetYT {
-				if TAPSHOP.cfg.hotkeyDebugMode
+				if TAPSHOP.cfg.isHotkeyDebugMode
 					CursorMsg "Title changed: " newTitle
 				if !isYT
 					this.targetYT := 0
@@ -430,7 +430,7 @@ UnpairAllWindows(workspaceList) {
 
 ;=========== GUI ===========
 ^<#`:: {
-	local isDebugMode := TAPSHOP.cfg.guiDebugMode
+	local isDebugMode := TAPSHOP.cfg.isGuiDebugMode
 	isDebugMode ? MainGui.Show("w500 h450") : MainGui.Show("w500 h500")
 	TAPSHOP.guiHwnd := MainGui.Hwnd
 	UpdateGUI()
@@ -449,7 +449,7 @@ activeWinTitle := MainGui.AddEdit("w400 vActiveTitle ReadOnly", "[Active Window 
 ; activeWinId := MainGui.AddEdit("w240 vActiveID ReadOnly", "[Active Window Id]")
 
 
-debugLabel := TAPSHOP.cfg.guiDebugMode ? MainGui.AddEdit("w400 h150 ReadOnly", "[Debug]") : ""
+debugLabel := TAPSHOP.cfg.isGuiDebugMode ? MainGui.AddEdit("w400 h150 ReadOnly", "[Debug]") : ""
 
 ; Add controls for window DropDownList select
 AddDropDownListControls()
@@ -489,7 +489,7 @@ AssignWorkspaceOnEvent(workspaceObject) {
 }
 
 WorkspaceSelected(workspaceObject) {
-	local isDebugMode := TAPSHOP.cfg.guiDebugMode
+	local isDebugMode := TAPSHOP.cfg.isGuiDebugMode
 	index := workspaceObject.ddl.Value ; get selected index value
 	; if selected window exists, pair it to workspace
 	if WinExist(workspaceObject.options[index].id) {
@@ -519,7 +519,7 @@ UpdateWinList(workspaceObject) {
 	if workspaceObject.isPaired {
 		workspaceObject.ddl.Delete()
 		workspaceObject.ddl.Add([IdToDisplayString(workspaceObject.id)])
-		if TAPSHOP.cfg.guiDebugMode { ; DEBUG print
+		if TAPSHOP.cfg.isGuiDebugMode { ; DEBUG print
 			CursorMsg "UpdateWinList: workspaceObject.isPaired = true`n" 
 				. "adding id: " workspaceObject.id "`n"
 				. "adding displayText: " IdToDisplayString(workspaceObject.id)
@@ -561,7 +561,7 @@ UpdateWinList(workspaceObject) {
 		}
 	}
 
-	if TAPSHOP.cfg.guiDebugMode {
+	if TAPSHOP.cfg.isGuiDebugMode {
 		msg := ""
 		for obj in workspaceObject.options {
 			msg .= "displayTitle: " . obj.displayTitle . ", id: " . obj.id . "`n"
