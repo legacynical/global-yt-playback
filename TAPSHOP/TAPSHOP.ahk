@@ -6,6 +6,7 @@ DetectHiddenWindows(false) ; ideal setting for ux, esp. for gui ddl
 ; SendMode Input ; (AHKv2 default) Recommended for new scripts due to its superior speed and reliability.
 ; SetWorkingDir A_ScriptDir ; (AHKv2 default) Force script to use its own folder as working directory.
 ; SetTitleMatchMode 2 ; (AHKv2 default) Allow WinTitle to be matched anywhere from a window's title
+; ListHotkeys
 
 TAPSHOP := App(Config())
 
@@ -13,7 +14,7 @@ class Config {
   __New() {
     this.inputDelay := 50               ; 50–100 recommended
     this.minimizeThreshold := 2         ; presses before minimize
-    this.isGuiDebugMode := true
+    this.isGuiDebugMode := false
     this.isHotkeyDebugMode := false
     this.browserProcesses := Map(
       "chrome.exe", 1,
@@ -49,7 +50,7 @@ class App {
 		this.guiWin := MainWindow(this.workspaceList, this.cfg)
 		this.guiHwnd := this.guiWin.MainGui.Hwnd
 		this.ytWin := DetectWindowEvent(this.cfg)
-		CursorMsg "TAPSHOP ready"
+		CursorMsg "TAPSHOP GUI ready"
 	}
 
 	GetSpotifyWindow() {
@@ -229,6 +230,7 @@ F19:: YoutubeControl("{Left}") ; rewind 5 sec
 F21:: YoutubeControl("{Right}") ; fast forward 5 sec
 ^F21:: YoutubeControl("l") ; fast forward 10 sec
 F20:: YoutubeControl("k") ; play/pause
+; F20:: YoutubeControlV2("APPCOMMAND_MEDIA_PLAY_PAUSE") ; play/pause, but collides with spotify
 
 Media_Prev:: SpotifyControlV2("APPCOMMAND_MEDIA_PREVIOUSTRACK") ; skip to previous
 Media_Play_Pause:: SpotifyControlV2("APPCOMMAND_MEDIA_PLAY_PAUSE") ; play/pause
@@ -264,12 +266,25 @@ YoutubeControl(keyPress) {
 		WinActivate(hwnd)
 		if WinWaitActive(hwnd, , 1) {
 			Sleep TAPSHOP.cfg.inputDelay
-			Send keyPress
+			SendInput keyPress
 		} else {
 			CursorMsg "WinWaitActive did not find target"
 		}
 		WinActivate(lastActiveHwnd)
 	}
+}
+
+YoutubeControlV2(appCommand) {
+	hwnd := TAPSHOP.ytWin.GetTargetYT()
+	if !hwnd || !TAPSHOP.ytWin.IsYouTubeWindow(hwnd) {
+		hwnd := TAPSHOP.ytWin.FindAnyYouTubeWindow()
+		TAPSHOP.ytWin.targetYT := hwnd
+	}
+	if !hwnd {
+		CursorMsg("Youtube window not found.")
+		return
+	}
+	MediaAppCommand.Send(hwnd, appCommand)
 }
 
 SpotifyControl(keyPress) {
@@ -280,7 +295,7 @@ SpotifyControl(keyPress) {
 		WinActivate(spotifyWin)
 		if WinWaitActive(spotifyWin, , 1) {
 			Sleep TAPSHOP.cfg.inputDelay
-			Send keyPress
+			SendInput keyPress
 		} else {
 			CursorMsg "WinWaitActive did not find target"
 		}
@@ -432,178 +447,205 @@ UnpairAllWindows(workspaceList) {
 }
 
 ;=========== GUI ===========
-^<#`:: {
-	local isDebugMode := TAPSHOP.cfg.isGuiDebugMode
-	isDebugMode ? MainGui.Show("w500 h450") : MainGui.Show("w500 h500")
-	TAPSHOP.guiHwnd := MainGui.Hwnd
-	UpdateGUI()
-}
+^<#`:: ToggleMainWindow()
 
-; TODO: Prevent scroll select for DDLs (this needs more lower level implementations)
-; Create the main GUI
-MainGui := Gui("+Resize", "Window Pairing")
-
-MainGui.Opt("-MaximizeBox")
-
-; Add Controls for active window stats
-MainGui.AddText("w240 Section", "Focused Window Details:")
-activeWinTitle := MainGui.AddEdit("w400 vActiveTitle ReadOnly", "[Active Window Title]")
-; activeWinClass := MainGui.AddEdit("w240 vActiveClass ReadOnly", "[Active Window Class]")
-; activeWinId := MainGui.AddEdit("w240 vActiveID ReadOnly", "[Active Window Id]")
-
-
-debugLabel := TAPSHOP.cfg.isGuiDebugMode ? MainGui.AddEdit("w400 h150 ReadOnly", "[Debug]") : ""
-
-; Add controls for window DropDownList select
-AddDropDownListControls()
-
-AddDropDownListControls() {
-	for space in TAPSHOP.workspaceList {
-		MainGui.AddText("w100 Section", space.label)
-		space.ddl := MainGui.AddDDL("w400")
-		UpdateWinList(space)
-		AssignWorkspaceOnEvent(space)
+ToggleMainWindow() {
+	try {
+		hwnd := TAPSHOP.guiHwnd
+		TAPSHOP.guiWin.MainGui.Show(TAPSHOP.cfg.isGuiDebugMode ? "w500 h650" : "w500 h500")
+		; if !WinExist(hwnd) {
+			; } else {
+				; 	WinClose hwnd
+				; }
+				TAPSHOP.guiWin.UpdateGUI()
+	} catch Error {
+		CursorMsg "Waiting for TAPSHOP GUI to load..."
 	}
 }
 
-/* TODO: integrate these functions into gui control generation
+class MainWindow {
+	__New(workspaceList, cfg) {
+		this.workspaceList := workspaceList
+		this.cfg := cfg
+		this.MainGui := 0
+		this.activeWinTitleLabel := ""
+		this.debugLabel := ""
+		this._build()
+	}
+
+	_build() {
+		; TODO: Prevent scroll select for DDLs (this needs more lower level implementations)
+		MainGui := Gui("+Resize", "Window Pairing")
+		MainGui.Opt("-MaximizeBox")
+		this.MainGui := MainGui
+		
+		MainGui.AddText("w240 Section", "Focused Window Details:")
+		this.activeWinTitleLabel := MainGui.AddEdit("w400 vActiveTitle ReadOnly", "[Active Window Title]")
+		; activeWinClassLabel := MainGui.AddEdit("w240 vActiveClass ReadOnly", "[Active Window Class]")
+		; activeWinIdLabel := MainGui.AddEdit("w240 vActiveID ReadOnly", "[Active Window Id]")
+		this.debugLabel := this.cfg.isGuiDebugMode
+			? MainGui.AddEdit("w400 h150 ReadOnly", "[Debug]")
+			: ""
+		
+		for space in this.workspaceList {
+			MainGui.AddText("w100 Section", space.label)
+			space.ddl := MainGui.AddDDL("w400")			
+			this.UpdateWinList(space)
+			this.AssignWorkspaceOnEvent(space)
+		}
+	}
+	
+	/* TODO: integrate these functions into gui control generation
 MainGui.AddButton("YS w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(1))
 MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpairWindow(10))
 */
 
-UpdateGUI() {
-	; if the GUI window doesn't exist or is minimized...
-	if (!(WinExist("ahk_id " TAPSHOP.guiHwnd)) || (WinGetMinMax("ahk_id " TAPSHOP.guiHwnd) == -1)) {
-		return
-	}
-	
-	local winInfo := GetWinInfo()
-	if (winInfo)
-		activeWinTitle.Value := "[" StrReplace(winInfo.process, ".exe") "] " winInfo.title
-	; activeWinClass.Value := winInfo.class
-	; activeWinId.Value := winInfo.id
-}
+	UpdateGUI() {
+		if !(WinExist(this.MainGui.Hwnd))
+			return		
 
-; Assign event handlers
-AssignWorkspaceOnEvent(workspaceObject) {
-	workspaceObject.focusEvent := workspaceObject.ddl.OnEvent("Focus", (*) => UpdateWinList(workspaceObject))
-	workspaceObject.changeEvent := workspaceObject.ddl.OnEvent("Change", (*) => WorkspaceSelected(workspaceObject))
-	; MsgBox "updated: " workspaceObject.label
-}
-
-WorkspaceSelected(workspaceObject) {
-	local isDebugMode := TAPSHOP.cfg.isGuiDebugMode
-	index := workspaceObject.ddl.Value ; get selected index value
-	; if selected window exists, pair it to workspace
-	if WinExist(workspaceObject.options[index].id) {
-		workspaceObject.id := workspaceObject.options[index].id
-		workspaceObject.isPaired := true
-		if isDebugMode
-			CursorMsg "index: " index "`nid: " workspaceObject.id
-	} else {
-		CursorMsg "[Error] That window no longer exists!`n"
-		. "Attempting to refresh options, please select again..."
-	}
-	UpdateWinList(workspaceObject)
-}
-
-UpdateAllWinList(workspaceList) {
-	for space in TAPSHOP.workspaceList {
-		UpdateWinList(space)
-	}
-}
-
-UpdateWinList(workspaceObject) {
-	if !WinExist(workspaceObject.id) {
-		workspaceObject.isPaired := false
-		workspaceObject.id := ""
-	}
-
-	if workspaceObject.isPaired {
-		workspaceObject.ddl.Delete()
-		workspaceObject.ddl.Add([IdToDisplayString(workspaceObject.id)])
-		if TAPSHOP.cfg.isGuiDebugMode { ; DEBUG print
-			CursorMsg "UpdateWinList: workspaceObject.isPaired = true`n" 
-				. "adding id: " workspaceObject.id "`n"
-				. "adding displayText: " IdToDisplayString(workspaceObject.id)
-		}
-		workspaceObject.options := []
-		workspaceObject.options.Push(
-			{
-				displayTitle: IdToDisplayString(workspaceObject.id), id: workspaceObject.id
-			}
-		)
+    if (WinGetMinMax(this.MainGui.Hwnd) == -1)
+      return
 		
-	} else {
-		workspaceObject.ddl.Delete()
-		workspaceObject.ddl.Add(["[Select Window...]"])
-		workspaceObject.options := []
-		workspaceObject.options.Push(
-			{
-				displayTitle: "[Select Window...]", id: ""
-			}
-		)
+		local winInfo := GetWinInfo()
+		if (winInfo)
+			this.activeWinTitleLabel.Value := "[" StrReplace(winInfo.process, ".exe") "] " winInfo.title
+		; activeWinClass.Value := winInfo.class
+		; activeWinId.Value := winInfo.id
+	}
+
+	; Assign event handlers
+	AssignWorkspaceOnEvent(workspaceObject) {
+		workspaceObject.focusEvent := workspaceObject.ddl.OnEvent("Focus", (*) => this.UpdateWinList(workspaceObject))
+		workspaceObject.changeEvent := workspaceObject.ddl.OnEvent("Change", (*) => this.WorkspaceSelected(workspaceObject))
+		; MsgBox "updated: " workspaceObject.label
+	}
+
+	WorkspaceSelected(workspaceObject) {
+		local isDebugMode := this.cfg.isGuiDebugMode
+		selectedIndex := workspaceObject.ddl.Value
+		; if (selectedIndex < 1 || selectedIndex > workspaceObject.options.Length)
+		; 	return
+		selectedOption := workspaceObject.options[selectedIndex]
+		; if (!selectedOption.id)
+		; 	return
+		if WinExist(selectedOption.id) {
+			workspaceObject.id := selectedOption.id
+			workspaceObject.isPaired := true
+			if isDebugMode
+				CursorMsg "index: " selectedIndex "`nid: " workspaceObject.id
+		} else {
+			CursorMsg "[Error] That window no longer exists!`n"
+			. "Attempting to refresh options, please select again..."
+		}
+		this.UpdateWinList(workspaceObject)
+	}
+
+	UpdateAllWinList() {
+		for space in this.workspaceList {
+			this.UpdateWinList(space)
+		}
 	}
 	
-	for hwnd in WinGetList() { ; hwnd is the unique window handle
-		if (hwnd != workspaceObject.id ; filters out paired window
-				&& RegExMatch(WinGetTitle(hwnd), "\S") ; ensures at least one non-whitespace anywhere in the title (doesn't account for non-printable control characters) 
-				&& DllCall("IsWindowVisible", "Ptr", hwnd) ; ensures processing of only visible windows
-					; NOTE: above 3 conditional checks is enough to prevent explorer processes leaking into workspaceObject.options
-				; Optional conditional checks for future ref
-					;&& !RegExMatch(WinGetTitle(hwnd), "^[\s\x00-\x1F\x7F]*$") ; filters out empty, whitespace only, and control-only titles
-					;&& Trim(WinGetTitle(hwnd)) != "") ; filters out blank windows (doesn't account for non-printable control characters)
-			)
-		{
-			workspaceObject.ddl.Add([IdToDisplayString(hwnd)]) ; populates rest of options
+	UpdateWinList(workspaceObject) {
+		if workspaceObject.isUpdating
+			return
+		workspaceObject.isUpdating := true
+
+		if !WinExist(workspaceObject.id) {
+			workspaceObject.isPaired := false
+			workspaceObject.id := ""
+		}
+
+		if workspaceObject.isPaired {
+			workspaceObject.ddl.Delete()
+			workspaceObject.ddl.Add([this.IdToDisplayString(workspaceObject.id)])
+			if this.cfg.isGuiDebugMode { ; DEBUG print
+				CursorMsg "UpdateWinList: workspaceObject.isPaired = true`n" 
+				. "adding id: " workspaceObject.id "`n"
+				. "adding displayText: " this.IdToDisplayString(workspaceObject.id)
+			}
+			workspaceObject.options := []
 			workspaceObject.options.Push(
 				{
-					displayTitle: IdToDisplayString(hwnd), id: hwnd
+					displayTitle: this.IdToDisplayString(workspaceObject.id), id: workspaceObject.id
+				}
+			)
+			
+		} else {
+			workspaceObject.ddl.Delete()
+			workspaceObject.ddl.Add(["[Select Window...]"])
+			workspaceObject.options := []
+			workspaceObject.options.Push(
+				{
+					displayTitle: "[Select Window...]", id: ""
 				}
 			)
 		}
-	}
-
-	if TAPSHOP.cfg.isGuiDebugMode {
-		msg := ""
-		for obj in workspaceObject.options {
-			msg .= "displayTitle: " . obj.displayTitle . ", id: " . obj.id . "`n"
+		
+		for hwnd in WinGetList() { ; hwnd is the unique window handle
+			if (hwnd != workspaceObject.id ; filters out paired window
+					&& RegExMatch(WinGetTitle(hwnd), "\S") ; ensures at least one non-whitespace anywhere in the title (doesn't account for non-printable control characters) 
+					&& DllCall("IsWindowVisible", "Ptr", hwnd) ; ensures processing of only visible windows
+						; NOTE: above 3 conditional checks is enough to prevent explorer processes leaking into workspaceObject.options
+					; Optional conditional checks for future ref
+						;&& !RegExMatch(WinGetTitle(hwnd), "^[\s\x00-\x1F\x7F]*$") ; filters out empty, whitespace only, and control-only titles
+						;&& Trim(WinGetTitle(hwnd)) != "") ; filters out blank windows (doesn't account for non-printable control characters)
+					)
+					{
+						workspaceObject.ddl.Add([this.IdToDisplayString(hwnd)]) ; populates rest of options
+						workspaceObject.options.Push(
+					{
+						displayTitle: this.IdToDisplayString(hwnd), id: hwnd
+					}
+				)
+			}
 		}
-		debugLabel.Value := msg
+		
+		if this.cfg.isGuiDebugMode {
+			msg := ""
+			for obj in workspaceObject.options {
+				msg .= "displayTitle: " . obj.displayTitle . ", id: " . obj.id . "`n"
+			}
+			this.debugLabel.Value := msg
+		}
+		workspaceObject.ddl.Choose(1)
+		workspaceObject.isUpdating := false
 	}
-	workspaceObject.ddl.Choose(1)
-}
-
-IdToDisplayString(hwnd) {
-	local winInfo := GetWinInfo(hwnd)
-	local windowProcess := WinGetProcessName(hwnd)
-	if (winInfo.title != "") { ; if not an blank title window
-		return "[" windowProcess "] " winInfo.title
+	
+	IdToDisplayString(hwnd) {
+		local winInfo := GetWinInfo(hwnd)
+		local windowProcess := WinGetProcessName(hwnd)
+		if (winInfo.title != "") { ; if not an blank title window
+			return "[" windowProcess "] " winInfo.title
+		}
+		return "[" windowProcess "] non-empty title[" winInfo.title "]"  
 	}
-	return "[" windowProcess "] non-empty title[" winInfo.title "]"  
+	
+
+	; NOTE: This function will likely be deprecated as DDL controls/event listeners already handle this
+	; GuiPairWindow(num) {
+	; 	switch num {
+	; 		case 1: PairWindow(app.workspaceList[1])
+	; 		case 2: PairWindow(app.workspaceList[2])
+	; 		case 3: PairWindow(app.workspaceList[3])
+	; 		case 4: PairWindow(app.workspaceList[4])
+	; 		case 5: PairWindow(app.workspaceList[5])
+	; 	}
+	; }
+
+	; TODO: Add unpair buttons to gui, this will probably be a redundant method if I opt to create
+	; the controls dynamically along side the DDL controls being generated.
+		; It could also be more simple/maintainable to utilize this, will have to consider.
+	; GuiUnpairWindow(num) {
+	; 	switch num {
+	; 		case 1: UnpairWindow(app.workspaceList[1])
+	; 		case 2: UnpairWindow(app.workspaceList[2])
+	; 		case 3: UnpairWindow(app.workspaceList[3])
+	; 		case 4: UnpairWindow(app.workspaceList[4])
+	; 		case 5: UnpairWindow(app.workspaceList[5])
+	; 		case 10: UnpairAllWindows(app.workspaceList)
+	; 	}
+	; }
+
 }
-
-; NOTE: This function will likely be deprecated as DDL controls/event listeners already handle this
-; GuiPairWindow(num) {
-; 	switch num {
-; 		case 1: PairWindow(app.workspaceList[1])
-; 		case 2: PairWindow(app.workspaceList[2])
-; 		case 3: PairWindow(app.workspaceList[3])
-; 		case 4: PairWindow(app.workspaceList[4])
-; 		case 5: PairWindow(app.workspaceList[5])
-; 	}
-; }
-
-; TODO: Add unpair buttons to gui, this will probably be a redundant method if I opt to create
-; the controls dynamically along side the DDL controls being generated.
-	; It could also be more simple/maintainable to utilize this, will have to consider.
-; GuiUnpairWindow(num) {
-; 	switch num {
-; 		case 1: UnpairWindow(app.workspaceList[1])
-; 		case 2: UnpairWindow(app.workspaceList[2])
-; 		case 3: UnpairWindow(app.workspaceList[3])
-; 		case 4: UnpairWindow(app.workspaceList[4])
-; 		case 5: UnpairWindow(app.workspaceList[5])
-; 		case 10: UnpairAllWindows(app.workspaceList)
-; 	}
-; }
