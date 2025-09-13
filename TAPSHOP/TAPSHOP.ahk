@@ -13,7 +13,7 @@ class Config {
   __New() {
     this.inputDelay := 50               ; 50–100 recommended
     this.minimizeThreshold := 2         ; presses before minimize
-    this.isGuiDebugMode := false
+    this.isGuiDebugMode := true
     this.isHotkeyDebugMode := false
     this.browserProcesses := Map(
       "chrome.exe", 1,
@@ -44,10 +44,12 @@ class App {
 		this.cfg := cfg
 		this.workspaceList := []
 		loop 9
-			this.workspaceList.Push(Workspace("Window" A_Index))
+			this.workspaceList.Push(Workspace("Window " A_Index))
 
-		this.guiHwnd := ""
-		this.ytWin := DetectWindowEvent(this.cfg.browserProcesses)
+		this.guiWin := MainWindow(this.workspaceList, this.cfg)
+		this.guiHwnd := this.guiWin.MainGui.Hwnd
+		this.ytWin := DetectWindowEvent(this.cfg)
+		CursorMsg "TAPSHOP ready"
 	}
 
 	GetSpotifyWindow() {
@@ -68,6 +70,7 @@ class Workspace {
 		this.label := label
 		this.id := ""
 		this.isPaired := false
+		this.isUpdating := false
 
 		this.ddl := ""
 		this.focusEvent := ""
@@ -77,8 +80,8 @@ class Workspace {
 }
 
 class DetectWindowEvent {
-	__New(browserMap) {
-		this.browserMap := browserMap
+	__New(cfg) {
+		this.cfg := cfg
 		this.targetYT := 0
 
 		this.cbForegroundChange := CallbackCreate(this._OnForegroundChange.Bind(this), "Fast", 7)
@@ -118,7 +121,7 @@ class DetectWindowEvent {
 				this.targetYT := hwnd
 				CursorMsg "YT Target Updated: " WinGetTitle(hwnd)
 			}
-			UpdateGUI()
+			TAPSHOP.guiWin.UpdateGUI()
 		}
 	}
 
@@ -135,7 +138,7 @@ class DetectWindowEvent {
 			newTitle := WinGetTitle(hwnd)
 
 			if hwnd == this.targetYT {
-				if TAPSHOP.cfg.isHotkeyDebugMode
+				if this.cfg.isHotkeyDebugMode
 					CursorMsg "Title changed: " newTitle
 				if !isYT
 					this.targetYT := 0
@@ -144,7 +147,7 @@ class DetectWindowEvent {
 				this.targetYT := hwnd
 				CursorMsg "YT Target Updated: " newTitle
 			}
-			UpdateGUI()
+			TAPSHOP.guiWin.UpdateGUI()
 		}
 	}
 
@@ -153,14 +156,14 @@ class DetectWindowEvent {
 			return false
 		
 		proc := WinGetProcessName(hwnd)
-		if !this.browserMap.Has(proc)
+		if !this.cfg.browserProcesses.Has(proc)
 			return false
 		
 		title := WinGetTitle(hwnd)
 		if InStr(title, "Subscriptions - YouTube")
 			return false
 
-		return InStr(title, "- YouTube -") && this.browserMap.Has(proc)
+		return InStr(title, "- YouTube -") && this.cfg.browserProcesses.Has(proc)
 	}
 
 	GetTargetYT() {
@@ -391,7 +394,7 @@ PairWindow(workspaceObject) {
 		}
 	}
 	if WinExist(TAPSHOP.guiHwnd)
-		UpdateWinList(workspaceObject)
+		TAPSHOP.guiWin.UpdateWinList(workspaceObject)
 }
 
 ^<#1:: UnpairWindow(TAPSHOP.workspaceList[1])
@@ -414,7 +417,7 @@ UnpairWindow(workspaceObject) {
 	} else {
 		CursorMsg "" windowLabel " is already unpaired!"
 	}
-	UpdateWinList(workspaceObject)
+	TAPSHOP.guiWin.UpdateWinList(workspaceObject)
 }
 
 UnpairAllWindows(workspaceList) {
