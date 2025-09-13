@@ -9,6 +9,7 @@ DetectHiddenWindows(false) ; ideal setting for ux, esp. for gui ddl
 ; ListHotkeys
 
 TAPSHOP := App(Config())
+TAPSHOP.InitializeGUI()
 
 class Config {
   __New() {
@@ -47,11 +48,35 @@ class App {
 		loop 9
 			this.workspaceList.Push(Workspace("Window " A_Index))
 
-		this.guiWin := MainWindow(this.workspaceList, this.cfg)
-		this.guiHwnd := this.guiWin.MainGui.Hwnd
+		this.guiWin := 0
+		this.guiHwnd := 0
 		this.ytWin := DetectWindowEvent(this.cfg)
-		CursorMsg "TAPSHOP GUI ready"
+		CursorMsg "TAPSHOP ready"
 	}
+
+	InitializeGUI() {
+		if !this.guiWin {
+			this.guiWin := MainWindow(this.workspaceList, this.cfg)
+			this.guiHwnd := this.guiWin.MainGui.Hwnd
+		}
+		return this.guiWin
+	}
+
+	ShowGUI() {
+		this.InitializeGui()
+		this.guiWin.MainGui.Show(this.cfg.isGuiDebugMode ? "w500 h650" : "w500 h500")
+		this.guiWin.UpdateGUI()
+	}
+
+	SafeUpdateGUI() {
+    if this.guiWin && WinExist(this.guiWin.MainGui.Hwnd)
+      this.guiWin.UpdateGUI()
+  }
+
+	SafeUpdateWinList(workspaceObject) {
+    if this.guiWin && WinExist(this.guiWin.MainGui.Hwnd)
+      this.guiWin.UpdateWinList(workspaceObject)
+  }
 
 	GetSpotifyWindow() {
 		static cachedID := 0
@@ -122,7 +147,7 @@ class DetectWindowEvent {
 				this.targetYT := hwnd
 				CursorMsg "YT Target Updated: " WinGetTitle(hwnd)
 			}
-			TAPSHOP.guiWin.UpdateGUI()
+			TAPSHOP.SafeUpdateGUI()
 		}
 	}
 
@@ -148,7 +173,7 @@ class DetectWindowEvent {
 				this.targetYT := hwnd
 				CursorMsg "YT Target Updated: " newTitle
 			}
-			TAPSHOP.guiWin.UpdateGUI()
+			TAPSHOP.SafeUpdateGUI()
 		}
 	}
 
@@ -274,18 +299,18 @@ YoutubeControl(keyPress) {
 	}
 }
 
-YoutubeControlV2(appCommand) {
-	hwnd := TAPSHOP.ytWin.GetTargetYT()
-	if !hwnd || !TAPSHOP.ytWin.IsYouTubeWindow(hwnd) {
-		hwnd := TAPSHOP.ytWin.FindAnyYouTubeWindow()
-		TAPSHOP.ytWin.targetYT := hwnd
-	}
-	if !hwnd {
-		CursorMsg("Youtube window not found.")
-		return
-	}
-	MediaAppCommand.Send(hwnd, appCommand)
-}
+; YoutubeControlV2(appCommand) {
+; 	hwnd := TAPSHOP.ytWin.GetTargetYT()
+; 	if !hwnd || !TAPSHOP.ytWin.IsYouTubeWindow(hwnd) {
+; 		hwnd := TAPSHOP.ytWin.FindAnyYouTubeWindow()
+; 		TAPSHOP.ytWin.targetYT := hwnd
+; 	}
+; 	if !hwnd {
+; 		CursorMsg("Youtube window not found.")
+; 		return
+; 	}
+; 	MediaAppCommand.Send(hwnd, appCommand)
+; }
 
 SpotifyControl(keyPress) {
 	spotifyWin := TAPSHOP.GetSpotifyWindow()
@@ -409,7 +434,7 @@ PairWindow(workspaceObject) {
 		}
 	}
 	if WinExist(TAPSHOP.guiHwnd)
-		TAPSHOP.guiWin.UpdateWinList(workspaceObject)
+		TAPSHOP.SafeUpdateWinList(workspaceObject)
 }
 
 ^<#1:: UnpairWindow(TAPSHOP.workspaceList[1])
@@ -432,7 +457,7 @@ UnpairWindow(workspaceObject) {
 	} else {
 		CursorMsg "" windowLabel " is already unpaired!"
 	}
-	TAPSHOP.guiWin.UpdateWinList(workspaceObject)
+	TAPSHOP.SafeUpdateWinList(workspaceObject)
 }
 
 UnpairAllWindows(workspaceList) {
@@ -450,17 +475,7 @@ UnpairAllWindows(workspaceList) {
 ^<#`:: ToggleMainWindow()
 
 ToggleMainWindow() {
-	try {
-		hwnd := TAPSHOP.guiHwnd
-		TAPSHOP.guiWin.MainGui.Show(TAPSHOP.cfg.isGuiDebugMode ? "w500 h650" : "w500 h500")
-		; if !WinExist(hwnd) {
-			; } else {
-				; 	WinClose hwnd
-				; }
-				TAPSHOP.guiWin.UpdateGUI()
-	} catch Error {
-		CursorMsg "Waiting for TAPSHOP GUI to load..."
-	}
+	TAPSHOP.ShowGUI()
 }
 
 class MainWindow {
