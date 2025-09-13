@@ -475,7 +475,10 @@ UnpairAllWindows(workspaceList) {
 ^<#`:: ToggleMainWindow()
 
 ToggleMainWindow() {
-	TAPSHOP.ShowGUI()
+	if DllCall("IsWindowVisible", "Ptr", TAPSHOP.guiHwnd)
+		WinClose(TAPSHOP.guiHwnd)
+	else
+		TAPSHOP.ShowGUI()
 }
 
 class MainWindow {
