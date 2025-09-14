@@ -30,15 +30,44 @@ app := GTYP([
 	Workspace("", false, "Window 8"),
 	Workspace("", false, "Window 9")
 	],
-	false ; set guiDebugMode
+	50,    ; set inputDelay (50-100 ideal for apps to accept input)
+	2,     ; set maxMinWinBuffer (presses needed to minimize if paired window already in focus)
+	false, ; set guiDebugMode
+	false, ; set hotkeyDebugMode
 )
 class GTYP {
-	__New(workspaceList, guiDebugMode) {
+	__New(workspaceList, inputDelay, maxMinWinBuffer, guiDebugMode, hotkeyDebugMode) {
 		this.workspaceList := workspaceList
+		this.inputDelay := inputDelay
+		this.maxMinWinBuffer := maxMinWinBuffer
 		this.guiDebugMode := guiDebugMode
-		this.isGuiRefresh := true
-		this.maxInputBuffer := 2
+		this.hotkeyDebugMode := hotkeyDebugMode
+
 		this.guiHwnd := ""
+		this.browserMap := Map(
+			"chrome.exe", 1,
+			"msedge.exe", 1,
+			"firefox.exe", 1,
+			"brave.exe", 1,
+			"opera.exe", 1,
+			"opera_gx.exe", 1,
+			"vivaldi.exe", 1,
+			"chromium.exe", 1,
+			"waterfox.exe", 1,
+			"tor.exe", 1,
+			"yandex.exe", 1,
+			"maxthon.exe", 1,
+			"seamonkey.exe", 1,
+			"epic.exe", 1,
+			"slimjet.exe", 1,
+			"comodo_dragon.exe", 1,
+			"avast_secure_browser.exe", 1,
+			"srware_iron.exe", 1,
+			"falkon.exe", 1,
+			"arc.exe", 1,
+			"dia.exe", 1,
+		)
+		this.ytWin := DetectWindowEvent(this.browserMap)
 	}
 }
 class Workspace {
@@ -53,6 +82,121 @@ class Workspace {
 	}
 }
 
+class DetectWindowEvent {
+	__New(browserMap) {
+		this.browserMap := browserMap
+		this.targetYT := 0
+
+		this.cbForegroundChange := CallbackCreate(this.OnForegroundChange.Bind(this), "Fast", 7)
+		this.hookForegroundChange := DllCall(
+			"SetWinEventHook",
+			"UInt", 0x0003,                 ; eventMin          EVENT_SYSTEM_FOREGROUND 
+			"UInt", 0x0003,                 ; eventMax
+			"Ptr", 0,                       ; hmodWinEventProc  (0 = none)
+			"Ptr", this.cbForegroundChange,	; callback pointer
+			"UInt", 0,                      ; idProcess         (0 = all)
+			"UInt", 0,                      ; idThread          (0 = all)
+			"UInt", 0,                      ; dwFlags           (0 = out-of-context)
+			"Ptr"                           ; return type       HWINEVENTHOOK
+		)
+		
+		this.cbTitleChange := CallbackCreate(this.OnTitleChange.Bind(this), "Fast", 7)
+		this.hookTitleChange := DllCall(
+			"SetWinEventHook",
+			"UInt", 0x800C,                 ; eventMin          EVENT_OBJECT_NAMECHANGE 
+			"UInt", 0x800C,                 ; eventMax
+			"Ptr", 0,                       ; hmodWinEventProc  (0 = none)
+			"Ptr", this.cbTitleChange,	    ; callback pointer
+			"UInt", 0,                      ; idProcess         (0 = all)
+			"UInt", 0,                      ; idThread          (0 = all)
+			"UInt", 0,                      ; dwFlags           (0 = out-of-context)
+			"Ptr"                           ; return type       HWINEVENTHOOK
+		)
+
+		OnExit(ObjBindMethod(this, "Cleanup"))
+	}
+
+	OnForegroundChange(hWinEventHook, event, hwnd, idObject, idChild, dwEventThread, dwmsEventTime) {
+		try {
+			if !hwnd
+				return
+			if this.IsYouTubeWindow(hwnd) && this.targetYT != hwnd {
+				this.targetYT := hwnd
+				CursorMsg "YT Target Updated: " WinGetTitle(hwnd)
+			}
+			UpdateGUI()
+		}
+	}
+
+	OnTitleChange(hWinEventHook, event, hwnd, idObject, idChild, dwEventThread, dwmsEventTime) {
+		try {
+			; Only process top-level window for NAMECHANGE events
+			if idObject != 0
+				return
+
+			if !hwnd
+				return
+
+			isYT := this.IsYouTubeWindow(hwnd)
+			newTitle := WinGetTitle(hwnd)
+
+			if hwnd == this.targetYT {
+				if app.hotkeyDebugMode
+					CursorMsg "Title changed: " newTitle
+				if !isYT
+					this.targetYT := 0
+			}
+			if isYT && this.targetYT != hwnd {
+				this.targetYT := hwnd
+				CursorMsg "YT Target Updated: " newTitle
+			}
+			UpdateGUI()
+		}
+	}
+
+	IsYouTubeWindow(hwnd) {
+		if !hwnd || !WinExist(hwnd)
+			return false
+		
+		proc := WinGetProcessName(hwnd)
+		if !this.browserMap.Has(proc)
+			return false
+		
+		title := WinGetTitle(hwnd)
+		if InStr(title, "Subscriptions - YouTube")
+			return false
+
+		return InStr(title, "- YouTube -") && this.browserMap.Has(proc)
+	}
+
+	GetTargetYT() {
+		return (this.targetYT && WinExist(this.targetYT))
+			? this.targetYT
+			: 0
+  }
+
+	FindAnyYouTubeWindow() {
+		for hwnd in WinGetList() {
+			if this.IsYouTubeWindow(hwnd)
+				return hwnd
+		}
+		return 0
+	}
+
+  Cleanup(*) {
+		if this.hookForegroundChange
+			DllCall("UnhookWinEvent", "Ptr", this.hookForegroundChange)
+		if this.cbForegroundChange
+			CallbackFree(this.cbForegroundChange)
+
+		if this.hookTitleChange
+			DllCall("UnhookWinEvent", "Ptr", this.hookTitleChange)
+		if this.cbTitleChange
+			CallbackFree(this.cbTitleChange)
+  }
+}
+
+
 Media_Prev:: YoutubeControl("{Left}") ; rewind 5 sec
 ^Media_Prev:: YoutubeControl("j") ; rewind 10 sec
 Media_Next:: YoutubeControl("{Right}") ; fast forward 5 sec
@@ -61,47 +205,21 @@ Media_Play_Pause:: YoutubeControl("k") ; play/pause
 	; Most browsers allow Media_Play_Pause by default but this ensures that it targets a YouTube tab
 
 YoutubeControl(keyPress) {
-	local targetProcesses := Map(
-		"chrome.exe", 1,
-		"msedge.exe", 1,
-		"firefox.exe", 1,
-		"brave.exe", 1,
-		"opera.exe", 1,
-		"opera_gx.exe", 1,
-		"vivaldi.exe", 1,
-		"chromium.exe", 1,
-		"waterfox.exe", 1,
-		"tor.exe", 1,
-		"yandex.exe", 1,
-		"maxthon.exe", 1,
-		"seamonkey.exe", 1,
-		"epic.exe", 1,
-		"slimjet.exe", 1,
-		"comodo_dragon.exe", 1,
-		"avast_secure_browser.exe", 1,
-		"srware_iron.exe", 1,
-		"falkon.exe", 1,
-	)
-	static targetID := "" 
-	
-	if (!targetID || !WinExist(targetID)) {
-		for hwnd in WinGetList("YouTube") {
-			proc := WinGetProcessName(hwnd)
-			if targetProcesses.Has(proc) {
-				targetID := hwnd
-				MsgBox "targetID set to window:" WinGetTitle(hwnd)
-				break
-			}	
-		}
+	hwnd := app.ytWin.GetTargetYT()
+
+	if !hwnd || !app.ytWin.IsYouTubeWindow(hwnd) {
+		hwnd := app.ytWin.FindAnyYouTubeWindow()
+		app.ytWin.targetYT := hwnd
 	}
 
-	if (targetID && WinExist(targetID)) { 
-		local lastActiveHwnd := WinGetID("A")
-		WinActivate(targetID)
-		if WinWaitActive(targetID, , 1) {
+	if hwnd {
+		lastActiveHwnd := WinGetID("A")
+		WinActivate(hwnd)
+		if WinWaitActive(hwnd, , 1) {
+			Sleep app.inputDelay
 			Send keyPress
 		} else {
-			MsgBox "WinWaitActive did not find target in under 1 second", , "T1"
+			CursorMsg "WinWaitActive did not find target"
 		}
 		WinActivate(lastActiveHwnd)
 	}
@@ -128,6 +246,28 @@ GetWinInfo(hwnd := "A") {
 	}
 }
 
+CursorMsg(msg, ms := 2000) {
+	static text := ""
+	static timer := ""
+
+	if(text != "")
+		text .= "`n" msg
+	else
+		text := msg
+
+	ToolTip text
+
+	if (timer)
+		SetTimer timer, 0
+
+	timer := () => (
+		ToolTip(),
+		text := "",
+		timer := ""
+	)
+	SetTimer timer, -ms
+}
+
 <#`:: DisplayActiveWindowStats()
 
 DisplayActiveWindowStats() {
@@ -151,12 +291,12 @@ DisplayActiveWindowStats() {
 <#9:: PairWindow(app.workspaceList[9])
 
 PairWindow(workspaceObject) {
-	local maxInputBuffer := app.maxInputBuffer
+	local maxInputBuffer := app.maxMinWinBuffer
 	static inputBuffer := maxInputBuffer
 	
 	local currentWin := GetWinInfo()
 	if (!currentWin) {
-		MsgBox "No active window found!"
+		CursorMsg "No active window found!"
 		return
 	}
 
@@ -165,10 +305,10 @@ PairWindow(workspaceObject) {
 	if (workspaceObject.id == "") {
 		workspaceObject.id := currentID
 		workspaceObject.isPaired := true
-		MsgBox "[Pairing " workspaceObject.label "]`n"
+		CursorMsg "[Pairing " workspaceObject.label "]`n"
 			. "title: " currentWin.title "`n"
 			. "workspace: " currentWin.id "`n"
-			. "process: " currentWin.process, , "T3"
+			. "process: " currentWin.process
 	} else if (currentID != workspaceObject.id) {
 		if WinExist(workspaceObject.id) {
 			inputBuffer := maxInputBuffer
@@ -201,9 +341,9 @@ UnpairWindow(workspaceObject) {
 	if (workspaceObject.isPaired) {
 		workspaceObject.id := ""
 		workspaceObject.isPaired := false
-		MsgBox "[Unpaired " windowLabel "]", , "T1"
+		CursorMsg "[Unpaired " windowLabel "]"
 	} else {
-		MsgBox "" windowLabel " is already unpaired!", , "T1"
+		CursorMsg "" windowLabel " is already unpaired!"
 	}
 	UpdateWinList(workspaceObject)
 }
@@ -215,7 +355,7 @@ UnpairAllWindows(workspaceList) {
 			workspaceObject.id := ""
 			workspaceObject.isPaired := false
 		}		
-		MsgBox "[Unpaired All Windows]", , "T1"
+		CursorMsg "[Unpaired All Windows]"
 	}
 }
 
@@ -259,15 +399,6 @@ MainGui.AddButton("YS w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(1)
 MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpairWindow(10))
 */
 
-
-; TODO: make this a gui toggle
-SetGuiRefreshTimer(app.isGuiRefresh) ; default true
-
-SetGuiRefreshTimer(bool) {
-	SetTimer UpdateGUI, (bool ? 250 : 0) ; calls UpdateGUI() every 250ms or disables timer
-}
-
-
 UpdateGUI() {
 	; if the GUI window doesn't exist or is minimized...
 	if (!(WinExist("ahk_id " app.guiHwnd)) || (WinGetMinMax("ahk_id " app.guiHwnd) == -1)) {
@@ -296,9 +427,9 @@ WorkspaceSelected(workspaceObject) {
 		workspaceObject.id := workspaceObject.options[index].id
 		workspaceObject.isPaired := true
 		if isDebugMode
-			MsgBox "index: " index "`nid: " workspaceObject.id
+			CursorMsg "index: " index "`nid: " workspaceObject.id
 	} else {
-		MsgBox "[Error] That window no longer exists!`n"
+		CursorMsg "[Error] That window no longer exists!`n"
 		. "Attempting to refresh options, please select again..."
 	}
 	UpdateWinList(workspaceObject)
@@ -320,7 +451,7 @@ UpdateWinList(workspaceObject) {
 		workspaceObject.ddl.Delete()
 		workspaceObject.ddl.Add([IdToDisplayString(workspaceObject.id)])
 		if app.guiDebugMode { ; DEBUG print
-			MsgBox "UpdateWinList: workspaceObject.isPaired = true`n" 
+			CursorMsg "UpdateWinList: workspaceObject.isPaired = true`n" 
 				. "adding id: " workspaceObject.id "`n"
 				. "adding displayText: " IdToDisplayString(workspaceObject.id)
 		}
@@ -373,7 +504,7 @@ UpdateWinList(workspaceObject) {
 
 IdToDisplayString(hwnd) {
 	local winInfo := GetWinInfo(hwnd)
-	local windowProcess := StrReplace(WinGetProcessName(hwnd), ".exe")
+	local windowProcess := WinGetProcessName(hwnd)
 	if (winInfo.title != "") { ; if not an blank title window
 		return "[" windowProcess "] " winInfo.title
 	}
