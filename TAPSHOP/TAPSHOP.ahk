@@ -63,8 +63,7 @@ class App {
 	}
 
 	ShowGUI() {
-		this.InitializeGui()
-		this.guiWin.MainGui.Show(this.cfg.isGuiDebugMode ? "w500 h650" : "w500 h500")
+		this.guiWin.MainGui.Show(this.cfg.isGuiDebugMode ? "w500 h670" : "w500 h520") ; keep h150 diff
 		this.guiWin.UpdateGUI()
 	}
 
@@ -76,6 +75,11 @@ class App {
 	SafeUpdateWinList(workspaceObject) {
     if this.guiWin && WinExist(this.guiWin.MainGui.Hwnd)
       this.guiWin.UpdateWinList(workspaceObject)
+  }
+
+	SafeUpdateAllWinList() {
+    if this.guiWin && WinExist(this.guiWin.MainGui.Hwnd)
+      this.guiWin.UpdateAllWinList()
   }
 
 	GetSpotifyWindow() {
@@ -99,9 +103,12 @@ class Workspace {
 		this.isUpdating := false
 
 		this.ddl := ""
+		this.ddlOptions := []
 		this.focusEvent := ""
 		this.changeEvent := ""
-		this.options := []
+
+		this.unpairB := ""
+		this.unpairEvent := ""
 	}
 }
 
@@ -359,25 +366,32 @@ GetWinInfo(hwnd := "A") {
 }
 
 CursorMsg(msg, ms := 2000) {
-	static text := ""
-	static timer := ""
+  static lines := []
+  static timer := ""
+	static expireAt := 0
+	static maxLines := 25
 
-	if(text != "")
-		text .= "`n" msg
-	else
-		text := msg
+  lines.Push(msg)
+	if (lines.Length > maxLines)
+		lines.RemoveAt(1)
 
-	ToolTip text
+  stack := ""
+  loop lines.Length {
+    i := A_Index
+    prefix := (i = lines.Length) ? ">" : " "
+    stack .= prefix " " lines[i] (i < lines.Length ? "`n" : "")
+  }
+  ToolTip stack
 
-	if (timer)
-		SetTimer timer, 0
-
-	timer := () => (
-		ToolTip(),
-		text := "",
-		timer := ""
-	)
-	SetTimer timer, -ms
+	now := A_TickCount
+	remaining := expireAt > now ? expireAt - now : 0
+	if (remaining = 0 || remaining <= ms) {
+		if (timer)
+			SetTimer timer, 0
+		timer := () => (ToolTip(), lines := [],	timer := ""	expireAt := 0)
+		expireAt := now + ms
+		SetTimer timer, -ms
+	}
 }
 
 <#`:: DisplayActiveWindowStats()
@@ -469,6 +483,7 @@ UnpairAllWindows(workspaceList) {
 		}		
 		CursorMsg "[Unpaired All Windows]"
 	}
+	TAPSHOP.SafeUpdateAllWinList()
 }
 
 ;=========== GUI ===========
@@ -478,8 +493,10 @@ ToggleMainWindow() {
 	if DllCall("IsWindowVisible", "Ptr", TAPSHOP.guiHwnd)
 		WinClose(TAPSHOP.guiHwnd)
 	else
-		TAPSHOP.ShowGUI()
-}
+		try TAPSHOP.ShowGUI()
+		catch Error
+			CursorMsg "Still initialing GUI..."
+}		
 
 class MainWindow {
 	__New(workspaceList, cfg) {
@@ -501,22 +518,21 @@ class MainWindow {
 		this.activeWinTitleLabel := MainGui.AddEdit("w400 vActiveTitle ReadOnly", "[Active Window Title]")
 		; activeWinClassLabel := MainGui.AddEdit("w240 vActiveClass ReadOnly", "[Active Window Class]")
 		; activeWinIdLabel := MainGui.AddEdit("w240 vActiveID ReadOnly", "[Active Window Id]")
+		MainGui.AddButton("YP w70", "Unpair ALL").OnEvent("Click", (*) => UnpairAllWindows(this.workspaceList))
+		
 		this.debugLabel := this.cfg.isGuiDebugMode
 			? MainGui.AddEdit("w400 h150 ReadOnly", "[Debug]")
 			: ""
 		
 		for space in this.workspaceList {
-			MainGui.AddText("w100 Section", space.label)
+			MainGui.AddText("XS w100 Section", space.label)
 			space.ddl := MainGui.AddDDL("w400")			
+			space.unpairB := MainGui.AddButton("YP w70", "Unpair")
 			this.UpdateWinList(space)
 			this.AssignWorkspaceOnEvent(space)
 		}
+
 	}
-	
-	/* TODO: integrate these functions into gui control generation
-MainGui.AddButton("YS w50", "Unpair").OnEvent("Click", (*) => GuiUnpairWindow(1))
-MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpairWindow(10))
-*/
 
 	UpdateGUI() {
 		if !(WinExist(this.MainGui.Hwnd))
@@ -536,15 +552,16 @@ MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpai
 	AssignWorkspaceOnEvent(workspaceObject) {
 		workspaceObject.focusEvent := workspaceObject.ddl.OnEvent("Focus", (*) => this.UpdateWinList(workspaceObject))
 		workspaceObject.changeEvent := workspaceObject.ddl.OnEvent("Change", (*) => this.WorkspaceSelected(workspaceObject))
+		workspaceObject.unpairEvent := workspaceObject.unpairB.OnEvent("Click", (*) => UnpairWindow(workspaceObject))
 		; MsgBox "updated: " workspaceObject.label
 	}
 
 	WorkspaceSelected(workspaceObject) {
 		local isDebugMode := this.cfg.isGuiDebugMode
 		selectedIndex := workspaceObject.ddl.Value
-		; if (selectedIndex < 1 || selectedIndex > workspaceObject.options.Length)
+		; if (selectedIndex < 1 || selectedIndex > workspaceObject.ddlOptions.Length)
 		; 	return
-		selectedOption := workspaceObject.options[selectedIndex]
+		selectedOption := workspaceObject.ddlOptions[selectedIndex]
 		; if (!selectedOption.id)
 		; 	return
 		if WinExist(selectedOption.id) {
@@ -583,8 +600,8 @@ MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpai
 				. "adding id: " workspaceObject.id "`n"
 				. "adding displayText: " this.IdToDisplayString(workspaceObject.id)
 			}
-			workspaceObject.options := []
-			workspaceObject.options.Push(
+			workspaceObject.ddlOptions := []
+			workspaceObject.ddlOptions.Push(
 				{
 					displayTitle: this.IdToDisplayString(workspaceObject.id), id: workspaceObject.id
 				}
@@ -593,8 +610,8 @@ MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpai
 		} else {
 			workspaceObject.ddl.Delete()
 			workspaceObject.ddl.Add(["[Select Window...]"])
-			workspaceObject.options := []
-			workspaceObject.options.Push(
+			workspaceObject.ddlOptions := []
+			workspaceObject.ddlOptions.Push(
 				{
 					displayTitle: "[Select Window...]", id: ""
 				}
@@ -605,14 +622,14 @@ MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpai
 			if (hwnd != workspaceObject.id ; filters out paired window
 					&& RegExMatch(WinGetTitle(hwnd), "\S") ; ensures at least one non-whitespace anywhere in the title (doesn't account for non-printable control characters) 
 					&& DllCall("IsWindowVisible", "Ptr", hwnd) ; ensures processing of only visible windows
-						; NOTE: above 3 conditional checks is enough to prevent explorer processes leaking into workspaceObject.options
+						; NOTE: above 3 conditional checks is enough to prevent explorer processes leaking into workspaceObject.ddlOptions
 					; Optional conditional checks for future ref
 						;&& !RegExMatch(WinGetTitle(hwnd), "^[\s\x00-\x1F\x7F]*$") ; filters out empty, whitespace only, and control-only titles
 						;&& Trim(WinGetTitle(hwnd)) != "") ; filters out blank windows (doesn't account for non-printable control characters)
 					)
 					{
-						workspaceObject.ddl.Add([this.IdToDisplayString(hwnd)]) ; populates rest of options
-						workspaceObject.options.Push(
+						workspaceObject.ddl.Add([this.IdToDisplayString(hwnd)]) ; populates rest of ddlOptions
+						workspaceObject.ddlOptions.Push(
 					{
 						displayTitle: this.IdToDisplayString(hwnd), id: hwnd
 					}
@@ -622,7 +639,7 @@ MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpai
 		
 		if this.cfg.isGuiDebugMode {
 			msg := ""
-			for obj in workspaceObject.options {
+			for obj in workspaceObject.ddlOptions {
 				msg .= "displayTitle: " . obj.displayTitle . ", id: " . obj.id . "`n"
 			}
 			this.debugLabel.Value := msg
@@ -639,31 +656,4 @@ MainGui.AddButton("w240", "Unpair All Windows").OnEvent("Click", (*) => GuiUnpai
 		}
 		return "[" windowProcess "] non-empty title[" winInfo.title "]"  
 	}
-	
-
-	; NOTE: This function will likely be deprecated as DDL controls/event listeners already handle this
-	; GuiPairWindow(num) {
-	; 	switch num {
-	; 		case 1: PairWindow(app.workspaceList[1])
-	; 		case 2: PairWindow(app.workspaceList[2])
-	; 		case 3: PairWindow(app.workspaceList[3])
-	; 		case 4: PairWindow(app.workspaceList[4])
-	; 		case 5: PairWindow(app.workspaceList[5])
-	; 	}
-	; }
-
-	; TODO: Add unpair buttons to gui, this will probably be a redundant method if I opt to create
-	; the controls dynamically along side the DDL controls being generated.
-		; It could also be more simple/maintainable to utilize this, will have to consider.
-	; GuiUnpairWindow(num) {
-	; 	switch num {
-	; 		case 1: UnpairWindow(app.workspaceList[1])
-	; 		case 2: UnpairWindow(app.workspaceList[2])
-	; 		case 3: UnpairWindow(app.workspaceList[3])
-	; 		case 4: UnpairWindow(app.workspaceList[4])
-	; 		case 5: UnpairWindow(app.workspaceList[5])
-	; 		case 10: UnpairAllWindows(app.workspaceList)
-	; 	}
-	; }
-
 }
