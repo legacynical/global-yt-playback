@@ -13,7 +13,7 @@ TAPSHOP.InitializeGUI()
 
 class Config {
   __New() {
-    this.inputDelay := 50               ; 50–100 recommended
+    this.inputDelay := 15               ; typically rounded up to nearest multiple of 10 or 15.6ms
     this.minimizeThreshold := 2         ; presses before minimize
     this.isGuiDebugMode := false
     this.isHotkeyDebugMode := false
@@ -200,9 +200,11 @@ class DetectWindowEvent {
 	}
 
 	GetTargetYT() {
-		return (this.targetYT && WinExist(this.targetYT))
-			? this.targetYT
-			: 0
+		if WinExist(this.targetYT)
+			return this.targetYT
+		else 
+			this.targetYT := this.FindAnyYouTubeWindow()
+			return this.targetYT
   }
 
 	FindAnyYouTubeWindow() {
@@ -288,17 +290,15 @@ F24:: SpotifyControl("^{Up}") ; raise volume
 YoutubeControl(keyPress) {
 	hwnd := TAPSHOP.ytWin.GetTargetYT()
 
-	if !hwnd || !TAPSHOP.ytWin.IsYouTubeWindow(hwnd) {
-		hwnd := TAPSHOP.ytWin.FindAnyYouTubeWindow()
-		TAPSHOP.ytWin.targetYT := hwnd
-	}
-
 	if hwnd {
-		lastActiveHwnd := WinGetID("A")
+		try lastActiveHwnd := WinGetID("A")
+		catch Error
+			lastActiveHwnd := ""
 		WinActivate(hwnd)
 		if WinWaitActive(hwnd, , 1) {
 			Sleep TAPSHOP.cfg.inputDelay
 			SendInput keyPress
+			Sleep TAPSHOP.cfg.inputDelay
 		} else {
 			CursorMsg "WinWaitActive did not find target"
 		}
@@ -323,11 +323,14 @@ SpotifyControl(keyPress) {
 	spotifyWin := TAPSHOP.GetSpotifyWindow()
 
 	if (spotifyWin) {
-		local lastActiveHwnd := WinGetID("A")
+		try lastActiveHwnd := WinGetID("A")
+		catch Error
+			lastActiveHwnd := ""
 		WinActivate(spotifyWin)
 		if WinWaitActive(spotifyWin, , 1) {
 			Sleep TAPSHOP.cfg.inputDelay
 			SendInput keyPress
+			Sleep TAPSHOP.cfg.inputDelay
 		} else {
 			CursorMsg "WinWaitActive did not find target"
 		}
@@ -337,6 +340,7 @@ SpotifyControl(keyPress) {
 
 SpotifyControlV2(appCommand) {
 	spotifyWin := TAPSHOP.GetSpotifyWindow()
+
 	if (!spotifyWin) {
 		CursorMsg("Spotify window not found.")
 		return
