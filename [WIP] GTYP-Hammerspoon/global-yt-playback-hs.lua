@@ -45,7 +45,6 @@ CursorMsg = (function()
   local maxLines = 25
   local alertId = nil
 
-  -- How far above the bottom to place the alert
   local function bottomMargin()
     return (Config and Config.cursorMsgBottomMargin) or 100
   end
@@ -58,7 +57,7 @@ CursorMsg = (function()
 
   local function alertPos()
     local scr = pickScreen()
-    local vf = scr:frame() -- visible frame (excludes Dock/menubar on current Hammerspoon)
+    local vf = scr:frame() -- visible frame
     local x = vf.x + vf.w / 2
     local y = vf.y + vf.h - bottomMargin()
     return { x = x, y = y }
@@ -71,7 +70,9 @@ CursorMsg = (function()
       buf[#buf + 1] = prefix .. tostring(lines[i])
     end
     local text = table.concat(buf, "\n")
-    if text == "" then text = " " end
+    if text == "" then
+      text = " "
+    end
 
     if alertId then
       hs.alert.closeSpecific(alertId)
@@ -79,25 +80,26 @@ CursorMsg = (function()
     end
 
     local style = { textSize = 14, radius = 6 }
-
-    -- Use explicit point positioning so it doesn't hug the bottom edge
     local ok, id = pcall(hs.alert.show, text, style, alertPos(), secs)
     if ok and id then
       alertId = id
       return
     end
-
-    -- Fallback: default placement if point path fails for any reason
     hs.alert.show(text, style, secs)
   end
 
   return function(msg, secs)
     secs = secs or 2.0
     lines[#lines + 1] = tostring(msg)
-    if #lines > maxLines then table.remove(lines, 1) end
+    if #lines > maxLines then
+      table.remove(lines, 1)
+    end
     show(secs)
 
-    if timer then timer:stop(); timer = nil end
+    if timer then
+      timer:stop()
+      timer = nil
+    end
     timer = hs.timer.doAfter(secs, function()
       lines = {}
       if alertId then
@@ -117,13 +119,17 @@ end
 
 local function appNameOrBundle(win)
   local app = win and win:application()
-  if not app then return "[UnknownApp]" end
+  if not app then
+    return "[UnknownApp]"
+  end
   return app:bundleID() or app:name() or "[Unknown]"
 end
 
 local function GetWinInfo(win)
   win = win or hs.window.frontmostWindow()
-  if not win then return nil end
+  if not win then
+    return nil
+  end
   return {
     title = win:title() or "",
     id = win:id(),
@@ -138,7 +144,9 @@ local function allWindowsVisible()
   local wins = hs.window.filter.default:getWindows()
   local out = {}
   for _, w in ipairs(wins) do
-    if w:isVisible() then table.insert(out, w) end
+    if w:isVisible() then
+      table.insert(out, w)
+    end
   end
   return out
 end
@@ -149,7 +157,7 @@ local function Workspace(label)
     label = label,
     id = nil,
     isPaired = false,
-    inputBuffer = Config.minimizeThreshold,
+    inputBuffer = Config.minimizeThreshold, -- per-workspace buffer
   }
 end
 
@@ -165,14 +173,24 @@ end
 
 -- ------------- YouTube window tracking -------------
 local function isYouTubeWindow(win)
-  if not win or not win:isVisible() then return false end
+  if not win or not win:isVisible() then
+    return false
+  end
   local app = win:application()
-  if not app then return false end
+  if not app then
+    return false
+  end
   local bid = app:bundleID() or ""
-  if not TAPSHOP.cfg.browserBundleIDs[bid] then return false end
+  if not TAPSHOP.cfg.browserBundleIDs[bid] then
+    return false
+  end
   local title = win:title() or ""
-  if title == "" then return false end
-  if string.find(title, "Subscriptions - YouTube", 1, true) then return false end
+  if title == "" then
+    return false
+  end
+  if string.find(title, "Subscriptions - YouTube", 1, true) then
+    return false
+  end
   return string.find(title, "- YouTube", 1, true) ~= nil
 end
 
@@ -191,7 +209,9 @@ wf:subscribe({
   hs.window.filter.windowFocused,
   hs.window.filter.windowTitleChanged,
 }, function(win, appName, event)
-  pcall(function() setYTTargetIfApplicable(win) end)
+  pcall(function()
+    setYTTargetIfApplicable(win)
+  end)
 end)
 
 local function getYTTargetWindow()
@@ -256,13 +276,23 @@ end
 
 --------------- Window pairing / switching -------------
 local function focusOrRestore(win)
-  if not win then return false end
+  if not win then
+    return false
+  end
   local app = win:application()
-  if app and app:isHidden() then app:unhide() end
-  if win:isMinimized() then win:unminimize() end
-  if app then app:activate(true) end
+  if app and app:isHidden() then
+    app:unhide()
+  end
+  if win:isMinimized() then
+    win:unminimize()
+  end
+  if app then
+    app:activate(true)
+  end
   hs.timer.doAfter(TAPSHOP.cfg.inputDelay, function()
-    if win then win:focus() end
+    if win then
+      win:focus()
+    end
   end)
   return true
 end
@@ -353,7 +383,7 @@ end
 
 --------------- YouTube control -------------
 local function sendKeyStrokes(keys)
-  -- keys: a small subset parser for "{Left}", "{Right}" or single letters "k"/"j"/"l"
+  -- keys: a small subset parser for "{Left}", "{Right}" or "k"/"j"/"l"
   local special = {
     ["{Left}"] = { {}, "left" },
     ["{Right}"] = { {}, "right" },
@@ -366,7 +396,6 @@ local function sendKeyStrokes(keys)
     hs.eventtap.keyStroke({}, keys, 0)
     return
   end
-  -- Extend as needed if you want combos like "^{Up}" etc.
 end
 
 local function YoutubeControl(keyPress)
@@ -383,7 +412,9 @@ local function YoutubeControl(keyPress)
   else
     CursorMsg("Focus failed for YT window")
   end
-  if prevApp then prevApp:activate() end
+  if prevApp then
+    prevApp:activate()
+  end
 end
 
 -- ------------- Spotify control -------------
@@ -414,7 +445,9 @@ local function SpotifyControl(keyPress)
   end
 
   parseAndSend(keyPress)
-  if prevApp then prevApp:activate() end
+  if prevApp then
+    prevApp:activate()
+  end
 end
 
 local function SpotifyControlV2(appCommand)
@@ -436,7 +469,9 @@ local function SpotifyControlV2(appCommand)
   elseif appCommand == "APPCOMMAND_VOLUME_MUTE" then
     -- System mute instead of Spotify mute (Spotify has no dedicated mute)
     local dev = hs.audiodevice.defaultOutputDevice()
-    if dev then dev:setMuted(not dev:muted()) end
+    if dev then
+      dev:setMuted(not dev:muted())
+    end
   end
 end
 
@@ -469,7 +504,9 @@ local function rebuildMenu()
       local app = w:application()
       local prefix = app and app:name() or "App"
       local title = (w:title() or "")
-      if w:isMinimized() then title = title .. " (minimized)" end
+      if w:isMinimized() then
+        title = title .. " (minimized)"
+      end
       return "[" .. prefix .. "] " .. title
     end
     return "[Unpaired]"
@@ -486,32 +523,45 @@ local function rebuildMenu()
     })
     table.insert(items, {
       title = "  Pair with current window",
-      fn = function() pairWindow(ws); rebuildMenu() end,
+      fn = function()
+        pairWindow(ws)
+        rebuildMenu()
+      end,
     })
     table.insert(items, {
       title = "  Focus",
-      fn = function() focusWorkspace(ws) end,
+      fn = function()
+        focusWorkspace(ws)
+      end,
     })
     table.insert(items, {
       title = "  Unpair",
-      fn = function() unpairWindow(ws); rebuildMenu() end,
+      fn = function()
+        unpairWindow(ws)
+        rebuildMenu()
+      end,
     })
     table.insert(items, { title = "-" })
   end
 
-  table.insert(items, { title = "Unpair ALL", fn = function() unpairAll(); rebuildMenu() end })
+  table.insert(items, {
+    title = "Unpair ALL",
+    fn = function()
+      unpairAll()
+      rebuildMenu()
+    end,
+  })
   menuBar:setMenu(items)
 end
 
 menuBar:setTitle("TAPSHOP")
 rebuildMenu()
 
---------------- Hotkeys (refactored to Cmd+Option layers) -------------
+--------------- Hotkeys (Cmd+Option for context-aware pairing) -------------
 local pairMods = { "cmd", "alt" }
-local focusMods = { "cmd", "alt", }
 local unpairMods = { "cmd", "alt", "shift" }
 
--- Pair current window with workspaces 1..9 (Cmd+Option+1..9)
+-- Cmd+Option+1..9: context-aware pair/focus/minimize
 for i = 1, 9 do
   hs.hotkey.bind(pairMods, tostring(i), function()
     pairWindow(TAPSHOP.workspaces[i])
@@ -519,14 +569,7 @@ for i = 1, 9 do
   end)
 end
 
--- Focus paired window for 1..9 (Cmd+Option+Shift+1..9)
-for i = 1, 9 do
-  hs.hotkey.bind(focusMods, tostring(i), function()
-    focusWorkspace(TAPSHOP.workspaces[i])
-  end)
-end
-
--- Unpair workspace (Ctrl+Cmd+Option+Shift+1..9) and Unpair ALL with ...+0
+-- Cmd+Option+Shift+1..9: unpair slots; Cmd+Option+Shift+0: unpair all
 for i = 1, 9 do
   hs.hotkey.bind(unpairMods, tostring(i), function()
     unpairWindow(TAPSHOP.workspaces[i])
@@ -561,13 +604,23 @@ hs.hotkey.bind(pairMods, "k", function()
 end)
 
 -- Optional legacy F19/F20/F21 binds (kept but not required)
-bindIfAvailable({}, "F19", function() YoutubeControl("{Left}") end)
-bindIfAvailable({ "ctrl" }, "F19", function() YoutubeControl("j") end)
-bindIfAvailable({}, "F21", function() YoutubeControl("{Right}") end)
-bindIfAvailable({ "ctrl" }, "F21", function() YoutubeControl("l") end)
-bindIfAvailable({}, "F20", function() YoutubeControl("k") end)
+bindIfAvailable({}, "F19", function()
+  YoutubeControl("{Left}")
+end)
+bindIfAvailable({ "ctrl" }, "F19", function()
+  YoutubeControl("j")
+end)
+bindIfAvailable({}, "F21", function()
+  YoutubeControl("{Right}")
+end)
+bindIfAvailable({ "ctrl" }, "F21", function()
+  YoutubeControl("l")
+end)
+bindIfAvailable({}, "F20", function()
+  YoutubeControl("k")
+end)
 
--- Spotify media keys (native V2) keep as-is
+-- Spotify media keys (native V2)
 hs.hotkey.bind({}, "F7", function()
   SpotifyControlV2("APPCOMMAND_MEDIA_PREVIOUSTRACK")
 end)
@@ -586,7 +639,7 @@ hs.hotkey.bind({ "ctrl" }, "F9", function()
   SpotifyControlV2("APPCOMMAND_MEDIA_FAST_FORWARD")
 end)
 
--- Volume and like (keep your Hyper alternatives)
+-- Volume and like (guarded F-keys)
 bindIfAvailable({}, "F23", function()
   SpotifyControlV2("APPCOMMAND_VOLUME_DOWN")
 end)
@@ -597,8 +650,8 @@ bindIfAvailable({}, "F22", function()
   spotifyToggleLike()
 end)
 
--- Alternate volume controls for keyboards without knobs (Cmd+Option layer if you prefer)
-local hyper = { "cmd", "alt", "ctrl" } -- retained for those who want it
+-- Alternate volume controls for keyboards without knobs (Hyper retained)
+local hyper = { "cmd", "alt", "ctrl" }
 hs.hotkey.bind(hyper, ",", function()
   local dev = hs.audiodevice.defaultOutputDevice()
   if dev then
@@ -615,7 +668,9 @@ hs.hotkey.bind(hyper, ".", function()
 end)
 hs.hotkey.bind(hyper, "M", function()
   local dev = hs.audiodevice.defaultOutputDevice()
-  if dev then dev:setMuted(not dev:muted()) end
+  if dev then
+    dev:setMuted(not dev:muted())
+  end
 end)
 
 --------------- Init message -------------
