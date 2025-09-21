@@ -529,12 +529,6 @@ local function rebuildMenu()
       end,
     })
     table.insert(items, {
-      title = "  Focus",
-      fn = function()
-        focusWorkspace(ws)
-      end,
-    })
-    table.insert(items, {
       title = "  Unpair",
       fn = function()
         unpairWindow(ws)
