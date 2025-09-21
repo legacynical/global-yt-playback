@@ -65,16 +65,13 @@ CursorMsg = (function()
   end
 
   local function show(secs)
-    -- Build stacked text
     local buf = {}
     for i = 1, #lines do
       local prefix = (i == #lines) and "> " or "  "
       buf[#buf + 1] = prefix .. tostring(lines[i])
     end
     local text = table.concat(buf, "\n")
-    if text == "" then
-      text = " "
-    end
+    if text == "" then text = " " end
 
     if alertId then
       hs.alert.closeSpecific(alertId)
@@ -97,15 +94,10 @@ CursorMsg = (function()
   return function(msg, secs)
     secs = secs or 2.0
     lines[#lines + 1] = tostring(msg)
-    if #lines > maxLines then
-      table.remove(lines, 1)
-    end
+    if #lines > maxLines then table.remove(lines, 1) end
     show(secs)
 
-    if timer then
-      timer:stop()
-      timer = nil
-    end
+    if timer then timer:stop(); timer = nil end
     timer = hs.timer.doAfter(secs, function()
       lines = {}
       if alertId then
@@ -125,17 +117,13 @@ end
 
 local function appNameOrBundle(win)
   local app = win and win:application()
-  if not app then
-    return "[UnknownApp]"
-  end
+  if not app then return "[UnknownApp]" end
   return app:bundleID() or app:name() or "[Unknown]"
 end
 
 local function GetWinInfo(win)
   win = win or hs.window.frontmostWindow()
-  if not win then
-    return nil
-  end
+  if not win then return nil end
   return {
     title = win:title() or "",
     id = win:id(),
@@ -150,9 +138,7 @@ local function allWindowsVisible()
   local wins = hs.window.filter.default:getWindows()
   local out = {}
   for _, w in ipairs(wins) do
-    if w:isVisible() then
-      table.insert(out, w)
-    end
+    if w:isVisible() then table.insert(out, w) end
   end
   return out
 end
@@ -163,7 +149,7 @@ local function Workspace(label)
     label = label,
     id = nil,
     isPaired = false,
-    inputBuffer = Config.minimizeThreshold, -- per-workspace buffer
+    inputBuffer = Config.minimizeThreshold,
   }
 end
 
@@ -179,24 +165,14 @@ end
 
 -- ------------- YouTube window tracking -------------
 local function isYouTubeWindow(win)
-  if not win or not win:isVisible() then
-    return false
-  end
+  if not win or not win:isVisible() then return false end
   local app = win:application()
-  if not app then
-    return false
-  end
+  if not app then return false end
   local bid = app:bundleID() or ""
-  if not TAPSHOP.cfg.browserBundleIDs[bid] then
-    return false
-  end
+  if not TAPSHOP.cfg.browserBundleIDs[bid] then return false end
   local title = win:title() or ""
-  if title == "" then
-    return false
-  end
-  if string.find(title, "Subscriptions - YouTube", 1, true) then
-    return false
-  end
+  if title == "" then return false end
+  if string.find(title, "Subscriptions - YouTube", 1, true) then return false end
   return string.find(title, "- YouTube", 1, true) ~= nil
 end
 
@@ -207,8 +183,6 @@ local function setYTTargetIfApplicable(win)
       TAPSHOP.ytTargetId = id
       CursorMsg("YT Target Updated: " .. (win:title() or "[untitled]"))
     end
-  else
-    -- if frontmost leaves YT, keep previous target until we find another
   end
 end
 
@@ -217,9 +191,7 @@ wf:subscribe({
   hs.window.filter.windowFocused,
   hs.window.filter.windowTitleChanged,
 }, function(win, appName, event)
-  pcall(function()
-    setYTTargetIfApplicable(win)
-  end)
+  pcall(function() setYTTargetIfApplicable(win) end)
 end)
 
 local function getYTTargetWindow()
@@ -283,26 +255,14 @@ local function spotifyToggleLike()
 end
 
 --------------- Window pairing / switching -------------
-
--- Focus a window, restoring it if minimized or hidden, and activate its app
 local function focusOrRestore(win)
-  if not win then
-    return false
-  end
+  if not win then return false end
   local app = win:application()
-  if app and app:isHidden() then
-    app:unhide()
-  end
-  if win:isMinimized() then
-    win:unminimize()
-  end
-  if app then
-    app:activate(true)
-  end
+  if app and app:isHidden() then app:unhide() end
+  if win:isMinimized() then win:unminimize() end
+  if app then app:activate(true) end
   hs.timer.doAfter(TAPSHOP.cfg.inputDelay, function()
-    if win then
-      win:focus()
-    end
+    if win then win:focus() end
   end)
   return true
 end
@@ -353,6 +313,21 @@ local function pairWindow(workspace)
       workspace.inputBuffer = TAPSHOP.cfg.minimizeThreshold
       paired:minimize()
     end
+  end
+end
+
+local function focusWorkspace(workspace)
+  if workspace.isPaired and workspace.id then
+    local paired = hs.window.get(workspace.id)
+    if paired then
+      focusOrRestore(paired)
+    else
+      workspace.id = nil
+      workspace.isPaired = false
+      CursorMsg("[Paired window missing; cleared]")
+    end
+  else
+    CursorMsg(workspace.label .. " not paired")
   end
 end
 
@@ -408,9 +383,7 @@ local function YoutubeControl(keyPress)
   else
     CursorMsg("Focus failed for YT window")
   end
-  if prevApp then
-    prevApp:activate()
-  end
+  if prevApp then prevApp:activate() end
 end
 
 -- ------------- Spotify control -------------
@@ -441,9 +414,7 @@ local function SpotifyControl(keyPress)
   end
 
   parseAndSend(keyPress)
-  if prevApp then
-    prevApp:activate()
-  end
+  if prevApp then prevApp:activate() end
 end
 
 local function SpotifyControlV2(appCommand)
@@ -465,9 +436,7 @@ local function SpotifyControlV2(appCommand)
   elseif appCommand == "APPCOMMAND_VOLUME_MUTE" then
     -- System mute instead of Spotify mute (Spotify has no dedicated mute)
     local dev = hs.audiodevice.defaultOutputDevice()
-    if dev then
-      dev:setMuted(not dev:muted())
-    end
+    if dev then dev:setMuted(not dev:muted()) end
   end
 end
 
@@ -491,7 +460,7 @@ local function DisplayActiveWindowStats()
   end
 end
 
---------------- Menubar helper to inspect workspaces -------------
+--------------- Menubar helper -------------
 local menuBar = hs.menubar.new(true)
 local function rebuildMenu()
   local function winTitleById(id)
@@ -500,19 +469,14 @@ local function rebuildMenu()
       local app = w:application()
       local prefix = app and app:name() or "App"
       local title = (w:title() or "")
-      if w:isMinimized() then
-        title = title .. " (minimized)"
-      end
+      if w:isMinimized() then title = title .. " (minimized)" end
       return "[" .. prefix .. "] " .. title
     end
     return "[Unpaired]"
   end
 
   local items = {}
-  table.insert(items, {
-    title = "Active Window Details…",
-    fn = DisplayActiveWindowStats,
-  })
+  table.insert(items, { title = "Active Window Details…", fn = DisplayActiveWindowStats })
   table.insert(items, { title = "-" })
 
   for i, ws in ipairs(TAPSHOP.workspaces) do
@@ -522,105 +486,88 @@ local function rebuildMenu()
     })
     table.insert(items, {
       title = "  Pair with current window",
-      fn = function()
-        pairWindow(ws)
-        rebuildMenu()
-      end,
+      fn = function() pairWindow(ws); rebuildMenu() end,
+    })
+    table.insert(items, {
+      title = "  Focus",
+      fn = function() focusWorkspace(ws) end,
     })
     table.insert(items, {
       title = "  Unpair",
-      fn = function()
-        unpairWindow(ws)
-        rebuildMenu()
-      end,
+      fn = function() unpairWindow(ws); rebuildMenu() end,
     })
     table.insert(items, { title = "-" })
   end
 
-  table.insert(items, {
-    title = "Unpair ALL",
-    fn = function()
-      unpairAll()
-      rebuildMenu()
-    end,
-  })
+  table.insert(items, { title = "Unpair ALL", fn = function() unpairAll(); rebuildMenu() end })
   menuBar:setMenu(items)
 end
 
 menuBar:setTitle("TAPSHOP")
 rebuildMenu()
 
---------------- Hotkeys -------------
-local hyper = { "cmd", "alt", "ctrl" } -- Hyper-like
+--------------- Hotkeys (refactored to Cmd+Option layers) -------------
+local pairMods = { "cmd", "alt" }
+local focusMods = { "cmd", "alt", }
+local unpairMods = { "cmd", "alt", "shift" }
 
--- Pair current window with workspaces 1..9
+-- Pair current window with workspaces 1..9 (Cmd+Option+1..9)
 for i = 1, 9 do
-  hs.hotkey.bind(hyper, tostring(i), function()
+  hs.hotkey.bind(pairMods, tostring(i), function()
     pairWindow(TAPSHOP.workspaces[i])
     rebuildMenu()
   end)
 end
 
--- Unpair current workspace (Ctrl+Hyper+digit), and Unpair ALL (Ctrl+Hyper+0)
+-- Focus paired window for 1..9 (Cmd+Option+Shift+1..9)
 for i = 1, 9 do
-  hs.hotkey.bind({ "ctrl", "cmd", "alt", "shift" }, tostring(i), function()
+  hs.hotkey.bind(focusMods, tostring(i), function()
+    focusWorkspace(TAPSHOP.workspaces[i])
+  end)
+end
+
+-- Unpair workspace (Ctrl+Cmd+Option+Shift+1..9) and Unpair ALL with ...+0
+for i = 1, 9 do
+  hs.hotkey.bind(unpairMods, tostring(i), function()
     unpairWindow(TAPSHOP.workspaces[i])
     rebuildMenu()
   end)
 end
-hs.hotkey.bind({ "ctrl", "cmd", "alt", "shift" }, "0", function()
+hs.hotkey.bind(unpairMods, "0", function()
   unpairAll()
   rebuildMenu()
 end)
 
--- Toggle info window (Hyper + `)
-hs.hotkey.bind(hyper, "`", function()
+-- Toggle info window (Cmd+Option+`)
+hs.hotkey.bind(pairMods, "`", function()
   DisplayActiveWindowStats()
 end)
 
--- YouTube controls
--- AHK mapping:
--- F19 -> {Left}        rewind 5 sec
--- Ctrl+F19 -> "j"      rewind 10 sec (YouTube native)
--- F21 -> {Right}       forward 5 sec (guarded; many keyboards don't have F21)
--- Ctrl+F21 -> "l"      forward 10 sec (guarded)
--- F20 -> "k"           play/pause
-
-bindIfAvailable({}, "F19", function()
+-- YouTube controls on Cmd+Option layer
+hs.hotkey.bind(pairMods, "left", function()
   YoutubeControl("{Left}")
 end)
-bindIfAvailable({ "ctrl" }, "F19", function()
-  YoutubeControl("j")
-end)
-bindIfAvailable({}, "F21", function()
+hs.hotkey.bind(pairMods, "right", function()
   YoutubeControl("{Right}")
 end)
-bindIfAvailable({ "ctrl" }, "F21", function()
+hs.hotkey.bind(pairMods, "j", function()
+  YoutubeControl("j")
+end)
+hs.hotkey.bind(pairMods, "l", function()
   YoutubeControl("l")
 end)
-bindIfAvailable({}, "F20", function()
+hs.hotkey.bind(pairMods, "k", function()
   YoutubeControl("k")
 end)
 
--- Fallback YouTube keys if you don't have F19/F20/F21:
-hs.hotkey.bind(hyper, "left", function()
-  YoutubeControl("{Left}")
-end)
-hs.hotkey.bind({ "ctrl", "cmd", "alt" }, "J", function()
-  YoutubeControl("j")
-end)
-hs.hotkey.bind(hyper, "right", function()
-  YoutubeControl("{Right}")
-end)
-hs.hotkey.bind({ "ctrl", "cmd", "alt" }, "L", function()
-  YoutubeControl("l")
-end)
-hs.hotkey.bind(hyper, "K", function()
-  YoutubeControl("k")
-end)
+-- Optional legacy F19/F20/F21 binds (kept but not required)
+bindIfAvailable({}, "F19", function() YoutubeControl("{Left}") end)
+bindIfAvailable({ "ctrl" }, "F19", function() YoutubeControl("j") end)
+bindIfAvailable({}, "F21", function() YoutubeControl("{Right}") end)
+bindIfAvailable({ "ctrl" }, "F21", function() YoutubeControl("l") end)
+bindIfAvailable({}, "F20", function() YoutubeControl("k") end)
 
--- Spotify media keys (native V2)
--- macOS typically uses F7/F8/F9
+-- Spotify media keys (native V2) keep as-is
 hs.hotkey.bind({}, "F7", function()
   SpotifyControlV2("APPCOMMAND_MEDIA_PREVIOUSTRACK")
 end)
@@ -639,8 +586,7 @@ hs.hotkey.bind({ "ctrl" }, "F9", function()
   SpotifyControlV2("APPCOMMAND_MEDIA_FAST_FORWARD")
 end)
 
--- Volume and like
--- F23 lower vol, F24 raise vol, F22 toggle like (guarded; may not exist)
+-- Volume and like (keep your Hyper alternatives)
 bindIfAvailable({}, "F23", function()
   SpotifyControlV2("APPCOMMAND_VOLUME_DOWN")
 end)
@@ -651,7 +597,8 @@ bindIfAvailable({}, "F22", function()
   spotifyToggleLike()
 end)
 
--- Alternate volume controls for keyboards without knobs (Hyper + ,/. and Hyper + Mute)
+-- Alternate volume controls for keyboards without knobs (Cmd+Option layer if you prefer)
+local hyper = { "cmd", "alt", "ctrl" } -- retained for those who want it
 hs.hotkey.bind(hyper, ",", function()
   local dev = hs.audiodevice.defaultOutputDevice()
   if dev then
@@ -668,9 +615,7 @@ hs.hotkey.bind(hyper, ".", function()
 end)
 hs.hotkey.bind(hyper, "M", function()
   local dev = hs.audiodevice.defaultOutputDevice()
-  if dev then
-    dev:setMuted(not dev:muted())
-  end
+  if dev then dev:setMuted(not dev:muted()) end
 end)
 
 --------------- Init message -------------
