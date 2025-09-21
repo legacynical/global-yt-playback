@@ -554,6 +554,7 @@ rebuildMenu()
 --------------- Hotkeys (Cmd+Option for context-aware pairing) -------------
 local pairMods = { "cmd", "alt" }
 local unpairMods = { "cmd", "alt", "shift" }
+local toggleMenuBar = { "cmd", "alt", "shift" }
 
 -- Cmd+Option+1..9: context-aware pair/focus/minimize
 for i = 1, 9 do
@@ -578,6 +579,18 @@ end)
 -- Toggle info window (Cmd+Option+`)
 hs.hotkey.bind(pairMods, "`", function()
   DisplayActiveWindowStats()
+end)
+
+-- Toggle menubar (Cmd+Option+Shift+`)
+hs.hotkey.bind(toggleMenuBar, "`", function()
+  print(menuBar)
+  if menuBar then
+    local pt = hs.mouse.getAbsolutePosition()
+    pt.y = 22
+    menuBar:popupMenu(pt)
+  else
+    CursorMsg("TAPSHOP menu not available")
+  end
 end)
 
 -- YouTube controls on Cmd+Option layer
