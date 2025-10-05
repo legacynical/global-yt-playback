@@ -21,7 +21,11 @@
 
 > [!TIP]
 > - Place script ahk/exe (or shortcut) in `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup` to autorun on startup.
-> - Applications running at admin level will ignore script functions, which can be fixed by also running the script ahk/exe as admin or setting its advanced properties to run as administrator.
+> - Applications running at admin level will ignore script functions, which can be fixed by also running the script ahk/exe as admin.
+
+> [!WARNING]
+> - Setting the run as admin flag on with the script in the Startup folder (as shown below) will NOT autorun the script on startup. 
+> - To allow this script to autorun at admin level on startup, use the native Windows Task Scheduler to bypass the UAC prompt requirement needed for script execution permission.
 
 ![image](https://github.com/user-attachments/assets/1d315525-54f0-4e9f-aa7c-cfecb1c60ed7)
 
