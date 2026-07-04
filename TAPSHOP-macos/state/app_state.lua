@@ -482,10 +482,11 @@ function AppState:_refreshPairedWorkspaceMetadataForWindow(win, opts)
   local meta = self.windowService.pairingMetadata(win)
   local matchedWorkspace = false
   self:_forEachWorkspace(function(workspace)
-    if workspace:getBaseWindowId() == id or workspace:getFullscreenTargetWindowId() == id then
+    local isBaseWindow = workspace:getBaseWindowId() == id
+    if isBaseWindow or workspace:getFullscreenTargetWindowId() == id then
       matchedWorkspace = true
       workspace:setFingerprint(meta)
-      if type(opts) == "table" and opts.updateSpace == true then
+      if isBaseWindow and type(opts) == "table" and opts.updateSpace == true then
         self:_updateWorkspaceBindingSpaceState(workspace, win)
       end
     end
@@ -646,7 +647,7 @@ function AppState:_isWindowAlreadyPaired(windowId)
   return paired
 end
 
-function AppState:_restoreRecoverableWorkspacesForCandidate(win, opts)
+function AppState:_restoreRecoverableWorkspacesForCandidate(win)
   if not self.cfg.recoverClosedWindows then
     return {}
   end
@@ -668,40 +669,13 @@ function AppState:_restoreRecoverableWorkspacesForCandidate(win, opts)
       return
     end
 
-    local canRestore = workspace:canRecover()
-    if not canRestore and type(opts) == "table" and opts.allowStalePaired == true then
-      canRestore = self:_canRestoreStalePairedWorkspaceForCandidate(workspace)
-    end
-
-    if canRestore then
+    if workspace:canRecover() then
       self:_pairWorkspace(workspace, candidateId, win)
       restoredWorkspaces[#restoredWorkspaces + 1] = workspace
     end
   end)
 
   return restoredWorkspaces
-end
-
-function AppState:_canRestoreStalePairedWorkspaceForCandidate(workspace)
-  if not workspace or workspace:getBindingKind() ~= "paired" then
-    return false
-  end
-
-  local baseWindowId = workspace:getBaseWindowId()
-  if not baseWindowId or self.windowService.getWindowById(baseWindowId) then
-    return false
-  end
-
-  if self:_resolveTrackedSpaceByWindowId(baseWindowId) then
-    return false
-  end
-
-  local fullscreenTargetWindowId = workspace:getFullscreenTargetWindowId()
-  if fullscreenTargetWindowId and self:_resolveTrackedSpaceByWindowId(fullscreenTargetWindowId) then
-    return false
-  end
-
-  return true
 end
 
 function AppState:_restoreWorkspaceFromCandidate(win, opts)
@@ -747,6 +721,100 @@ function AppState:_restoreRecoverableWorkspacesFromExistingCandidates()
   end
 
   return restored
+end
+
+local function appObjectField(appObject, methodName)
+  local objectType = type(appObject)
+  if objectType ~= "table" and objectType ~= "userdata" then
+    return nil
+  end
+
+  local methodOk, method = pcall(function()
+    return appObject[methodName]
+  end)
+  if not methodOk then
+    return nil
+  end
+  if type(method) ~= "function" then
+    return nil
+  end
+
+  local ok, value = pcall(function()
+    return method(appObject)
+  end)
+  if ok and type(value) == "string" and value:match("%S") then
+    return value
+  end
+  return nil
+end
+
+local function workspaceMatchesTerminatedApp(workspace, bundleID, appName)
+  local fingerprint = workspace and workspace:getFingerprint() or nil
+  if type(fingerprint) ~= "table" then
+    return false
+  end
+
+  if type(bundleID) == "string" and bundleID ~= "" then
+    return fingerprint.bundleID == bundleID
+  end
+
+  if type(appName) == "string" and appName ~= "" then
+    return fingerprint.appName == appName
+  end
+
+  return false
+end
+
+function AppState:handleApplicationTerminated(appName, appObject)
+  if not self.cfg.recoverClosedWindows then
+    return false
+  end
+
+  local bundleID = appObjectField(appObject, "bundleID")
+  local resolvedAppName = appObjectField(appObject, "name") or appName
+  if (type(bundleID) ~= "string" or bundleID == "")
+    and (type(resolvedAppName) ~= "string" or resolvedAppName == "") then
+    return false
+  end
+
+  local changed = false
+  local function visitProfile(profile)
+    if not profile then
+      return
+    end
+
+    for _, workspace in ipairs(profile.workspaces or {}) do
+      if workspace:isPaired()
+        and workspaceMatchesTerminatedApp(workspace, bundleID, resolvedAppName) then
+        local baseWindowId = workspace:getBaseWindowId()
+        local fullscreenTargetWindowId = workspace:getFullscreenTargetWindowId()
+        if baseWindowId then
+          self.youtubeService:handleDestroyedWindowId(baseWindowId)
+        end
+        if fullscreenTargetWindowId and fullscreenTargetWindowId ~= baseWindowId then
+          self.youtubeService:handleDestroyedWindowId(fullscreenTargetWindowId)
+        end
+
+        workspace:markClosedForRecovery()
+        changed = true
+      end
+    end
+  end
+
+  local activeProfile = self:_getActiveProfile()
+  visitProfile(activeProfile)
+  for _, profile in ipairs(self.profiles or {}) do
+    if profile ~= activeProfile then
+      visitProfile(profile)
+    end
+  end
+
+  if changed then
+    self:_persistWorkspacePairings()
+    self:syncUi()
+  end
+
+  return changed
 end
 
 function AppState:_restoreStartupWorkspaceState()
@@ -1285,9 +1353,7 @@ function AppState:handleWindowEvent(event, win)
 
   local restored = false
   if win then
-    restored = self:_restoreWorkspaceFromCandidate(win, {
-      allowStalePaired = event == hs.window.filter.windowCreated,
-    })
+    restored = self:_restoreWorkspaceFromCandidate(win)
   end
 
   local pairedWorkspaceTouched = self:_refreshPairedWorkspaceMetadataForWindow(win, {

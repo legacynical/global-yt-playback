@@ -141,6 +141,14 @@ end)
 
 app.windowFilter = windowFilter
 
+local appWatcher = hs.application.watcher.new(function(appName, eventType, appObject)
+  if eventType == hs.application.watcher.terminated then
+    app:handleApplicationTerminated(appName, appObject)
+  end
+end)
+appWatcher:start()
+app.appWatcher = appWatcher
+
 hotkeyManager:bindAll()
 
 toast(Toast.message.status("TAPSHOP ready (Hammerspoon)", {

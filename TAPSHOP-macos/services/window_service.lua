@@ -271,7 +271,14 @@ function WindowService.isFullscreenSpace(spaceId)
 end
 
 function WindowService.isWindowFullscreen(win)
-  return win ~= nil and win:isFullScreen()
+  if not win then
+    return false
+  end
+
+  local ok, fullscreen = pcall(function()
+    return win:isFullScreen()
+  end)
+  return ok and fullscreen == true
 end
 
 function WindowService.getPrimarySpaceForWindow(win)
