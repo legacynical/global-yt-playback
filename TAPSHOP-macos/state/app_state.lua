@@ -11,26 +11,6 @@ local UNPAIR_TOAST_COLOR = { red = 0xc0 / 255, green = 0x40 / 255, blue = 0x30 /
 local HOTKEY_WARNING_TOAST_COLOR = { red = 0xf2 / 255, green = 0xc1 / 255, blue = 0x4e / 255, alpha = 1 }
 local TOAST_WHITE = { white = 1, alpha = 1 }
 
-local function result(ok, code, fields)
-  local out = fields or {}
-  out.ok = ok == true
-  out.code = code
-  return out
-end
-
-local function recoveryLog(message, ...)
-  if hs and type(hs.printf) == "function" then
-    pcall(hs.printf, "[tapshop-recovery] " .. message, ...)
-  end
-end
-
-local function hasRecoverableFingerprint(workspace)
-  local fingerprint = workspace and workspace:getFingerprint() or nil
-  return type(fingerprint) == "table"
-    and fingerprint.bundleID ~= nil
-    and fingerprint.titleNormalized ~= nil
-end
-
 local function loadPersistedWorkspacePairings(appdata)
   if appdata.getProfilesWindowPairings then
     return appdata.getProfilesWindowPairings()
@@ -489,7 +469,7 @@ function AppState:_refreshWorkspaceFingerprint(workspace, win)
   end
 end
 
-function AppState:_refreshPairedWorkspaceMetadataForWindow(win)
+function AppState:_refreshPairedWorkspaceMetadataForWindow(win, opts)
   if not win then
     return false
   end
@@ -505,245 +485,13 @@ function AppState:_refreshPairedWorkspaceMetadataForWindow(win)
     if workspace:getBaseWindowId() == id or workspace:getFullscreenTargetWindowId() == id then
       matchedWorkspace = true
       workspace:setFingerprint(meta)
+      if type(opts) == "table" and opts.updateSpace == true then
+        self:_updateWorkspaceBindingSpaceState(workspace, win)
+      end
     end
   end)
 
   return matchedWorkspace
-end
-
-function AppState:_recoveryCandidateWindows()
-  if self.windowService.recoveryCandidateWindows then
-    return self.windowService:recoveryCandidateWindows() or {}
-  end
-  if self.windowService.candidateWindows then
-    return self.windowService:candidateWindows() or {}
-  end
-  return {}
-end
-
-function AppState:_isWindowPairedByOtherWorkspace(windowId, owner)
-  if not windowId then
-    return false
-  end
-
-  local paired = false
-  self:_forEachWorkspace(function(workspace)
-    if workspace ~= owner
-      and (workspace:getBaseWindowId() == windowId or workspace:getFullscreenTargetWindowId() == windowId) then
-      paired = true
-    end
-  end)
-  return paired
-end
-
-function AppState:_validateWindowLocator(windowId)
-  if not windowId then
-    return result(false, "missing_window_id")
-  end
-
-  local win = self.windowService.getWindowById(windowId)
-  if not win then
-    return result(false, "stale_locator", {
-      windowId = windowId,
-    })
-  end
-
-  if self.windowService.getWindowSpacesById then
-    local spaceIds = self.windowService.getWindowSpacesById(windowId)
-    if type(spaceIds) == "table" and #spaceIds == 0 then
-      return result(false, "stale_locator", {
-        windowId = windowId,
-        window = win,
-      })
-    end
-  end
-
-  return result(true, "live_locator", {
-    windowId = windowId,
-    window = win,
-  })
-end
-
-function AppState:_findRecoveryCandidateForWorkspace(workspace)
-  if not hasRecoverableFingerprint(workspace) then
-    return result(false, "missing_fingerprint")
-  end
-
-  local matches = {}
-  for _, candidate in ipairs(self:_recoveryCandidateWindows()) do
-    local candidateId = candidate and candidate:id() or nil
-    local candidateMeta = self.windowService.pairingMetadata(candidate)
-    if candidateId
-      and candidateMeta
-      and not self:_isWindowPairedByOtherWorkspace(candidateId, workspace)
-      and workspace:matchesRecoveryCandidate(candidateMeta) then
-      matches[#matches + 1] = candidate
-    end
-  end
-
-  if #matches == 0 then
-    return result(false, "no_recovery_match", {
-      candidateCount = 0,
-    })
-  end
-
-  if #matches > 1 then
-    return result(false, "ambiguous_recovery_match", {
-      candidateCount = #matches,
-    })
-  end
-
-  return result(true, "recovery_match", {
-    candidate = matches[1],
-    candidateCount = 1,
-  })
-end
-
-function AppState:_logRecoveryResult(workspace, recoveryResult, context)
-  if not recoveryResult or recoveryResult.code == "live_locator" or recoveryResult.code == "not_stale" then
-    return
-  end
-
-  local fingerprint = workspace and workspace:getFingerprint() or {}
-  recoveryLog(
-    "%s slot=%s name=%s code=%s oldWindow=%s oldSpace=%s candidates=%s title=%s",
-    tostring(context or "recovery"),
-    tostring(workspace and workspace:getIndex() or "?"),
-    tostring(workspace and workspace:getName() or "?"),
-    tostring(recoveryResult.code),
-    tostring(recoveryResult.oldWindowId or (workspace and workspace:getBaseWindowId()) or "?"),
-    tostring(recoveryResult.oldSpaceId or (workspace and workspace:getBaseSpaceId()) or "?"),
-    tostring(recoveryResult.candidateCount or "?"),
-    tostring(fingerprint.titleRaw or fingerprint.titleNormalized or "?")
-  )
-end
-
-function AppState:_relinkWorkspaceFromCandidate(workspace, win)
-  if not workspace or not win then
-    return result(false, "missing_window")
-  end
-
-  local candidateId = win:id()
-  if not candidateId then
-    return result(false, "missing_window_id")
-  end
-
-  self:_pairWorkspace(workspace, candidateId, win)
-  return result(true, "relinked", {
-    window = win,
-    windowId = candidateId,
-    changed = true,
-  })
-end
-
-function AppState:_demoteWorkspaceForRecovery(workspace, code, fields)
-  if not hasRecoverableFingerprint(workspace) then
-    return result(false, "missing_fingerprint", fields)
-  end
-
-  workspace:markClosedForRecovery()
-  local recoveryResult = result(false, code or "no_recovery_match", fields or {})
-  recoveryResult.changed = true
-  return recoveryResult
-end
-
-function AppState:_repairStalePairedWorkspace(workspace, opts)
-  if not workspace then
-    return result(false, "missing_workspace")
-  end
-
-  opts = opts or {}
-  local oldWindowId = workspace:getBaseWindowId()
-  local oldSpaceId = workspace:getBaseSpaceId()
-  if workspace:isRecoverable() then
-    local matchResult = self:_findRecoveryCandidateForWorkspace(workspace)
-    if matchResult.ok then
-      local relinkResult = self:_relinkWorkspaceFromCandidate(workspace, matchResult.candidate)
-      relinkResult.oldWindowId = oldWindowId
-      relinkResult.oldSpaceId = oldSpaceId
-      self:_logRecoveryResult(workspace, relinkResult, opts.reason or "recoverable")
-      return relinkResult
-    end
-    matchResult.oldWindowId = oldWindowId
-    matchResult.oldSpaceId = oldSpaceId
-    self:_logRecoveryResult(workspace, matchResult, opts.reason or "recoverable")
-    return matchResult
-  end
-
-  if not workspace:isPaired() then
-    return result(true, "not_paired")
-  end
-
-  local baseResult = self:_validateWindowLocator(workspace:getBaseWindowId())
-  if baseResult.ok then
-    if workspace:hasTrackedFullscreenTarget() then
-      local fullscreenResult = self:_validateWindowLocator(workspace:getFullscreenTargetWindowId())
-      if not fullscreenResult.ok then
-        workspace:clearFullscreenState()
-        return result(true, "fullscreen_target_stale_cleared", {
-          changed = true,
-        })
-      end
-    end
-    return result(true, "not_stale", {
-      window = baseResult.window,
-      windowId = baseResult.windowId,
-    })
-  end
-
-  if workspace:hasTrackedFullscreenTarget() then
-    local fullscreenResult = self:_validateWindowLocator(workspace:getFullscreenTargetWindowId())
-    if fullscreenResult.ok then
-      local relinkResult = self:_relinkWorkspaceFromCandidate(workspace, fullscreenResult.window)
-      relinkResult.code = "relinked_fullscreen_target"
-      relinkResult.oldWindowId = oldWindowId
-      relinkResult.oldSpaceId = oldSpaceId
-      self:_logRecoveryResult(workspace, relinkResult, opts.reason or "stale_paired")
-      return relinkResult
-    end
-  end
-
-  local matchResult = self:_findRecoveryCandidateForWorkspace(workspace)
-  if matchResult.ok then
-    local relinkResult = self:_relinkWorkspaceFromCandidate(workspace, matchResult.candidate)
-    relinkResult.oldWindowId = oldWindowId
-    relinkResult.oldSpaceId = oldSpaceId
-    self:_logRecoveryResult(workspace, relinkResult, opts.reason or "stale_paired")
-    return relinkResult
-  end
-
-  if self.cfg.recoverClosedWindows then
-    local demoted = self:_demoteWorkspaceForRecovery(workspace, matchResult.code, {
-      candidateCount = matchResult.candidateCount,
-      oldWindowId = oldWindowId,
-      oldSpaceId = oldSpaceId,
-    })
-    self:_logRecoveryResult(workspace, demoted, opts.reason or "stale_paired")
-    return demoted
-  end
-
-  matchResult.oldWindowId = oldWindowId
-  matchResult.oldSpaceId = oldSpaceId
-  self:_logRecoveryResult(workspace, matchResult, opts.reason or "stale_paired")
-  return matchResult
-end
-
-function AppState:_repairStalePairedWorkspaces(opts)
-  local changed = false
-  local repaired = false
-  self:_forEachWorkspace(function(workspace)
-    local repairResult = self:_repairStalePairedWorkspace(workspace, opts)
-    if repairResult.changed then
-      changed = true
-    end
-    if repairResult.ok and (repairResult.code == "relinked" or repairResult.code == "relinked_fullscreen_target") then
-      repaired = true
-    end
-  end)
-  return {
-    changed = changed,
-    repaired = repaired,
-  }
 end
 
 function AppState:_pairWorkspace(workspace, windowId, win)
@@ -813,7 +561,7 @@ end
 
 function AppState:_activateResolvedPairedWindow(workspace, paired, focusedSpaceId)
   if not workspace or not paired then
-    return result(false, "missing_window")
+    return nil
   end
 
   local shouldInspectSpaces = workspace:getBaseSpaceId() ~= nil
@@ -827,13 +575,8 @@ function AppState:_activateResolvedPairedWindow(workspace, paired, focusedSpaceI
         workspace:setBaseSpaceId(resolvedSpaceId)
       end
       self:_refreshWorkspaceFingerprint(workspace, paired)
-      local focusResult = self.windowService.requestFrontmost(paired)
-      if focusResult and focusResult.ok == false then
-        return result(false, focusResult.code or "focus_failed")
-      end
-      return result(true, "base_window", {
-        window = paired,
-      })
+      self.windowService.requestFrontmost(paired)
+      return "base-window"
     end
 
     if targetSpaceId then
@@ -841,63 +584,46 @@ function AppState:_activateResolvedPairedWindow(workspace, paired, focusedSpaceI
       if switchResult.ok then
         workspace:setBaseSpaceId(targetSpaceId)
         self:_refreshWorkspaceFingerprint(workspace, paired)
-        local focusResult = self.windowService.requestFrontmostAfterSpaceSwitch(paired, self.cfg)
-        if focusResult and focusResult.ok == false then
-          return result(false, focusResult.code or "focus_failed")
-        end
-        return result(true, "base_window_space_switch", {
-          window = paired,
-          spaceId = targetSpaceId,
-        })
+        self.windowService.requestFrontmostAfterSpaceSwitch(paired, self.cfg)
+        return "base-window-space-switch"
       end
 
-      return result(false, switchResult.code or "space_switch_failed", {
-        spaceId = targetSpaceId,
-      })
+      return nil
     end
-
-    return result(false, "missing_window_space")
   end
 
   self:_refreshWorkspaceFingerprint(workspace, paired)
-  local focusResult = self.windowService.requestFrontmost(paired)
-  if focusResult and focusResult.ok == false then
-    return result(false, focusResult.code or "focus_failed")
-  end
-  return result(true, "base_window", {
-    window = paired,
-  })
+  self.windowService.requestFrontmost(paired)
+  return "base-window"
 end
 
 function AppState:_activateExactWindowIdAcrossSpaces(workspace, focusedSpaceId)
   if not workspace or not workspace:getBaseWindowId() then
-    return result(false, "missing_window_id")
+    return nil
   end
 
   if workspace:getBaseSpaceId() == nil or workspace:getBaseSpaceId() == focusedSpaceId then
-    return result(false, "same_or_unknown_space")
+    return nil
   end
 
   if not self.windowService.getWindowSpacesById then
-    return result(false, "missing_space_api")
+    return nil
   end
 
   local spaceIds = self.windowService.getWindowSpacesById(workspace:getBaseWindowId())
   local targetSpaceId, inFocusedSpace = self:_resolvedTargetSpaceFromSpaceIds(spaceIds, focusedSpaceId)
   if inFocusedSpace or not targetSpaceId then
-    return result(false, "missing_window_space")
+    return nil
   end
 
   local switchResult = self.windowService.gotoSpace(targetSpaceId, self.cfg)
   if not switchResult.ok then
-    return result(false, switchResult.code or "space_switch_failed", {
-      spaceId = targetSpaceId,
-    })
+    return nil
   end
 
   local resolved = self:_resolvePairedWindow(workspace)
   if not resolved then
-    return result(false, "stale_locator")
+    return nil
   end
 
   self:_updateWorkspaceBindingSpaceState(
@@ -906,14 +632,8 @@ function AppState:_activateExactWindowIdAcrossSpaces(workspace, focusedSpaceId)
   )
   workspace:setBaseSpaceId(targetSpaceId)
   self:_refreshWorkspaceFingerprint(workspace, resolved)
-  local focusResult = self.windowService.requestFrontmostAfterSpaceSwitch(resolved, self.cfg)
-  if focusResult and focusResult.ok == false then
-    return result(false, focusResult.code or "focus_failed")
-  end
-  return result(true, "base_window_id_space_switch", {
-    window = resolved,
-    spaceId = targetSpaceId,
-  })
+  self.windowService.requestFrontmostAfterSpaceSwitch(resolved, self.cfg)
+  return "base-window-id-space-switch"
 end
 
 function AppState:_isWindowAlreadyPaired(windowId)
@@ -926,7 +646,7 @@ function AppState:_isWindowAlreadyPaired(windowId)
   return paired
 end
 
-function AppState:_restoreRecoverableWorkspacesForCandidate(win)
+function AppState:_restoreRecoverableWorkspacesForCandidate(win, opts)
   if not self.cfg.recoverClosedWindows then
     return {}
   end
@@ -944,8 +664,16 @@ function AppState:_restoreRecoverableWorkspacesForCandidate(win)
 
   local restoredWorkspaces = {}
   self:_forEachWorkspace(function(workspace)
-    if workspace:canRecover()
-      and workspace:matchesRecoveryCandidate(candidateMeta) then
+    if not workspace:matchesRecoveryCandidate(candidateMeta) then
+      return
+    end
+
+    local canRestore = workspace:canRecover()
+    if not canRestore and type(opts) == "table" and opts.allowStalePaired == true then
+      canRestore = self:_canRestoreStalePairedWorkspaceForCandidate(workspace)
+    end
+
+    if canRestore then
       self:_pairWorkspace(workspace, candidateId, win)
       restoredWorkspaces[#restoredWorkspaces + 1] = workspace
     end
@@ -954,8 +682,30 @@ function AppState:_restoreRecoverableWorkspacesForCandidate(win)
   return restoredWorkspaces
 end
 
+function AppState:_canRestoreStalePairedWorkspaceForCandidate(workspace)
+  if not workspace or workspace:getBindingKind() ~= "paired" then
+    return false
+  end
+
+  local baseWindowId = workspace:getBaseWindowId()
+  if not baseWindowId or self.windowService.getWindowById(baseWindowId) then
+    return false
+  end
+
+  if self:_resolveTrackedSpaceByWindowId(baseWindowId) then
+    return false
+  end
+
+  local fullscreenTargetWindowId = workspace:getFullscreenTargetWindowId()
+  if fullscreenTargetWindowId and self:_resolveTrackedSpaceByWindowId(fullscreenTargetWindowId) then
+    return false
+  end
+
+  return true
+end
+
 function AppState:_restoreWorkspaceFromCandidate(win, opts)
-  local restoredWorkspaces = self:_restoreRecoverableWorkspacesForCandidate(win)
+  local restoredWorkspaces = self:_restoreRecoverableWorkspacesForCandidate(win, opts)
   if #restoredWorkspaces > 0 then
     if not (type(opts) == "table" and opts.persist == false) then
       self:_persistWorkspacePairings()
@@ -973,11 +723,21 @@ function AppState:_restoreRecoverableWorkspacesFromExistingCandidates()
     return false
   end
 
-  if not self.windowService.recoveryCandidateWindows and not self.windowService.candidateWindows then
+  local hasRecoverableWorkspace = false
+  self:_forEachWorkspace(function(workspace)
+    if workspace:canRecover() then
+      hasRecoverableWorkspace = true
+    end
+  end)
+  if not hasRecoverableWorkspace then
     return false
   end
 
-  local candidates = self:_recoveryCandidateWindows()
+  if not self.windowService.candidateWindows then
+    return false
+  end
+
+  local candidates = self.windowService:candidateWindows() or {}
   local restored = false
   for _, win in ipairs(candidates) do
     local restoredWorkspaces = self:_restoreRecoverableWorkspacesForCandidate(win)
@@ -991,9 +751,6 @@ end
 
 function AppState:_restoreStartupWorkspaceState()
   self:_restoreWorkspacePairings()
-  self:_repairStalePairedWorkspaces({
-    reason = "startup",
-  })
   self:_restoreRecoverableWorkspacesFromExistingCandidates()
   self:_persistWorkspacePairings()
   if self.appdata.setActiveProfileId then
@@ -1064,41 +821,6 @@ function AppState:_formatRestoreToast(workspaces, win)
   })
 end
 
-function AppState:_activationFailureMessage(workspace, failure)
-  local name = workspace and workspace:getName() or "Window"
-  local code = failure and failure.code or "unknown"
-
-  if code == "ambiguous_recovery_match" then
-    return string.format("%s has multiple matching restored windows; focus the intended window and pair it again.", name)
-  end
-
-  if code == "missing_fingerprint" then
-    return string.format("%s has stale window data and no recovery fingerprint.", name)
-  end
-
-  if code == "no_recovery_match" then
-    return string.format("%s is recoverable, but no matching restored window was found.", name)
-  end
-
-  if code == "space_switch_timeout" or code == "space_switch_failed" then
-    return string.format("%s was found, but macOS did not switch to its Space.", name)
-  end
-
-  if code == "missing_window_space" then
-    return string.format("%s was found, but macOS did not report a Space for it.", name)
-  end
-
-  if code == "focus_failed" or code == "missing_window" then
-    return string.format("%s was found, but macOS did not focus it.", name)
-  end
-
-  if code == "stale_locator" then
-    return string.format("%s points to a stale window id and could not be recovered.", name)
-  end
-
-  return "Window not found in any spaces"
-end
-
 function AppState:_clearRecoverableWorkspaces()
   local changed = false
   self:_forEachWorkspace(function(workspace)
@@ -1152,32 +874,6 @@ function AppState:activateSlot(index)
 
     local currentId = win:id()
     local focusedSpaceId = self.windowService.focusedSpaceId and self.windowService.focusedSpaceId() or nil
-    local repairResult = nil
-
-    if workspace:isRecoverable() then
-      repairResult = self:_repairStalePairedWorkspace(workspace, {
-        reason = "activation",
-      })
-      if repairResult.changed then
-        bindingChanged = true
-      end
-      if not workspace:isPaired() then
-        self.toast(Toast.message.plain(self:_activationFailureMessage(workspace, repairResult)))
-        return
-      end
-    elseif workspace:isPaired() then
-      repairResult = self:_repairStalePairedWorkspace(workspace, {
-        reason = "activation",
-      })
-      if repairResult.changed then
-        bindingChanged = true
-      end
-      if workspace:isRecoverable() then
-        self.toast(Toast.message.plain(self:_activationFailureMessage(workspace, repairResult)))
-        return
-      end
-    end
-
     if not workspace:isPaired() then
       self:_pairWorkspace(workspace, currentId, win)
       bindingChanged = true
@@ -1234,10 +930,6 @@ function AppState:activateSlot(index)
                 return
               end
             end
-            self.toast(Toast.message.plain(self:_activationFailureMessage(workspace, {
-              code = switchResult.code or "space_switch_failed",
-            })))
-            return
           end
         else
           workspace:clearFullscreenState()
@@ -1248,15 +940,9 @@ function AppState:activateSlot(index)
       local paired = self:_resolvePairedWindow(workspace)
       if paired then
         workspace:resetInputBuffer()
-        local activationResult = self:_activateResolvedPairedWindow(workspace, paired, focusedSpaceId)
-        if not activationResult.ok then
-          self.toast(Toast.message.plain(self:_activationFailureMessage(workspace, activationResult)))
-        end
-      else
-        local exactResult = self:_activateExactWindowIdAcrossSpaces(workspace, focusedSpaceId)
-        if not exactResult.ok then
-          self.toast(Toast.message.plain(self:_activationFailureMessage(workspace, exactResult)))
-        end
+        self:_activateResolvedPairedWindow(workspace, paired, focusedSpaceId)
+      elseif not self:_activateExactWindowIdAcrossSpaces(workspace, focusedSpaceId) then
+        self.toast(Toast.message.plain("Window not found in any spaces"))
       end
       return
     end
@@ -1517,25 +1203,13 @@ function AppState:handleWindowEvent(event, win)
       if workspace:getBaseWindowId() == deadId then
         if workspace:hasTrackedFullscreenTarget()
           and workspace:getFullscreenTargetWindowId() ~= deadId then
-          local repairResult = self:_repairStalePairedWorkspace(workspace, {
-            reason = "window_destroyed",
-          })
-          if repairResult.changed then
-            basePairingChanged = true
-            return
-          end
-          -- Repair could not relink; fall through to the regular closed-window path.
+          return
         end
         if workspace:hasTrackedFullscreenTarget()
           and workspace:getFullscreenTargetWindowId() == deadId
           and self.windowService.isWindowFullscreen(win) then
-          if self.cfg.recoverClosedWindows then
-            workspace:markClosedForRecovery()
-          else
-            closedWindowToast = self:_formatClosedWindowUnpairToast(workspace)
-            workspace:clear()
-          end
-          basePairingChanged = true
+          workspace:clearFullscreenState()
+          fullscreenStateChanged = true
           return
         end
         if self.cfg.recoverClosedWindows then
@@ -1611,29 +1285,17 @@ function AppState:handleWindowEvent(event, win)
 
   local restored = false
   if win then
-    restored = self:_restoreWorkspaceFromCandidate(win)
-  end
-
-  local staleRepair = {
-    changed = false,
-    repaired = false,
-  }
-  if win then
-    staleRepair = self:_repairStalePairedWorkspaces({
-      reason = "window_event",
+    restored = self:_restoreWorkspaceFromCandidate(win, {
+      allowStalePaired = event == hs.window.filter.windowCreated,
     })
-    if staleRepair.changed then
-      self:_persistWorkspacePairings()
-    end
   end
 
-  local pairedWorkspaceTouched = self:_refreshPairedWorkspaceMetadataForWindow(win)
+  local pairedWorkspaceTouched = self:_refreshPairedWorkspaceMetadataForWindow(win, {
+    updateSpace = event == hs.window.filter.windowFocused,
+  })
   self.youtubeService:handleWindowCandidate(win)
 
-  local shouldRefreshPopover = event == hs.window.filter.windowFocused
-    or pairedWorkspaceTouched
-    or restored
-    or staleRepair.changed
+  local shouldRefreshPopover = event == hs.window.filter.windowFocused or pairedWorkspaceTouched or restored
   if win then
     local frontmost = hs.window.frontmostWindow()
     if frontmost and frontmost:id() == win:id() then

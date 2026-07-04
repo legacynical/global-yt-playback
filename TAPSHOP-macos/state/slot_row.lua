@@ -81,19 +81,28 @@ function SlotRow.build(slot, session, deps)
     baseWin = windowService.getWindowById(windowId)
     if slot:hasTrackedFullscreenTarget() then
       local fullscreenWin = windowService.getWindowById(slot:getFullscreenTargetWindowId())
-      if fullscreenWin
-        and (not windowService.isWindowFullscreen or windowService.isWindowFullscreen(fullscreenWin)) then
-        state = "fullscreen"
+      state = "fullscreen"
+      if fullscreenWin then
         label = rowLabelForWindow(windowService, fullscreenWin)
         iconBundleID, iconAppName = iconFieldsForWindow(fullscreenWin, fingerprint.bundleID, fingerprint.appName)
+      else
+        label = slot:getStoredWindowTitle()
+        iconBundleID = fingerprint.bundleID
+        iconAppName = fingerprint.appName
       end
     end
 
     if state ~= "fullscreen" then
-      if baseWin and isOffSpace(slot, session) then
+      if isOffSpace(slot, session) then
         state = "off_space"
-        label = rowLabelForWindow(windowService, baseWin)
-        iconBundleID, iconAppName = iconFieldsForWindow(baseWin, fingerprint.bundleID, fingerprint.appName)
+        if baseWin then
+          label = rowLabelForWindow(windowService, baseWin)
+          iconBundleID, iconAppName = iconFieldsForWindow(baseWin, fingerprint.bundleID, fingerprint.appName)
+        else
+          label = slot:getStoredWindowTitle()
+          iconBundleID = fingerprint.bundleID
+          iconAppName = fingerprint.appName
+        end
       elseif baseWin then
         state = baseWin:isMinimized() and "minimized" or "paired"
         label = rowLabelForWindow(windowService, baseWin)
