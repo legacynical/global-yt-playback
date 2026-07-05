@@ -56,6 +56,9 @@ function Workspace.new(indexOrName, nameOrThreshold, maybeThreshold)
       },
       fingerprint = cloneFingerprint(nil),
     },
+    runtime = {
+      application = nil,
+    },
     _minimizeThreshold = minimizeThreshold,
   }, Workspace)
 end
@@ -105,6 +108,7 @@ function Workspace:pair(baseWindowId, recoveryMeta)
   self.binding.baseWindowId = baseWindowId
   self.binding.baseSpaceId = nil
   self:setFingerprint(recoveryMeta)
+  self:clearRuntimeApplicationIdentity()
   self:clearFullscreenState()
   self:resetInputBuffer()
 end
@@ -118,6 +122,7 @@ function Workspace:setRecoverable(recoveryMeta)
   self.binding.baseWindowId = nil
   self.binding.baseSpaceId = nil
   self:setFingerprint(recoveryMeta)
+  self:clearRuntimeApplicationIdentity()
   self:resetInputBuffer()
   self:clearFullscreenState()
 end
@@ -127,6 +132,7 @@ function Workspace:clear()
   self.binding.baseWindowId = nil
   self.binding.baseSpaceId = nil
   self.binding.fingerprint = cloneFingerprint(nil)
+  self:clearRuntimeApplicationIdentity()
   self:resetInputBuffer()
   self:clearFullscreenState()
 end
@@ -155,6 +161,40 @@ function Workspace:matchesRecoveryCandidate(candidateMeta)
   end
   return fingerprint.bundleID == candidateMeta.bundleID
     and fingerprint.titleNormalized == candidateMeta.titleNormalized
+end
+
+function Workspace:setRuntimeApplicationIdentity(identity)
+  if type(identity) ~= "table" then
+    self:clearRuntimeApplicationIdentity()
+    return
+  end
+
+  local pid = type(identity.pid) == "number" and identity.pid or nil
+  local bundleID = type(identity.bundleID) == "string" and identity.bundleID ~= "" and identity.bundleID or nil
+  local appName = type(identity.appName) == "string" and identity.appName ~= "" and identity.appName or nil
+  if not pid and not bundleID and not appName then
+    self:clearRuntimeApplicationIdentity()
+    return
+  end
+
+  self.runtime.application = {
+    pid = pid,
+    bundleID = bundleID,
+    appName = appName,
+  }
+end
+
+function Workspace:clearRuntimeApplicationIdentity()
+  self.runtime.application = nil
+end
+
+function Workspace:getRuntimeApplicationIdentity()
+  return self.runtime.application
+end
+
+function Workspace:getRuntimeApplicationPid()
+  local identity = self.runtime.application
+  return identity and identity.pid or nil
 end
 
 function Workspace:resetInputBuffer()

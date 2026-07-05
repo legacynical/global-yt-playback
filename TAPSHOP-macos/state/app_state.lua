@@ -304,6 +304,7 @@ function AppState:_restorePairedWorkspaceFromRecord(workspace, persisted)
   local baseWin = self.windowService.getWindowById(baseWindowId)
   if baseWin then
     workspace:pair(baseWindowId, persisted.fingerprint)
+    self:_refreshWorkspaceRuntimeApplicationIdentity(workspace, baseWin)
     if persisted.baseSpaceId then
       workspace:setBaseSpaceId(persisted.baseSpaceId)
     end
@@ -466,7 +467,15 @@ function AppState:_refreshWorkspaceFingerprint(workspace, win)
 
   if target then
     workspace:setFingerprint(self.windowService.pairingMetadata(target))
+    self:_refreshWorkspaceRuntimeApplicationIdentity(workspace, target)
   end
+end
+
+function AppState:_refreshWorkspaceRuntimeApplicationIdentity(workspace, win)
+  if not workspace or not self.windowService.runtimeApplicationIdentity then
+    return
+  end
+  workspace:setRuntimeApplicationIdentity(self.windowService.runtimeApplicationIdentity(win))
 end
 
 function AppState:_refreshPairedWorkspaceMetadataForWindow(win, opts)
@@ -486,6 +495,7 @@ function AppState:_refreshPairedWorkspaceMetadataForWindow(win, opts)
     if isBaseWindow or workspace:getFullscreenTargetWindowId() == id then
       matchedWorkspace = true
       workspace:setFingerprint(meta)
+      self:_refreshWorkspaceRuntimeApplicationIdentity(workspace, win)
       if isBaseWindow and type(opts) == "table" and opts.updateSpace == true then
         self:_updateWorkspaceBindingSpaceState(workspace, win)
       end
@@ -497,6 +507,7 @@ end
 
 function AppState:_pairWorkspace(workspace, windowId, win)
   workspace:pair(windowId, self.windowService.pairingMetadata(win))
+  self:_refreshWorkspaceRuntimeApplicationIdentity(workspace, win)
   local spaceId = self:_updateWorkspaceBindingSpaceState(
     workspace,
     win
@@ -723,43 +734,29 @@ function AppState:_restoreRecoverableWorkspacesFromExistingCandidates()
   return restored
 end
 
-local function appObjectField(appObject, methodName)
-  local objectType = type(appObject)
-  if objectType ~= "table" and objectType ~= "userdata" then
-    return nil
-  end
-
-  local methodOk, method = pcall(function()
-    return appObject[methodName]
-  end)
-  if not methodOk then
-    return nil
-  end
-  if type(method) ~= "function" then
-    return nil
-  end
-
-  local ok, value = pcall(function()
-    return method(appObject)
-  end)
-  if ok and type(value) == "string" and value:match("%S") then
-    return value
-  end
-  return nil
-end
-
-local function workspaceMatchesTerminatedApp(workspace, bundleID, appName)
+local function workspaceMatchesTerminatedApp(workspace, terminatedIdentity)
   local fingerprint = workspace and workspace:getFingerprint() or nil
   if type(fingerprint) ~= "table" then
     return false
   end
 
-  if type(bundleID) == "string" and bundleID ~= "" then
-    return fingerprint.bundleID == bundleID
+  if type(terminatedIdentity) ~= "table" then
+    return false
   end
 
-  if type(appName) == "string" and appName ~= "" then
-    return fingerprint.appName == appName
+  if type(terminatedIdentity.pid) == "number" then
+    local runtimePid = workspace.getRuntimeApplicationPid and workspace:getRuntimeApplicationPid() or nil
+    if runtimePid == terminatedIdentity.pid then
+      return true
+    end
+  end
+
+  if type(terminatedIdentity.bundleID) == "string" and terminatedIdentity.bundleID ~= "" then
+    return fingerprint.bundleID == terminatedIdentity.bundleID
+  end
+
+  if type(terminatedIdentity.appName) == "string" and terminatedIdentity.appName ~= "" then
+    return fingerprint.appName == terminatedIdentity.appName
   end
 
   return false
@@ -770,10 +767,10 @@ function AppState:handleApplicationTerminated(appName, appObject)
     return false
   end
 
-  local bundleID = appObjectField(appObject, "bundleID")
-  local resolvedAppName = appObjectField(appObject, "name") or appName
-  if (type(bundleID) ~= "string" or bundleID == "")
-    and (type(resolvedAppName) ~= "string" or resolvedAppName == "") then
+  local terminatedIdentity = self.windowService.applicationIdentity
+    and self.windowService.applicationIdentity(appName, appObject)
+    or nil
+  if not terminatedIdentity then
     return false
   end
 
@@ -785,7 +782,7 @@ function AppState:handleApplicationTerminated(appName, appObject)
 
     for _, workspace in ipairs(profile.workspaces or {}) do
       if workspace:isPaired()
-        and workspaceMatchesTerminatedApp(workspace, bundleID, resolvedAppName) then
+        and workspaceMatchesTerminatedApp(workspace, terminatedIdentity) then
         local baseWindowId = workspace:getBaseWindowId()
         local fullscreenTargetWindowId = workspace:getFullscreenTargetWindowId()
         if baseWindowId then

@@ -17,6 +17,71 @@ local function focusResult(ok, code, win)
   }
 end
 
+local function objectField(object, methodName, expectedType)
+  if not object then
+    return nil
+  end
+
+  local methodOk, method = pcall(function()
+    return object[methodName]
+  end)
+  if not methodOk then
+    return nil
+  end
+  if type(method) ~= "function" then
+    return nil
+  end
+
+  local ok, value = pcall(function()
+    return method(object)
+  end)
+  if not ok or type(value) ~= expectedType then
+    return nil
+  end
+  if expectedType == "string" and not value:match("%S") then
+    return nil
+  end
+  return value
+end
+
+local function identityFromAppObject(app, fallbackName)
+  local fallbackAppName = type(fallbackName) == "string" and fallbackName:match("%S") and fallbackName or nil
+  if not app then
+    if fallbackAppName then
+      return {
+        pid = nil,
+        bundleID = nil,
+        appName = fallbackAppName,
+      }
+    end
+    return nil
+  end
+
+  local identity = {
+    pid = objectField(app, "pid", "number"),
+    bundleID = objectField(app, "bundleID", "string"),
+    appName = objectField(app, "name", "string") or fallbackAppName,
+  }
+  if not identity.pid and not identity.bundleID and not identity.appName then
+    return nil
+  end
+  return identity
+end
+
+local function appForWindow(win)
+  if not win then
+    return nil
+  end
+
+  local ok, app = pcall(function()
+    return win:application()
+  end)
+  if ok then
+    return app
+  end
+  return nil
+end
+
 local function isFrontmost(win)
   if not win then
     return false
@@ -81,6 +146,14 @@ function WindowService.getWindowInfo(win)
     pid = app and app:pid() or nil,
     bundleID = app and app:bundleID() or "",
   }
+end
+
+function WindowService.runtimeApplicationIdentity(win)
+  return identityFromAppObject(appForWindow(win))
+end
+
+function WindowService.applicationIdentity(appName, appObject)
+  return identityFromAppObject(appObject, appName)
 end
 
 function WindowService.candidateWindows()
