@@ -1349,7 +1349,7 @@ function AppState:handleWindowEvent(event, win)
   end
 
   local restored = false
-  if win then
+  if event == hs.window.filter.windowCreated and win then
     restored = self:_restoreWorkspaceFromCandidate(win)
   end
 
