@@ -648,7 +648,9 @@ function AppState:_restoreRecoverableWorkspacesForCandidate(win)
     return {}
   end
 
-  if not self.windowService.isCandidateWindow or not self.windowService.isCandidateWindow(win) then
+  local isRecoveryCandidateWindow = self.windowService.isRecoveryCandidateWindow
+    or self.windowService.isCandidateWindow
+  if not isRecoveryCandidateWindow or not isRecoveryCandidateWindow(win) then
     return {}
   end
 
