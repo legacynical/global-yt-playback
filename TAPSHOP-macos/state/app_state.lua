@@ -746,8 +746,8 @@ local function workspaceMatchesTerminatedApp(workspace, terminatedIdentity)
 
   if type(terminatedIdentity.pid) == "number" then
     local runtimePid = workspace.getRuntimeApplicationPid and workspace:getRuntimeApplicationPid() or nil
-    if runtimePid == terminatedIdentity.pid then
-      return true
+    if type(runtimePid) == "number" then
+      return runtimePid == terminatedIdentity.pid
     end
   end
 
