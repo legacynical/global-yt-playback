@@ -26,6 +26,7 @@ local windowService = require("services.window_service")
 local YoutubeService = require("services.youtube_service")
 local SpotifyService = require("services.spotify_service")
 local SystemAudioService = require("services.system_audio_service")
+local DebugLogger = require("services.debug_logger")
 local Toast = require("ui.toast")
 local Icons = require("ui.icons")
 local Popover = require("ui.popover.controller")
@@ -92,6 +93,16 @@ end
 Settings.bootstrap()
 AppData.bootstrap()
 
+local debugLogger = DebugLogger.new()
+_G.tapshop = _G.tapshop or {}
+_G.tapshop.debug = debugLogger:commands()
+debugLogger:consumeLaunchArm()
+debugLogger:record("startup", "info", "bootstrap_started", "TAPSHOP bootstrap started", function()
+  return {
+    phase = "after_persistence_bootstrap",
+  }
+end)
+
 local cfg = loadConfig()
 local toast = Toast.new(cfg)
 local youtubeService = YoutubeService.new(cfg, windowService, toast)
@@ -105,6 +116,7 @@ local app = AppState.new(cfg, {
   youtubeService = youtubeService,
   spotifyService = spotifyService,
   systemAudioService = systemAudioService,
+  debugLogger = debugLogger,
   toast = toast,
 })
 
@@ -140,12 +152,29 @@ windowFilter:subscribe({
 end)
 
 app.windowFilter = windowFilter
+debugLogger:record("startup", "debug", "window_filter_subscribed", "window filter subscribed", function()
+  return {
+    events = {
+      hs.window.filter.windowFocused,
+      hs.window.filter.windowTitleChanged,
+      hs.window.filter.windowCreated,
+      hs.window.filter.windowDestroyed,
+      hs.window.filter.windowVisible,
+      hs.window.filter.windowMinimized,
+      hs.window.filter.windowUnminimized,
+      hs.window.filter.windowFullscreened,
+      hs.window.filter.windowUnfullscreened,
+    },
+  }
+end)
 
 hotkeyManager:bindAll()
+debugLogger:record("startup", "info", "hotkeys_bound", "hotkeys bound")
 
 toast(Toast.message.status("TAPSHOP ready (Hammerspoon)", {
   imagePath = Icons.tapshopIconPath(),
 }))
+debugLogger:record("startup", "info", "app_ready", "TAPSHOP ready")
 
 hs.timer.doAfter(0.10, function()
   if app.warmHotkeyUiCache then

@@ -30,6 +30,7 @@ function AppState.new(cfg, deps)
     youtubeService = deps.youtubeService,
     spotifyService = deps.spotifyService,
     systemAudioService = deps.systemAudioService,
+    debugLogger = deps.debugLogger,
     toast = deps.toast,
     profiles = {},
     session = {
@@ -113,6 +114,72 @@ function AppState:_refreshFocusedSpaceId()
     self.session.focusedSpaceId = self.windowService.focusedSpaceId()
   end
   return self.session.focusedSpaceId
+end
+
+local function safeValue(fn)
+  local ok, value = pcall(fn)
+  if ok then
+    return value
+  end
+  return nil
+end
+
+function AppState:_debugEnabled(domain, level, event, fields)
+  if not self.debugLogger or not self.debugLogger.enabled then
+    return false
+  end
+  return self.debugLogger:enabled(domain, level, event, fields)
+end
+
+function AppState:_recordDebug(domain, level, event, message, payloadFn, fields)
+  if not self.debugLogger or not self.debugLogger.record then
+    return false
+  end
+  return self.debugLogger:record(domain, level, event, message, payloadFn, fields)
+end
+
+function AppState:_windowDebugSnapshot(win)
+  if not win then
+    return nil
+  end
+
+  local app = safeValue(function()
+    return win:application()
+  end)
+  local spaces = nil
+  if self.windowService and self.windowService.getWindowSpaces then
+    spaces = safeValue(function()
+      return self.windowService.getWindowSpaces(win)
+    end)
+  end
+
+  return {
+    windowId = safeValue(function()
+      return win:id()
+    end),
+    windowTitle = safeValue(function()
+      return win:title()
+    end),
+    isVisible = safeValue(function()
+      return win:isVisible()
+    end),
+    isStandard = safeValue(function()
+      return win:isStandard()
+    end),
+    isMinimized = safeValue(function()
+      return win:isMinimized()
+    end),
+    isFullscreen = safeValue(function()
+      return win:isFullScreen()
+    end),
+    spaceIds = spaces,
+    bundleId = app and safeValue(function()
+      return app:bundleID()
+    end) or nil,
+    appName = app and safeValue(function()
+      return app:name()
+    end) or nil,
+  }
 end
 
 function AppState:getWorkspaceRowModels()
@@ -422,6 +489,21 @@ function AppState:_profilePairingSnapshot()
 end
 
 function AppState:_persistWorkspacePairings()
+  self:_recordDebug("persistence", "debug", "workspace_pairings_persisted", "workspace pairings persisted", function()
+    local snapshot = self:_profilePairingSnapshot()
+    local profileCount = 0
+    for _, _ in pairs(snapshot) do
+      profileCount = profileCount + 1
+    end
+    return {
+      operation = "write",
+      profileCount = profileCount,
+      activeProfileId = self.session.activeProfileId,
+    }
+  end, {
+    profileId = self.session.activeProfileId,
+  })
+
   if self.appdata.setProfilesWindowPairings then
     self.appdata.setProfilesWindowPairings(self:_profilePairingSnapshot())
     return
@@ -431,6 +513,15 @@ function AppState:_persistWorkspacePairings()
 end
 
 function AppState:_restoreWorkspacePairings()
+  self:_recordDebug("persistence", "debug", "workspace_pairings_restore_started", "workspace pairings restore started", function()
+    return {
+      operation = "read",
+      activeProfileId = self.session.activeProfileId,
+    }
+  end, {
+    profileId = self.session.activeProfileId,
+  })
+
   local pairings = loadPersistedWorkspacePairings(self.appdata)
   local restoredCount = 0
   for profileId, profilePairings in pairs(pairings) do
@@ -444,6 +535,17 @@ function AppState:_restoreWorkspacePairings()
       end
     end
   end
+  self:_recordDebug("persistence", "debug", "workspace_pairings_restore_result", "workspace pairings restore result", function()
+    return {
+      operation = "read",
+      result = "restored",
+      restoredCount = restoredCount,
+      activeProfileId = self.session.activeProfileId,
+    }
+  end, {
+    profileId = self.session.activeProfileId,
+    result = "restored",
+  })
   return restoredCount
 end
 
@@ -643,37 +745,162 @@ function AppState:_isWindowAlreadyPaired(windowId)
   return paired
 end
 
-function AppState:_restoreRecoverableWorkspacesForCandidate(win)
+function AppState:_restoreRecoverableWorkspacesForCandidate(win, opts)
   if not self.cfg.recoverClosedWindows then
     return {}
   end
 
+  local eventName = opts and opts.event or nil
+  local candidateWindowId = safeValue(function()
+    return win and win:id()
+  end)
+  local recoveryFields = {
+    event = eventName,
+    windowId = candidateWindowId,
+  }
+  self:_recordDebug("recovery", "debug", "candidate_considered", "recovery candidate considered", function()
+    return {
+      event = eventName,
+      window = self:_windowDebugSnapshot(win),
+    }
+  end, recoveryFields)
+
   local isRecoveryCandidateWindow = self.windowService.isRecoveryCandidateWindow
     or self.windowService.isCandidateWindow
-  if not isRecoveryCandidateWindow or not isRecoveryCandidateWindow(win) then
+  local isCandidate = isRecoveryCandidateWindow and isRecoveryCandidateWindow(win) or false
+  if not isCandidate then
+    self:_recordDebug("recovery", "debug", "candidate_rejected", "recovery candidate rejected", function()
+      return {
+        event = opts and opts.event or nil,
+        decision = "rejected",
+        reason = "candidate_filter",
+        window = self:_windowDebugSnapshot(win),
+      }
+    end, {
+      event = eventName,
+      windowId = candidateWindowId,
+      decision = "rejected",
+    })
     return {}
   end
 
   local candidateMeta = self.windowService.pairingMetadata(win)
   local candidateId = win:id()
-  if not candidateMeta or not candidateId or self:_isWindowAlreadyPaired(candidateId) then
+  local alreadyPaired = candidateId and self:_isWindowAlreadyPaired(candidateId) or false
+  if not candidateMeta or not candidateId or alreadyPaired then
+    self:_recordDebug("recovery", "debug", "candidate_rejected", "recovery candidate rejected", function()
+      return {
+        event = opts and opts.event or nil,
+        decision = "rejected",
+        reason = alreadyPaired and "already_paired" or "missing_metadata",
+        window = self:_windowDebugSnapshot(win),
+        candidateMeta = candidateMeta,
+      }
+    end, {
+      event = eventName,
+      windowId = candidateWindowId,
+      decision = "rejected",
+    })
     return {}
   end
 
+  self:_recordDebug("recovery", "debug", "candidate_accepted", "recovery candidate accepted", function()
+    return {
+      event = eventName,
+      decision = "accepted",
+      window = self:_windowDebugSnapshot(win),
+      candidateMeta = candidateMeta,
+    }
+  end, {
+    event = eventName,
+    windowId = candidateWindowId,
+    decision = "accepted",
+  })
+
   local restoredWorkspaces = {}
+  local recoverableCount = 0
+  local matchedSlots = {}
+  self:_recordDebug("recovery", "debug", "slot_match_attempted", "recovery slot match attempted", function()
+    return {
+      event = eventName,
+      window = self:_windowDebugSnapshot(win),
+      candidateMeta = candidateMeta,
+    }
+  end, {
+    event = eventName,
+    windowId = candidateWindowId,
+  })
+
   self:_forEachWorkspace(function(workspace)
-    if workspace:canRecover()
-      and workspace:matchesRecoveryCandidate(candidateMeta) then
+    if workspace:canRecover() then
+      recoverableCount = recoverableCount + 1
+    end
+    if workspace:canRecover() and workspace:matchesRecoveryCandidate(candidateMeta) then
+      matchedSlots[#matchedSlots + 1] = {
+        index = workspace:getIndex(),
+        name = workspace:getName(),
+        storedTitle = workspace:getStoredWindowTitle(),
+      }
       self:_pairWorkspace(workspace, candidateId, win)
       restoredWorkspaces[#restoredWorkspaces + 1] = workspace
     end
   end)
 
+  self:_recordDebug("recovery", "debug", "slot_match_result", "recovery slot match result", function()
+    return {
+      event = opts and opts.event or nil,
+      decision = #restoredWorkspaces > 0 and "matched" or "no_match",
+      window = self:_windowDebugSnapshot(win),
+      candidateMeta = candidateMeta,
+      recoverableCount = recoverableCount,
+      matchedSlots = matchedSlots,
+    }
+  end, {
+    event = eventName,
+    windowId = candidateWindowId,
+    decision = #restoredWorkspaces > 0 and "matched" or "no_match",
+  })
+
   return restoredWorkspaces
 end
 
 function AppState:_restoreWorkspaceFromCandidate(win, opts)
-  local restoredWorkspaces = self:_restoreRecoverableWorkspacesForCandidate(win)
+  local eventName = type(opts) == "table" and opts.event or nil
+  local candidateWindowId = safeValue(function()
+    return win and win:id()
+  end)
+  self:_recordDebug("recovery", "debug", "restore_attempted", "recovery restore attempted", function()
+    return {
+      event = eventName,
+      window = self:_windowDebugSnapshot(win),
+    }
+  end, {
+    event = eventName,
+    windowId = candidateWindowId,
+  })
+
+  local restoredWorkspaces = self:_restoreRecoverableWorkspacesForCandidate(win, opts)
+  self:_recordDebug("recovery", "debug", "restore_result", "recovery restore result", function()
+    local restoredSlots = {}
+    for _, workspace in ipairs(restoredWorkspaces) do
+      restoredSlots[#restoredSlots + 1] = {
+        index = workspace:getIndex(),
+        name = workspace:getName(),
+      }
+    end
+    return {
+      event = eventName,
+      decision = #restoredWorkspaces > 0 and "restored" or "no_match",
+      window = self:_windowDebugSnapshot(win),
+      restoredCount = #restoredWorkspaces,
+      restoredSlots = restoredSlots,
+    }
+  end, {
+    event = eventName,
+    windowId = candidateWindowId,
+    decision = #restoredWorkspaces > 0 and "restored" or "no_match",
+  })
+
   if #restoredWorkspaces > 0 then
     if not (type(opts) == "table" and opts.persist == false) then
       self:_persistWorkspacePairings()
@@ -698,7 +925,9 @@ function AppState:_restoreRecoverableWorkspacesFromExistingCandidates()
   local candidates = self.windowService:candidateWindows() or {}
   local restored = false
   for _, win in ipairs(candidates) do
-    local restoredWorkspaces = self:_restoreRecoverableWorkspacesForCandidate(win)
+    local restoredWorkspaces = self:_restoreRecoverableWorkspacesForCandidate(win, {
+      event = "startup_existing_candidate",
+    })
     if #restoredWorkspaces > 0 then
       restored = true
     end
@@ -822,10 +1051,32 @@ function AppState:activateSlot(index)
     return
   end
 
+  self:_recordDebug("focus", "info", "slot_activation_requested", "slot activation requested", function()
+    return {
+      slot = index,
+      profileId = self.session.activeProfileId,
+      isPaired = workspace:isPaired(),
+      isRecoverable = workspace:isRecoverable(),
+    }
+  end, {
+    slot = index,
+    profileId = self.session.activeProfileId,
+  })
+
   local bindingChanged = false
   self:_runWorkspaceAction(function()
     local win = hs.window.frontmostWindow()
     if not win then
+      self:_recordDebug("focus", "warn", "slot_activation_result", "slot activation failed", function()
+        return {
+          slot = index,
+          result = "no_frontmost_window",
+        }
+      end, {
+        slot = index,
+        profileId = self.session.activeProfileId,
+        result = "no_frontmost_window",
+      })
       self.toast(Toast.message.plain("No active window found!"))
       return
     end
@@ -835,6 +1086,18 @@ function AppState:activateSlot(index)
     if not workspace:isPaired() then
       self:_pairWorkspace(workspace, currentId, win)
       bindingChanged = true
+      self:_recordDebug("focus", "info", "slot_activation_result", "slot activation paired frontmost window", function()
+        return {
+          slot = index,
+          result = "paired_frontmost_window",
+          window = self:_windowDebugSnapshot(win),
+        }
+      end, {
+        slot = index,
+        profileId = self.session.activeProfileId,
+        windowId = currentId,
+        result = "paired_frontmost_window",
+      })
       self.toast(self:_formatPairToast(workspace, win))
       return
     end
@@ -987,6 +1250,7 @@ function AppState:activateNextProfile()
 end
 
 function AppState:togglePopover()
+  self:_recordDebug("popover", "info", "popover_toggle_requested", "popover toggle requested")
   if self.popover and self.popover.toggleOrFocus then
     self.popover:toggleOrFocus()
     return
@@ -998,12 +1262,14 @@ function AppState:togglePopover()
 end
 
 function AppState:showPopover()
+  self:_recordDebug("popover", "info", "popover_show_requested", "popover show requested")
   if self.popover and self.popover.show then
     self.popover:show()
   end
 end
 
 function AppState:toggleSettingsWindow()
+  self:_recordDebug("popover", "info", "settings_toggle_requested", "settings window toggle requested")
   if not self.settingsWindow then
     return
   end
@@ -1142,6 +1408,19 @@ function AppState:resetAllHotkeys()
 end
 
 function AppState:handleWindowEvent(event, win)
+  local windowId = safeValue(function()
+    return win and win:id()
+  end)
+  self:_recordDebug("window", "debug", event or "window_event", "window event observed", function()
+    return {
+      event = event,
+      window = self:_windowDebugSnapshot(win),
+    }
+  end, {
+    event = event,
+    windowId = windowId,
+  })
+
   if event == hs.window.filter.windowDestroyed then
     if not win then
       return
@@ -1243,7 +1522,9 @@ function AppState:handleWindowEvent(event, win)
 
   local restored = false
   if win then
-    restored = self:_restoreWorkspaceFromCandidate(win)
+    restored = self:_restoreWorkspaceFromCandidate(win, {
+      event = event,
+    })
   end
 
   local pairedWorkspaceTouched = self:_refreshPairedWorkspaceMetadataForWindow(win)
@@ -1265,6 +1546,17 @@ end
 
 function AppState:handleActiveWindowChange(win)
   self:_refreshFocusedSpaceId()
+  local windowId = safeValue(function()
+    return win and win:id()
+  end)
+  self:_recordDebug("focus", "debug", "active_window_changed", "active window changed", function()
+    return {
+      focusedSpaceId = self.session.focusedSpaceId,
+      window = self:_windowDebugSnapshot(win),
+    }
+  end, {
+    windowId = windowId,
+  })
   if self.popover and self.popover.requestActiveWindowUpdate then
     self.popover:requestActiveWindowUpdate(win)
   end
