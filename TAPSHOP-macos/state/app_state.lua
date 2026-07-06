@@ -745,6 +745,25 @@ function AppState:_isWindowAlreadyPaired(windowId)
   return paired
 end
 
+function AppState:_pairedWorkspaceHasExactTargetEvidence(workspace)
+  if not workspace or not workspace:getBaseWindowId() then
+    return false
+  end
+
+  if self:_resolvePairedWindow(workspace) then
+    return true
+  end
+
+  if workspace:hasTrackedFullscreenTarget() then
+    local _, fullscreenSpaceId = self:_resolveFullscreenTargetForActivation(workspace)
+    if fullscreenSpaceId then
+      return true
+    end
+  end
+
+  return self:_resolveTrackedSpaceByWindowId(workspace:getBaseWindowId()) ~= nil
+end
+
 function AppState:_restoreRecoverableWorkspacesForCandidate(win, opts)
   if not self.cfg.recoverClosedWindows then
     return {}
@@ -818,8 +837,12 @@ function AppState:_restoreRecoverableWorkspacesForCandidate(win, opts)
   })
 
   local restoredWorkspaces = {}
+  local restoredLookup = {}
   local recoverableCount = 0
+  local stalePairedCandidateCount = 0
   local matchedSlots = {}
+  local stalePairedPromotedSlots = {}
+  local stalePairedRejectedSlots = {}
   self:_recordDebug("recovery", "debug", "slot_match_attempted", "recovery slot match attempted", function()
     return {
       event = eventName,
@@ -843,8 +866,44 @@ function AppState:_restoreRecoverableWorkspacesForCandidate(win, opts)
       }
       self:_pairWorkspace(workspace, candidateId, win)
       restoredWorkspaces[#restoredWorkspaces + 1] = workspace
+      restoredLookup[workspace] = true
     end
   end)
+
+  if eventName == hs.window.filter.windowCreated then
+    self:_forEachWorkspace(function(workspace)
+      if restoredLookup[workspace] then
+        return
+      end
+      if not workspace:isPaired() or not workspace:matchesRecoveryCandidate(candidateMeta) then
+        return
+      end
+
+      stalePairedCandidateCount = stalePairedCandidateCount + 1
+      local exactTargetStillValid = self:_pairedWorkspaceHasExactTargetEvidence(workspace)
+      if exactTargetStillValid then
+        stalePairedRejectedSlots[#stalePairedRejectedSlots + 1] = {
+          index = workspace:getIndex(),
+          name = workspace:getName(),
+          storedTitle = workspace:getStoredWindowTitle(),
+          reason = "exact_target_still_valid",
+        }
+        return
+      end
+
+      local promotedSlot = {
+        index = workspace:getIndex(),
+        name = workspace:getName(),
+        storedTitle = workspace:getStoredWindowTitle(),
+        reason = "exact_target_unresolved",
+      }
+      matchedSlots[#matchedSlots + 1] = promotedSlot
+      stalePairedPromotedSlots[#stalePairedPromotedSlots + 1] = promotedSlot
+      self:_pairWorkspace(workspace, candidateId, win)
+      restoredWorkspaces[#restoredWorkspaces + 1] = workspace
+      restoredLookup[workspace] = true
+    end)
+  end
 
   self:_recordDebug("recovery", "debug", "slot_match_result", "recovery slot match result", function()
     return {
@@ -853,7 +912,10 @@ function AppState:_restoreRecoverableWorkspacesForCandidate(win, opts)
       window = self:_windowDebugSnapshot(win),
       candidateMeta = candidateMeta,
       recoverableCount = recoverableCount,
+      stalePairedCandidateCount = stalePairedCandidateCount,
       matchedSlots = matchedSlots,
+      stalePairedPromotedSlots = stalePairedPromotedSlots,
+      stalePairedRejectedSlots = stalePairedRejectedSlots,
     }
   end, {
     event = eventName,
@@ -911,6 +973,46 @@ function AppState:_restoreWorkspaceFromCandidate(win, opts)
     return true
   end
   return false
+end
+
+function AppState:_shouldAttemptRecoverableRestoreForWindowEvent(event)
+  return event == hs.window.filter.windowCreated
+    or event == hs.window.filter.windowTitleChanged
+    or event == hs.window.filter.windowFocused
+    or event == hs.window.filter.windowVisible
+    or event == hs.window.filter.windowMinimized
+    or event == hs.window.filter.windowUnminimized
+end
+
+function AppState:_recoverFromWindowEvent(event, win)
+  if not win then
+    return false
+  end
+
+  if not self:_shouldAttemptRecoverableRestoreForWindowEvent(event) then
+    return false
+  end
+
+  -- Recoverable-slot relink can use concrete window events. Stale-pair
+  -- repair is candidate-local and windowCreated-only inside the matcher.
+  return self:_restoreWorkspaceFromCandidate(win, {
+    event = event,
+  })
+end
+
+function AppState:_refreshUiStateFromWindowEvent(event, win)
+  local pairedWorkspaceTouched = self:_refreshPairedWorkspaceMetadataForWindow(win)
+  self.youtubeService:handleWindowCandidate(win)
+
+  local shouldRefreshPopover = event == hs.window.filter.windowFocused or pairedWorkspaceTouched
+  if win then
+    local frontmost = hs.window.frontmostWindow()
+    if frontmost and frontmost:id() == win:id() then
+      shouldRefreshPopover = true
+    end
+  end
+
+  return shouldRefreshPopover
 end
 
 function AppState:_restoreRecoverableWorkspacesFromExistingCandidates()
@@ -1520,23 +1622,8 @@ function AppState:handleWindowEvent(event, win)
     return
   end
 
-  local restored = false
-  if win then
-    restored = self:_restoreWorkspaceFromCandidate(win, {
-      event = event,
-    })
-  end
-
-  local pairedWorkspaceTouched = self:_refreshPairedWorkspaceMetadataForWindow(win)
-  self.youtubeService:handleWindowCandidate(win)
-
-  local shouldRefreshPopover = event == hs.window.filter.windowFocused or pairedWorkspaceTouched or restored
-  if win then
-    local frontmost = hs.window.frontmostWindow()
-    if frontmost and frontmost:id() == win:id() then
-      shouldRefreshPopover = true
-    end
-  end
+  local restored = self:_recoverFromWindowEvent(event, win)
+  local shouldRefreshPopover = self:_refreshUiStateFromWindowEvent(event, win) or restored
 
   if shouldRefreshPopover and self.popover and self.popover.requestRefresh then
     self.popover:requestRefresh("window_event")
