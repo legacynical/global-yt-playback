@@ -20,4 +20,16 @@ function Paths.appdata()
   return Paths.baseDir() .. "/appdata.json"
 end
 
+function Paths.debugDir()
+  return Paths.baseDir() .. "/debug"
+end
+
+function Paths.debugLaunchArm()
+  return Paths.debugDir() .. "/launch-arm.json"
+end
+
+function Paths.debugLog(sessionId)
+  return Paths.debugDir() .. "/debug-" .. tostring(sessionId or "session") .. ".jsonl"
+end
+
 return Paths

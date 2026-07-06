@@ -437,8 +437,30 @@ function HotkeyManager:resolve()
 end
 
 function HotkeyManager:_dispatch(binding)
+  if self.app and self.app._recordDebug then
+    self.app:_recordDebug("hotkey", "info", "hotkey_dispatched", "hotkey dispatched", function()
+      return {
+        id = binding.id,
+        action = binding.action,
+        group = binding.group,
+        label = binding.label,
+      }
+    end)
+  end
+
   local method = self.app[binding.action]
   if type(method) ~= "function" then
+    if self.app and self.app._recordDebug then
+      self.app:_recordDebug("hotkey", "warn", "hotkey_dispatch_failed", "hotkey dispatch failed", function()
+        return {
+          id = binding.id,
+          action = binding.action,
+          reason = "unknown_action",
+        }
+      end, {
+        decision = "unknown_action",
+      })
+    end
     hs.printf("[tapshop-hotkeys] unknown action %s for %s", tostring(binding.action), tostring(binding.id))
     return
   end
