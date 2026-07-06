@@ -173,7 +173,7 @@ function AppState:_windowDebugSnapshot(win)
       return win:isFullScreen()
     end),
     spaceIds = spaces,
-    bundleId = app and safeValue(function()
+    bundleID = app and safeValue(function()
       return app:bundleID()
     end) or nil,
     appName = app and safeValue(function()
@@ -489,27 +489,33 @@ function AppState:_profilePairingSnapshot()
 end
 
 function AppState:_persistWorkspacePairings()
-  self:_recordDebug("persistence", "debug", "workspace_pairings_persisted", "workspace pairings persisted", function()
-    local snapshot = self:_profilePairingSnapshot()
-    local profileCount = 0
-    for _, _ in pairs(snapshot) do
-      profileCount = profileCount + 1
-    end
-    return {
-      operation = "write",
-      profileCount = profileCount,
-      activeProfileId = self.session.activeProfileId,
-    }
-  end, {
-    profileId = self.session.activeProfileId,
-  })
+  local activeProfileId = self.session.activeProfileId
+  local profileSnapshot = self:_profilePairingSnapshot()
+  local activeProfileSnapshot = self:_workspacePairingSnapshot(self:_getActiveProfile())
+  local profileCount = 0
+  for _, _ in pairs(profileSnapshot) do
+    profileCount = profileCount + 1
+  end
+  local scope = "active_profile"
 
   if self.appdata.setProfilesWindowPairings then
-    self.appdata.setProfilesWindowPairings(self:_profilePairingSnapshot())
-    return
+    self.appdata.setProfilesWindowPairings(profileSnapshot)
+    scope = "profiles"
+  else
+    self.appdata.setWindowPairings(activeProfileSnapshot)
   end
 
-  self.appdata.setWindowPairings(self:_workspacePairingSnapshot(self:_getActiveProfile()))
+  self:_recordDebug("persistence", "debug", "workspace_pairings_persisted", "workspace pairings persisted", function()
+    return {
+      operation = "write",
+      result = "ok",
+      scope = scope,
+      profileCount = profileCount,
+      activeProfileId = activeProfileId,
+    }
+  end, {
+    profileId = activeProfileId,
+  })
 end
 
 function AppState:_restoreWorkspacePairings()

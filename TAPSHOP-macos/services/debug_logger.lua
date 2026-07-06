@@ -135,15 +135,35 @@ local function isArray(value)
 end
 
 local function encodeString(value)
-  local escaped = tostring(value)
-  escaped = escaped:gsub("\\", "\\\\")
-  escaped = escaped:gsub("\"", "\\\"")
-  escaped = escaped:gsub("\b", "\\b")
-  escaped = escaped:gsub("\f", "\\f")
-  escaped = escaped:gsub("\n", "\\n")
-  escaped = escaped:gsub("\r", "\\r")
-  escaped = escaped:gsub("\t", "\\t")
+  local escaped = tostring(value):gsub("[%z\1-\31\\\"]", function(char)
+    if char == "\\" then
+      return "\\\\"
+    end
+    if char == "\"" then
+      return "\\\""
+    end
+    if char == "\b" then
+      return "\\b"
+    end
+    if char == "\f" then
+      return "\\f"
+    end
+    if char == "\n" then
+      return "\\n"
+    end
+    if char == "\r" then
+      return "\\r"
+    end
+    if char == "\t" then
+      return "\\t"
+    end
+    return string.format("\\u%04x", char:byte())
+  end)
   return "\"" .. escaped .. "\""
+end
+
+local function isFiniteNumber(value)
+  return value == value and value ~= math.huge and value ~= -math.huge
 end
 
 local function encodeJson(value)
@@ -151,7 +171,13 @@ local function encodeJson(value)
   if valueType == "nil" then
     return "null"
   end
-  if valueType == "boolean" or valueType == "number" then
+  if valueType == "boolean" then
+    return tostring(value)
+  end
+  if valueType == "number" then
+    if not isFiniteNumber(value) then
+      return "null"
+    end
     return tostring(value)
   end
   if valueType == "string" then
@@ -197,8 +223,27 @@ local function tableSet(values)
         set[value] = true
       end
     end
+    for key, value in pairs(values) do
+      if type(key) == "string" and key ~= "" and value == true then
+        set[key] = true
+      end
+    end
   end
   return set
+end
+
+local function debugLaunchArmPath(debugDir)
+  if debugDir == Paths.debugDir() then
+    return Paths.debugLaunchArm()
+  end
+  return debugDir .. "/launch-arm.json"
+end
+
+local function debugLogPath(debugDir, sessionId)
+  if debugDir == Paths.debugDir() then
+    return Paths.debugLog(sessionId)
+  end
+  return debugDir .. "/debug-" .. tostring(sessionId or "session") .. ".jsonl"
 end
 
 local function normalizeDomains(values)
@@ -274,7 +319,7 @@ local function normalizeFilters(filters)
       [source.event] = true,
     }
   end
-  for _, key in ipairs({ "slot", "windowId", "appName", "bundleId", "bundleID", "profileId", "decision", "result" }) do
+  for _, key in ipairs({ "slot", "windowId", "appName", "bundleID", "profileId", "decision", "result" }) do
     if source[key] ~= nil then
       normalized[key] = source[key]
     end
@@ -364,7 +409,7 @@ end
 
 local function isAppIdentityKey(key)
   local normalized = normalizePathKey(key)
-  return normalized == "appname" or normalized == "bundleid" or normalized == "bundleid"
+  return normalized == "appname" or normalized == "bundleid"
 end
 
 local function isStructuralNumberKey(key)
@@ -403,7 +448,7 @@ function DebugLogger.new(opts)
   local debugDir = (opts and opts.debugDir) or Paths.debugDir()
   local self = setmetatable({
     debugDir = debugDir,
-    launchArmPath = (opts and opts.launchArmPath) or (debugDir .. "/launch-arm.json"),
+    launchArmPath = (opts and opts.launchArmPath) or debugLaunchArmPath(debugDir),
     active = nil,
     stopReason = nil,
     lastError = nil,
@@ -413,14 +458,14 @@ function DebugLogger.new(opts)
   return self
 end
 
-function DebugLogger:_titlePlaceholder(appName, bundleId, title)
+function DebugLogger:_titlePlaceholder(appName, bundleID, title)
   local rawTitle = trim(title)
   if not rawTitle then
     return nil
   end
 
-  local appLabel = trim(appName) or trim(bundleId) or "App"
-  local key = tostring(trim(bundleId) or appLabel) .. "\0" .. rawTitle
+  local appLabel = trim(appName) or trim(bundleID) or "App"
+  local key = tostring(trim(bundleID) or appLabel) .. "\0" .. rawTitle
   local existing = self.titlePlaceholders[key]
   if existing then
     return existing
@@ -461,7 +506,7 @@ function DebugLogger:_sanitizeValue(value, captureMode, context, key, depth)
       if captureMode == "unredacted" then
         return value
       end
-      return self:_titlePlaceholder(context.appName, context.bundleId, value)
+      return self:_titlePlaceholder(context.appName, context.bundleID, value)
     end
     if isPathOrUrlKey(key) then
       if captureMode == "unredacted" then
@@ -477,15 +522,13 @@ function DebugLogger:_sanitizeValue(value, captureMode, context, key, depth)
 
   local childContext = {
     appName = context.appName,
-    bundleId = context.bundleId,
+    bundleID = context.bundleID,
   }
   if type(value.appName) == "string" then
     childContext.appName = value.appName
   end
-  if type(value.bundleId) == "string" then
-    childContext.bundleId = value.bundleId
-  elseif type(value.bundleID) == "string" then
-    childContext.bundleId = value.bundleID
+  if type(value.bundleID) == "string" then
+    childContext.bundleID = value.bundleID
   end
 
   local out = {}
@@ -547,7 +590,7 @@ local function fieldValue(fields, key)
   if fields[key] ~= nil then
     return fields[key]
   end
-  if key == "bundleId" and fields.bundleID ~= nil then
+  if key == "bundleID" and fields.bundleID ~= nil then
     return fields.bundleID
   end
   if key == "windowId" then
@@ -559,8 +602,8 @@ local function fieldValue(fields, key)
   if key == "appName" and type(fields.window) == "table" then
     return fields.window.appName
   end
-  if key == "bundleId" and type(fields.window) == "table" then
-    return fields.window.bundleId or fields.window.bundleID
+  if key == "bundleID" and type(fields.window) == "table" then
+    return fields.window.bundleID
   end
   return nil
 end
@@ -597,7 +640,7 @@ function DebugLogger:_filtersMatch(event, fields, opts)
     return false
   end
   local allowMissing = type(opts) == "table" and opts.allowMissing == true
-  for _, key in ipairs({ "slot", "windowId", "appName", "bundleId", "profileId", "decision", "result" }) do
+  for _, key in ipairs({ "slot", "windowId", "appName", "bundleID", "profileId", "decision", "result" }) do
     if filters[key] ~= nil and not filterMatchesValue(filters[key], fieldValue(fields, key), allowMissing) then
       return false
     end
@@ -864,7 +907,7 @@ function DebugLogger:enableLogging(opts)
 
   local now = epochSeconds()
   local sessionId = sessionTimestamp(now) .. "-" .. randomSuffix()
-  local path = self.debugDir .. "/debug-" .. tostring(sessionId) .. ".jsonl"
+  local path = debugLogPath(self.debugDir, sessionId)
   local handle, openErr = io.open(path, "a")
   if not handle then
     self.lastError = openErr
