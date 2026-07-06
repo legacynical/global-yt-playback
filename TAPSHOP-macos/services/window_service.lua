@@ -154,6 +154,14 @@ function WindowService.isCandidateWindow(win)
   return win:isVisible() and win:isStandard() and (win:title() or ""):match("%S") ~= nil
 end
 
+function WindowService.isRecoveryCandidateWindow(win)
+  if not win then
+    return false
+  end
+
+  return win:isStandard() and (win:title() or ""):match("%S") ~= nil
+end
+
 function WindowService.waitForFrontmost(win, cfg)
   local timeoutSec = cfg.focusWaitTimeout
   local start = hs.timer.secondsSinceEpoch()
