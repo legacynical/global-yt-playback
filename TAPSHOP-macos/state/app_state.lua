@@ -20,6 +20,29 @@ local function loadPersistedWorkspacePairings(appdata)
   }
 end
 
+local function deepEqual(left, right)
+  if type(left) ~= type(right) then
+    return false
+  end
+  if type(left) ~= "table" then
+    return left == right
+  end
+
+  for key, value in pairs(left) do
+    if not deepEqual(value, right[key]) then
+      return false
+    end
+  end
+
+  for key, value in pairs(right) do
+    if not deepEqual(value, left[key]) then
+      return false
+    end
+  end
+
+  return true
+end
+
 function AppState.new(cfg, deps)
   local initialProfileId = deps.appdata.getActiveProfileId and deps.appdata.getActiveProfileId() or 1
   local self = setmetatable({
@@ -229,9 +252,9 @@ function AppState:syncUi(opacityPercent)
   end
 end
 
-function AppState:_syncWorkspaceUi()
+function AppState:_syncWorkspaceUi(reason)
   if self.popover and self.popover.requestRefresh then
-    self.popover:requestRefresh("workspace_state")
+    self.popover:requestRefresh(reason or "workspace_state")
   elseif self.popover and self.popover.refreshIfShown then
     self.popover:refreshIfShown()
   end
@@ -357,7 +380,7 @@ function AppState:_resolveLiveWindowTargetById(windowId)
   return self.windowService.getWindowById(windowId), resolvedSpaceId
 end
 
-function AppState:_restorePairedWorkspaceFromRecord(workspace, persisted)
+function AppState:_restorePairedWorkspaceFromRecord(workspace, persisted, opts)
   if not workspace or type(persisted) ~= "table" then
     return false
   end
@@ -368,13 +391,28 @@ function AppState:_restorePairedWorkspaceFromRecord(workspace, persisted)
     return false
   end
 
+  if type(opts) == "table" and opts.shallow == true then
+    workspace:pair(baseWindowId, persisted.fingerprint)
+    if persisted.baseSpaceId then
+      workspace:setBaseSpaceId(persisted.baseSpaceId)
+    end
+    local fullscreenTarget = persisted.fullscreenTarget
+    if type(fullscreenTarget) == "table" and fullscreenTarget.windowId and fullscreenTarget.spaceId then
+      workspace:setFullscreenState({
+        fullscreenWindowId = fullscreenTarget.windowId,
+        fullscreenSpaceId = fullscreenTarget.spaceId,
+        lastKnownSpaceId = persisted.baseSpaceId,
+      })
+    end
+    return true
+  end
+
   local baseWin = self.windowService.getWindowById(baseWindowId)
   if baseWin then
     workspace:pair(baseWindowId, persisted.fingerprint)
     if persisted.baseSpaceId then
       workspace:setBaseSpaceId(persisted.baseSpaceId)
     end
-    self:_updateWorkspaceBindingSpaceState(workspace, baseWin)
 
     local fullscreenTargetWindowId = persisted.fullscreenTarget and persisted.fullscreenTarget.windowId or nil
     local fullscreenSpaceId = self:_resolveTrackedSpaceByWindowId(fullscreenTargetWindowId)
@@ -389,13 +427,15 @@ function AppState:_restorePairedWorkspaceFromRecord(workspace, persisted)
         self:_refreshWorkspaceFingerprint(workspace, fullscreenWin)
       end
     elseif self.windowService.isWindowFullscreen(baseWin) then
-      local baseSpaceId = workspace:getBaseSpaceId()
+      local baseSpaceId = workspace:getBaseSpaceId() or self:_updateWorkspaceBindingSpaceState(workspace, baseWin)
       local fullscreenTarget = self:_findFullscreenCompanion(workspace, baseWin, baseSpaceId) or baseWin
       workspace:setFullscreenState({
         fullscreenWindowId = fullscreenTarget:id(),
         fullscreenSpaceId = baseSpaceId,
         lastKnownSpaceId = workspace:getBaseSpaceId(),
       })
+    elseif not workspace:getBaseSpaceId() then
+      self:_updateWorkspaceBindingSpaceState(workspace, baseWin)
     end
 
     if not workspace:hasTrackedFullscreenTarget() then
@@ -442,13 +482,13 @@ function AppState:_restorePairedWorkspaceFromRecord(workspace, persisted)
   return false
 end
 
-function AppState:_restoreWorkspaceFromPersistedRecord(workspace, persisted)
+function AppState:_restoreWorkspaceFromPersistedRecord(workspace, persisted, opts)
   if not workspace or type(persisted) ~= "table" then
     return false
   end
 
   if persisted.kind == "paired" then
-    return self:_restorePairedWorkspaceFromRecord(workspace, persisted)
+    return self:_restorePairedWorkspaceFromRecord(workspace, persisted, opts)
   end
 
   if persisted.kind == "recoverable" then
@@ -518,7 +558,7 @@ function AppState:_persistWorkspacePairings()
   })
 end
 
-function AppState:_restoreWorkspacePairings()
+function AppState:_restoreWorkspacePairings(pairings, opts)
   self:_recordDebug("persistence", "debug", "workspace_pairings_restore_started", "workspace pairings restore started", function()
     return {
       operation = "read",
@@ -528,14 +568,20 @@ function AppState:_restoreWorkspacePairings()
     profileId = self.session.activeProfileId,
   })
 
-  local pairings = loadPersistedWorkspacePairings(self.appdata)
+  pairings = pairings or loadPersistedWorkspacePairings(self.appdata)
   local restoredCount = 0
   for profileId, profilePairings in pairs(pairings) do
     local profile = self:_getProfile(profileId)
     if profile then
+      local restoreOpts = opts
+      if type(opts) == "table" and opts.shallowInactiveProfiles == true then
+        restoreOpts = {
+          shallow = profile.id ~= self.session.activeProfileId,
+        }
+      end
       for index, persisted in pairs(profilePairings or {}) do
         local workspace = self:_getWorkspace(index, profile.id)
-        if self:_restoreWorkspaceFromPersistedRecord(workspace, persisted) then
+        if self:_restoreWorkspaceFromPersistedRecord(workspace, persisted, restoreOpts) then
           restoredCount = restoredCount + 1
         end
       end
@@ -1045,11 +1091,15 @@ function AppState:_restoreRecoverableWorkspacesFromExistingCandidates()
 end
 
 function AppState:_restoreStartupWorkspaceState()
-  self:_restoreWorkspacePairings()
+  local persistedPairings = loadPersistedWorkspacePairings(self.appdata)
+  self:_restoreWorkspacePairings(persistedPairings, {
+    shallowInactiveProfiles = true,
+  })
   self:_restoreRecoverableWorkspacesFromExistingCandidates()
-  self:_persistWorkspacePairings()
-  if self.appdata.setActiveProfileId then
-    self.appdata.setActiveProfileId(self.session.activeProfileId)
+
+  local restoredPairings = self:_profilePairingSnapshot()
+  if not deepEqual(restoredPairings, persistedPairings) then
+    self:_persistWorkspacePairings()
   end
 end
 
@@ -1336,7 +1386,7 @@ function AppState:activateProfile(profileId)
   if self.appdata.setActiveProfileId then
     self.appdata.setActiveProfileId(profile.id)
   end
-  self:_syncWorkspaceUi()
+  self:_syncWorkspaceUi("profile_switch")
   self.toast(Toast.message.plain(string.format("[Active Profile: %d]", profile.id)))
   return true
 end

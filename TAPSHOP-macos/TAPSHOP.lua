@@ -133,40 +133,37 @@ local settingsWindow = SettingsWindow.new(app, cfg, {
 
 app:attachUi(popover, settingsWindow)
 
-local windowFilter = hs.window.filter.new()
-windowFilter:subscribe({
-  hs.window.filter.windowFocused,
-  hs.window.filter.windowTitleChanged,
-  hs.window.filter.windowCreated,
-  hs.window.filter.windowDestroyed,
-  hs.window.filter.windowVisible,
-  hs.window.filter.windowMinimized,
-  hs.window.filter.windowUnminimized,
-  hs.window.filter.windowFullscreened,
-  hs.window.filter.windowUnfullscreened,
-}, function(win, _, event)
-  if event == hs.window.filter.windowFocused then
-    app:handleActiveWindowChange(win)
+local function startWindowFilter()
+  if app.windowFilter then
+    return
   end
-  app:handleWindowEvent(event, win)
-end)
 
-app.windowFilter = windowFilter
-debugLogger:record("startup", "debug", "window_filter_subscribed", "window filter subscribed", function()
-  return {
-    events = {
-      hs.window.filter.windowFocused,
-      hs.window.filter.windowTitleChanged,
-      hs.window.filter.windowCreated,
-      hs.window.filter.windowDestroyed,
-      hs.window.filter.windowVisible,
-      hs.window.filter.windowMinimized,
-      hs.window.filter.windowUnminimized,
-      hs.window.filter.windowFullscreened,
-      hs.window.filter.windowUnfullscreened,
-    },
+  local subscribedEvents = {
+    hs.window.filter.windowFocused,
+    hs.window.filter.windowTitleChanged,
+    hs.window.filter.windowCreated,
+    hs.window.filter.windowDestroyed,
+    hs.window.filter.windowVisible,
+    hs.window.filter.windowMinimized,
+    hs.window.filter.windowUnminimized,
+    hs.window.filter.windowFullscreened,
+    hs.window.filter.windowUnfullscreened,
   }
-end)
+  local windowFilter = hs.window.filter.new()
+  windowFilter:subscribe(subscribedEvents, function(win, _, event)
+    if event == hs.window.filter.windowFocused then
+      app:handleActiveWindowChange(win)
+    end
+    app:handleWindowEvent(event, win)
+  end)
+
+  app.windowFilter = windowFilter
+  debugLogger:record("startup", "debug", "window_filter_subscribed", "window filter subscribed", function()
+    return {
+      events = subscribedEvents,
+    }
+  end)
+end
 
 hotkeyManager:bindAll()
 debugLogger:record("startup", "info", "hotkeys_bound", "hotkeys bound")
@@ -176,13 +173,15 @@ toast(Toast.message.status("TAPSHOP ready (Hammerspoon)", {
 }))
 debugLogger:record("startup", "info", "app_ready", "TAPSHOP ready")
 
-hs.timer.doAfter(0.10, function()
-  if app.warmHotkeyUiCache then
-    app:warmHotkeyUiCache()
-  end
+hs.timer.doAfter(0.05, startWindowFilter)
+
+hs.timer.doAfter(0.25, function()
   if popover.warmStaticCaches then
     popover:warmStaticCaches()
   end
+end)
+
+hs.timer.doAfter(0.75, function()
   if settingsWindow.warmStaticCaches then
     settingsWindow:warmStaticCaches()
   end

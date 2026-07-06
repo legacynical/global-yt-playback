@@ -604,10 +604,6 @@ function HotkeyManager:bindAll()
       if not keyIsAvailable(resolved.key) then
         goto continue
       end
-      local isAssignable = comboIsAssignable(resolved.mods, resolved.key)
-      if not isAssignable then
-        goto continue
-      end
       self.liveHotkeys[resolved.id] = bindHotkeySafe(resolved.mods, resolved.key, function()
         self:_dispatch(resolved)
       end)

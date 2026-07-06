@@ -6,6 +6,7 @@ local webviewPanel = require("ui.webview_panel")
 
 local Popover = {}
 local REFRESH_DEBOUNCE_SECONDS = 0.18
+local INTERACTIVE_REFRESH_DELAY_SECONDS = 0.03
 local AUTO_HIDE_ACTIONS = {
   pair = true,
   unpair = true,
@@ -237,10 +238,10 @@ function Popover.new(app, cfg, deps)
     panel:markDirty()
   end
 
-  local function queueRefresh()
+  local function queueRefresh(delay)
     pendingRefresh = true
     stopRefreshTimer()
-    refreshTimer = hs.timer.doAfter(REFRESH_DEBOUNCE_SECONDS, flushQueuedRefresh)
+    refreshTimer = hs.timer.doAfter(delay or REFRESH_DEBOUNCE_SECONDS, flushQueuedRefresh)
   end
 
   panel = webviewPanel.new({
@@ -502,7 +503,11 @@ function Popover.new(app, cfg, deps)
     cachedThemeCss = popoverStyles.buildCss(theme)
   end
 
-  function instance:requestRefresh(_)
+  function instance:requestRefresh(reason)
+    if reason == "profile_switch" then
+      queueRefresh(INTERACTIVE_REFRESH_DELAY_SECONDS)
+      return
+    end
     queueRefresh()
   end
 
