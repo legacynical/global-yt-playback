@@ -120,6 +120,23 @@ local app = AppState.new(cfg, {
   toast = toast,
 })
 
+local previousShutdownCallback = hs.shutdownCallback
+hs.shutdownCallback = function()
+  local flushed, flushErr = pcall(function()
+    app:flushActiveProfilePersistence()
+  end)
+  if not flushed and hs and type(hs.printf) == "function" then
+    hs.printf("[tapshop-persistence] active profile shutdown flush failed: %s", tostring(flushErr))
+  end
+
+  if type(previousShutdownCallback) == "function" then
+    local chained, chainedErr = pcall(previousShutdownCallback)
+    if not chained and hs and type(hs.printf) == "function" then
+      hs.printf("[tapshop] chained shutdown callback failed: %s", tostring(chainedErr))
+    end
+  end
+end
+
 local hotkeyManager = HotkeyManager.new(app, Settings)
 app:attachHotkeyManager(hotkeyManager)
 

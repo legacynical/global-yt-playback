@@ -6,6 +6,8 @@ local Toast = require("ui.toast")
 
 local AppState = {}
 AppState.__index = AppState
+local ACTIVE_PROFILE_PERSIST_DELAY_SECONDS = 0.05
+local ACTIVE_PROFILE_VALIDATION_DELAY_SECONDS = 0
 local PAIR_TOAST_COLOR = { red = 0x7e / 255, green = 0xc8 / 255, blue = 0x7e / 255, alpha = 1 }
 local UNPAIR_TOAST_COLOR = { red = 0xc0 / 255, green = 0x40 / 255, blue = 0x30 / 255, alpha = 1 }
 local HOTKEY_WARNING_TOAST_COLOR = { red = 0xf2 / 255, green = 0xc1 / 255, blue = 0x4e / 255, alpha = 1 }
@@ -63,6 +65,9 @@ function AppState.new(cfg, deps)
     hotkeyManager = nil,
     popover = nil,
     settingsWindow = nil,
+    activeProfilePersistTimer = nil,
+    activeProfileValidationTimer = nil,
+    pendingActiveProfileId = nil,
   }, AppState)
 
   for profileId = 1, Layout.MAX_PROFILES do
@@ -70,6 +75,7 @@ function AppState.new(cfg, deps)
       id = profileId,
       name = "Profile " .. tostring(profileId),
       workspaces = {},
+      needsExactValidation = profileId ~= initialProfileId,
     }
     for slotIndex = 1, Layout.SLOTS_PER_PROFILE do
       profile.workspaces[#profile.workspaces + 1] = Workspace.new(
@@ -1127,6 +1133,147 @@ function AppState:_restoreStartupWorkspaceState()
   end
 end
 
+function AppState:_validateWorkspaceExactState(workspace)
+  if not workspace or not workspace:isPaired() then
+    return false
+  end
+
+  local baseWindowId = workspace:getBaseWindowId()
+  if not baseWindowId then
+    return false
+  end
+
+  local before = SlotRecord.encode(workspace.binding)
+  local baseWin = self.windowService.getWindowById(baseWindowId)
+  if baseWin then
+    local baseSpaceId = self:_updateWorkspaceBindingSpaceState(workspace, baseWin)
+    if not baseSpaceId then
+      workspace:setBaseSpaceId(nil)
+    end
+    self:_refreshWorkspaceFingerprint(workspace, baseWin)
+    local baseIsFullscreen = self.windowService.isWindowFullscreen(baseWin)
+
+    if workspace:hasTrackedFullscreenTarget() then
+      local fullscreenTargetWindowId = workspace:getFullscreenTargetWindowId()
+      local fullscreenSpaceId = self:_resolveTrackedSpaceByWindowId(fullscreenTargetWindowId)
+      if fullscreenSpaceId then
+        workspace:setFullscreenState({
+          fullscreenWindowId = fullscreenTargetWindowId,
+          fullscreenSpaceId = fullscreenSpaceId,
+          lastKnownSpaceId = baseSpaceId or workspace:getBaseSpaceId(),
+        })
+      elseif baseIsFullscreen and baseSpaceId then
+        workspace:setFullscreenState({
+          fullscreenWindowId = baseWindowId,
+          fullscreenSpaceId = baseSpaceId,
+          lastKnownSpaceId = baseSpaceId,
+        })
+      else
+        workspace:clearFullscreenState()
+      end
+    elseif baseIsFullscreen and baseSpaceId then
+      workspace:setFullscreenState({
+        fullscreenWindowId = baseWindowId,
+        fullscreenSpaceId = baseSpaceId,
+        lastKnownSpaceId = baseSpaceId,
+      })
+    end
+  else
+    local baseSpaceId = self:_resolveTrackedSpaceByWindowId(baseWindowId)
+    if baseSpaceId then
+      workspace:setBaseSpaceId(baseSpaceId)
+      if workspace:hasTrackedFullscreenTarget() then
+        local fullscreenTargetWindowId = workspace:getFullscreenTargetWindowId()
+        local fullscreenSpaceId = self:_resolveTrackedSpaceByWindowId(fullscreenTargetWindowId)
+        if fullscreenSpaceId then
+          workspace:setFullscreenState({
+            fullscreenWindowId = fullscreenTargetWindowId,
+            fullscreenSpaceId = fullscreenSpaceId,
+            lastKnownSpaceId = baseSpaceId,
+          })
+        else
+          workspace:clearFullscreenState()
+        end
+      end
+    elseif workspace:hasTrackedFullscreenTarget() then
+      local fullscreenTargetWindowId = workspace:getFullscreenTargetWindowId()
+      local fullscreenSpaceId = self:_resolveTrackedSpaceByWindowId(fullscreenTargetWindowId)
+      if fullscreenSpaceId then
+        workspace:setFullscreenState({
+          fullscreenWindowId = fullscreenTargetWindowId,
+          fullscreenSpaceId = fullscreenSpaceId,
+          lastKnownSpaceId = workspace:getBaseSpaceId(),
+        })
+      else
+        workspace:setBaseSpaceId(nil)
+        workspace:clearFullscreenState()
+      end
+    else
+      workspace:setBaseSpaceId(nil)
+    end
+  end
+
+  return not deepEqual(before, SlotRecord.encode(workspace.binding))
+end
+
+function AppState:_validateProfileExactState(profile)
+  if not profile then
+    return false
+  end
+
+  local changed = false
+  local pairedCount = 0
+  for _, workspace in ipairs(profile.workspaces or {}) do
+    if workspace:isPaired() then
+      pairedCount = pairedCount + 1
+      if self:_validateWorkspaceExactState(workspace) then
+        changed = true
+      end
+    end
+  end
+
+  profile.needsExactValidation = false
+  self:_recordDebug("persistence", "debug", "profile_exact_validation_result", "profile exact validation completed", function()
+    return {
+      profileId = profile.id,
+      pairedCount = pairedCount,
+      changed = changed,
+    }
+  end, {
+    profileId = profile.id,
+    result = changed and "changed" or "unchanged",
+  })
+
+  if changed then
+    self:_persistWorkspacePairings()
+  end
+  return changed
+end
+
+function AppState:_queueActiveProfileValidation(profile)
+  if self.activeProfileValidationTimer then
+    self.activeProfileValidationTimer:stop()
+    self.activeProfileValidationTimer = nil
+  end
+
+  if not profile or profile.needsExactValidation ~= true then
+    return
+  end
+
+  local profileId = profile.id
+  self.activeProfileValidationTimer = hs.timer.doAfter(ACTIVE_PROFILE_VALIDATION_DELAY_SECONDS, function()
+    self.activeProfileValidationTimer = nil
+    if self.session.activeProfileId ~= profileId then
+      return
+    end
+
+    local activeProfile = self:_getProfile(profileId)
+    if activeProfile and activeProfile.needsExactValidation == true then
+      self:_validateProfileExactState(activeProfile)
+    end
+  end)
+end
+
 function AppState:_formatPairToast(workspace, win)
   local app = win and win:application() or nil
   local label = self.windowService.windowTitle and self.windowService.windowTitle(win) or self.windowService.displayTitle(win)
@@ -1400,6 +1547,42 @@ function AppState:unpairAll()
   end)
 end
 
+function AppState:_queueActiveProfilePersistence()
+  if not self.appdata.setActiveProfileId then
+    return
+  end
+
+  self.pendingActiveProfileId = self.session.activeProfileId
+
+  if self.activeProfilePersistTimer then
+    self.activeProfilePersistTimer:stop()
+    self.activeProfilePersistTimer = nil
+  end
+
+  self.activeProfilePersistTimer = hs.timer.doAfter(ACTIVE_PROFILE_PERSIST_DELAY_SECONDS, function()
+    self.activeProfilePersistTimer = nil
+    self:flushActiveProfilePersistence()
+  end)
+end
+
+function AppState:flushActiveProfilePersistence()
+  if self.activeProfilePersistTimer then
+    self.activeProfilePersistTimer:stop()
+    self.activeProfilePersistTimer = nil
+  end
+
+  local profileId = self.pendingActiveProfileId
+  if not profileId or not self.appdata.setActiveProfileId then
+    return false
+  end
+
+  self.appdata.setActiveProfileId(profileId)
+  if self.pendingActiveProfileId == profileId then
+    self.pendingActiveProfileId = nil
+  end
+  return true
+end
+
 function AppState:activateProfile(profileId)
   local profile = self:_getProfile(profileId)
   if not profile or profile.id == self.session.activeProfileId then
@@ -1407,9 +1590,8 @@ function AppState:activateProfile(profileId)
   end
 
   self.session.activeProfileId = profile.id
-  if self.appdata.setActiveProfileId then
-    self.appdata.setActiveProfileId(profile.id)
-  end
+  self:_queueActiveProfilePersistence()
+  self:_queueActiveProfileValidation(profile)
   self:_syncWorkspaceUi("profile_switch")
   self.toast(Toast.message.plain(string.format("[Active Profile: %d]", profile.id)))
   return true
