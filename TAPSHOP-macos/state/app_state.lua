@@ -623,7 +623,7 @@ function AppState:_refreshWorkspaceFingerprint(workspace, win)
   end
 end
 
-function AppState:_refreshPairedWorkspaceMetadataForWindow(win)
+function AppState:_refreshPairedWorkspaceMetadataForWindow(win, opts)
   if not win then
     return false
   end
@@ -633,12 +633,19 @@ function AppState:_refreshPairedWorkspaceMetadataForWindow(win)
     return false
   end
 
-  local meta = self.windowService.pairingMetadata(win)
+  local refreshBaseSpace = type(opts) == "table" and opts.refreshBaseSpace == true
   local matchedWorkspace = false
+  local meta = nil
   self:_forEachWorkspace(function(workspace)
     if workspace:getBaseWindowId() == id or workspace:getFullscreenTargetWindowId() == id then
       matchedWorkspace = true
+      if not meta then
+        meta = self.windowService.pairingMetadata(win)
+      end
       workspace:setFingerprint(meta)
+      if refreshBaseSpace and workspace:getBaseWindowId() == id then
+        self:_updateWorkspaceBindingSpaceState(workspace, win)
+      end
     end
   end)
 
@@ -1036,12 +1043,27 @@ function AppState:_shouldAttemptRecoverableRestoreForWindowEvent(event)
     or event == hs.window.filter.windowUnminimized
 end
 
+function AppState:_hasWorkspaceEligibleForRecoveryEvent(event)
+  local eligible = false
+  local allowsStalePairedRepair = event == hs.window.filter.windowCreated
+  self:_forEachWorkspace(function(workspace)
+    if workspace:canRecover() or (allowsStalePairedRepair and workspace:isPaired()) then
+      eligible = true
+    end
+  end)
+  return eligible
+end
+
 function AppState:_recoverFromWindowEvent(event, win)
   if not win then
     return false
   end
 
   if not self:_shouldAttemptRecoverableRestoreForWindowEvent(event) then
+    return false
+  end
+
+  if not self:_hasWorkspaceEligibleForRecoveryEvent(event) then
     return false
   end
 
@@ -1053,7 +1075,9 @@ function AppState:_recoverFromWindowEvent(event, win)
 end
 
 function AppState:_refreshUiStateFromWindowEvent(event, win)
-  local pairedWorkspaceTouched = self:_refreshPairedWorkspaceMetadataForWindow(win)
+  local pairedWorkspaceTouched = self:_refreshPairedWorkspaceMetadataForWindow(win, {
+    refreshBaseSpace = event == hs.window.filter.windowFocused,
+  })
   self.youtubeService:handleWindowCandidate(win)
 
   local shouldRefreshPopover = event == hs.window.filter.windowFocused or pairedWorkspaceTouched
