@@ -10,6 +10,8 @@ local APPDATA_DEFAULTS = {
   workspace = {
     activeProfileId = 1,
     profiles = {},
+    -- Overflow from pre-cap-9 banks (ids 10–12). Not loaded into runtime.
+    retiredProfiles = {},
   },
   windows = {
     popover = {
@@ -41,12 +43,12 @@ local function normalizeAppdata(raw)
   if type(source.workspace) == "table" then
     normalized.workspace.activeProfileId = Normalize.normalizeActiveProfileId(source.workspace.activeProfileId)
     normalized.workspace.profiles = Normalize.encodeProfileWindowPairings(
-      Normalize.normalizeProfileWindowPairings(source.workspace.profiles)
+      Normalize.normalizeProfileRecords(source.workspace.profiles)
     )
 
     if next(normalized.workspace.profiles) == nil and type(source.workspace.profilePairings) == "table" then
       normalized.workspace.profiles = Normalize.encodeProfileWindowPairings(
-        Normalize.normalizeProfileWindowPairings(source.workspace.profilePairings)
+        Normalize.normalizeProfileRecords(source.workspace.profilePairings)
       )
     end
 
@@ -58,6 +60,20 @@ local function normalizeAppdata(raw)
         }
       end
     end
+
+    -- Cap cut 12→9: archive overflow banks instead of deleting them.
+    local retired = Normalize.normalizeRetiredProfileRecords(source.workspace.retiredProfiles)
+    local overflow = Normalize.normalizeRetiredProfileRecords(source.workspace.profiles)
+    if type(source.workspace.profilePairings) == "table" then
+      local overflowAlt = Normalize.normalizeRetiredProfileRecords(source.workspace.profilePairings)
+      for profileId, record in pairs(overflowAlt) do
+        overflow[profileId] = record
+      end
+    end
+    for profileId, record in pairs(overflow) do
+      retired[profileId] = record
+    end
+    normalized.workspace.retiredProfiles = Normalize.encodeRetiredProfileRecords(retired)
   end
 
   if type(source.windows) == "table" then
@@ -166,6 +182,11 @@ function AppDataStore.getProfilesWindowPairings()
   return Normalize.normalizeProfileWindowPairings(appdata.workspace.profiles)
 end
 
+function AppDataStore.getProfileRecords()
+  ensureInitialized()
+  return Normalize.normalizeProfileRecords(appdata.workspace.profiles)
+end
+
 function AppDataStore.setProfilesWindowPairings(profiles)
   ensureInitialized()
   appdata.workspace.profiles = Normalize.encodeProfileWindowPairings(profiles)
@@ -183,9 +204,16 @@ end
 function AppDataStore.setWindowPairings(pairings)
   ensureInitialized()
   local profileId = AppDataStore.getActiveProfileId()
-  local profiles = AppDataStore.getProfilesWindowPairings()
-  profiles[profileId] = Normalize.normalizeWindowPairings(pairings)
-  appdata.workspace.profiles = Normalize.encodeProfileWindowPairings(profiles)
+  local records = Normalize.normalizeProfileRecords(appdata.workspace.profiles)
+  local record = records[profileId] or {
+    pairings = {},
+    name = nil,
+    color = nil,
+    colorPresent = false,
+  }
+  record.pairings = Normalize.normalizeWindowPairings(pairings)
+  records[profileId] = record
+  appdata.workspace.profiles = Normalize.encodeProfileWindowPairings(records)
   persist()
   return AppDataStore.getWindowPairings()
 end
@@ -200,9 +228,16 @@ end
 function AppDataStore.setProfileWindowPairings(profileId, pairings)
   ensureInitialized()
   local normalizedProfileId = Normalize.normalizeActiveProfileId(profileId)
-  local profiles = AppDataStore.getProfilesWindowPairings()
-  profiles[normalizedProfileId] = Normalize.normalizeWindowPairings(pairings)
-  appdata.workspace.profiles = Normalize.encodeProfileWindowPairings(profiles)
+  local records = Normalize.normalizeProfileRecords(appdata.workspace.profiles)
+  local record = records[normalizedProfileId] or {
+    pairings = {},
+    name = nil,
+    color = nil,
+    colorPresent = false,
+  }
+  record.pairings = Normalize.normalizeWindowPairings(pairings)
+  records[normalizedProfileId] = record
+  appdata.workspace.profiles = Normalize.encodeProfileWindowPairings(records)
   persist()
   return AppDataStore.getProfileWindowPairings(normalizedProfileId)
 end

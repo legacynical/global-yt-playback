@@ -1,5 +1,5 @@
 local Layout = {
-  MAX_PROFILES = 12,
+  MAX_PROFILES = 9,
   SLOTS_PER_PROFILE = 9,
 }
 

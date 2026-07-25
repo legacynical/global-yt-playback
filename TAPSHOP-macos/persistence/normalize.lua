@@ -310,7 +310,68 @@ function Normalize.normalizeActiveProfileId(value)
   return profileId
 end
 
-function Normalize.normalizeProfileWindowPairings(value)
+local function normalizeStoredProfileColor(value)
+  if value == nil then
+    return nil, false
+  end
+  if value == false or value == "" or value == "none" then
+    return nil, true
+  end
+  local hex = tostring(value):match("^%s*(#%x%x%x%x%x%x)%s*$")
+  if not hex then
+    return nil, false
+  end
+  return "#" .. string.upper(hex:sub(2)), true
+end
+
+local function normalizeStoredProfileName(value)
+  if type(value) ~= "string" then
+    return nil
+  end
+  local text = value:match("^%s*(.-)%s*$") or ""
+  if text == "" then
+    return nil
+  end
+  return text
+end
+
+-- Full on-disk profile records: pairings + optional name/color metadata.
+-- colorPresent distinguishes explicit "none" (nil + true) from unset (nil + false).
+local function decodeOneProfileRecord(rawProfile)
+  local pairingsSource = rawProfile
+  local name = nil
+  local color = nil
+  local colorPresent = false
+
+  if type(rawProfile) == "table" then
+    if type(rawProfile.pairings) == "table" then
+      pairingsSource = rawProfile.pairings
+    elseif rawProfile.pairings == nil
+      and (rawProfile.name ~= nil or rawProfile.color ~= nil or rawProfile.colorPresent ~= nil) then
+      pairingsSource = {}
+    end
+    name = normalizeStoredProfileName(rawProfile.name)
+    color, colorPresent = normalizeStoredProfileColor(rawProfile.color)
+    if rawProfile.color == nil and rawProfile.colorPresent == true then
+      color = nil
+      colorPresent = true
+    end
+  end
+
+  local pairings = Normalize.normalizeWindowPairings(pairingsSource)
+  if next(pairings) == nil and name == nil and not colorPresent then
+    return nil
+  end
+
+  return {
+    pairings = pairings,
+    name = name,
+    color = color,
+    colorPresent = colorPresent,
+  }
+end
+
+function Normalize.normalizeProfileRecords(value)
   local out = {}
   if type(value) ~= "table" then
     return out
@@ -319,18 +380,99 @@ function Normalize.normalizeProfileWindowPairings(value)
   for rawProfileId, rawProfile in pairs(value) do
     local profileId = Normalize.normalizePositiveInteger(tonumber(rawProfileId))
     if profileId and profileId >= 1 and profileId <= Layout.MAX_PROFILES then
-      local pairingsSource = rawProfile
-      if type(rawProfile) == "table" and type(rawProfile.pairings) == "table" then
-        pairingsSource = rawProfile.pairings
-      end
-
-      local pairings = Normalize.normalizeWindowPairings(pairingsSource)
-      if next(pairings) ~= nil then
-        out[profileId] = pairings
+      local record = decodeOneProfileRecord(rawProfile)
+      if record then
+        out[profileId] = record
       end
     end
   end
 
+  return out
+end
+
+-- Pre-release cap cut (12 → 9): keep overflow banks on disk for reconcile,
+-- outside the active profiles map.
+local LEGACY_MAX_PROFILES = 12
+
+function Normalize.normalizeRetiredProfileRecords(value)
+  local out = {}
+  if type(value) ~= "table" then
+    return out
+  end
+
+  for rawProfileId, rawProfile in pairs(value) do
+    local profileId = Normalize.normalizePositiveInteger(tonumber(rawProfileId))
+    if profileId and profileId > Layout.MAX_PROFILES and profileId <= LEGACY_MAX_PROFILES then
+      local record = decodeOneProfileRecord(rawProfile)
+      if record then
+        out[profileId] = record
+      end
+    end
+  end
+
+  return out
+end
+
+function Normalize.encodeRetiredProfileRecords(profiles)
+  local payload = {}
+  if type(profiles) ~= "table" then
+    return payload
+  end
+
+  for rawProfileId, rawProfile in pairs(profiles) do
+    local profileId = Normalize.normalizePositiveInteger(tonumber(rawProfileId))
+    if profileId and profileId > Layout.MAX_PROFILES and profileId <= LEGACY_MAX_PROFILES then
+      local pairingsSource = rawProfile
+      local name = nil
+      local color = nil
+      local colorPresent = false
+      local hasMeta = false
+
+      if type(rawProfile) == "table" and (
+        type(rawProfile.pairings) == "table"
+        or rawProfile.name ~= nil
+        or rawProfile.color ~= nil
+        or rawProfile.colorPresent ~= nil
+      ) then
+        pairingsSource = type(rawProfile.pairings) == "table" and rawProfile.pairings or {}
+        name = normalizeStoredProfileName(rawProfile.name)
+        color, colorPresent = normalizeStoredProfileColor(rawProfile.color)
+        if rawProfile.color == nil and rawProfile.colorPresent == true then
+          color = nil
+          colorPresent = true
+        end
+        hasMeta = name ~= nil or colorPresent or rawProfile.name ~= nil
+      end
+
+      local pairings = Normalize.encodeWindowPairings(pairingsSource)
+      if next(pairings) ~= nil or hasMeta then
+        local entry = {}
+        if next(pairings) ~= nil then
+          entry.pairings = pairings
+        end
+        if name ~= nil then
+          entry.name = name
+        end
+        if colorPresent then
+          entry.color = color or false
+        end
+        payload[tostring(profileId)] = entry
+      end
+    end
+  end
+
+  return payload
+end
+
+-- Compatibility: pairings-only map used by restore paths.
+function Normalize.normalizeProfileWindowPairings(value)
+  local out = {}
+  local records = Normalize.normalizeProfileRecords(value)
+  for profileId, record in pairs(records) do
+    if next(record.pairings) ~= nil then
+      out[profileId] = record.pairings
+    end
+  end
   return out
 end
 
@@ -343,11 +485,42 @@ function Normalize.encodeProfileWindowPairings(profiles)
   for rawProfileId, rawProfile in pairs(profiles) do
     local profileId = Normalize.normalizePositiveInteger(tonumber(rawProfileId))
     if profileId and profileId >= 1 and profileId <= Layout.MAX_PROFILES then
-      local pairings = Normalize.encodeWindowPairings(rawProfile)
-      if next(pairings) ~= nil then
-        payload[tostring(profileId)] = {
-          pairings = pairings,
-        }
+      local pairingsSource = rawProfile
+      local name = nil
+      local color = nil
+      local colorPresent = false
+      local hasMeta = false
+
+      if type(rawProfile) == "table" and (
+        type(rawProfile.pairings) == "table"
+        or rawProfile.name ~= nil
+        or rawProfile.color ~= nil
+        or rawProfile.colorPresent ~= nil
+      ) then
+        pairingsSource = type(rawProfile.pairings) == "table" and rawProfile.pairings or {}
+        name = normalizeStoredProfileName(rawProfile.name)
+        color, colorPresent = normalizeStoredProfileColor(rawProfile.color)
+        if rawProfile.color == nil and rawProfile.colorPresent == true then
+          color = nil
+          colorPresent = true
+        end
+        hasMeta = name ~= nil or colorPresent or rawProfile.name ~= nil
+      end
+
+      local pairings = Normalize.encodeWindowPairings(pairingsSource)
+      if next(pairings) ~= nil or hasMeta then
+        local entry = {}
+        if next(pairings) ~= nil then
+          entry.pairings = pairings
+        end
+        if name ~= nil then
+          entry.name = name
+        end
+        if colorPresent then
+          -- false encodes explicit "no color"; JSON null is awkward in Lua tables.
+          entry.color = color or false
+        end
+        payload[tostring(profileId)] = entry
       end
     end
   end
