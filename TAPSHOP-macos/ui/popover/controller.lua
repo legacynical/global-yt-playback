@@ -41,6 +41,24 @@ function Popover.new(app, cfg, deps)
   local savedTopLeft = appdata.getPopoverTopLeft()
   local savedSize = popoverLayout.loadSavedSize(appdata)
   local runtimeBounds = popoverLayout.initialRuntimeBounds()
+  local pointerHoverTap = nil
+  local lastPointerHoverX = nil
+  local lastPointerHoverY = nil
+  local pointerInsidePopover = false
+  local pointerHoverFlushTimer = nil
+  local pendingPointerHoverX = nil
+  local pendingPointerHoverY = nil
+  local POINTER_HOVER_INTERVAL = 0.03
+  local focusHandbackGeneration = 0
+
+  local function isPointInFrame(pt, frame)
+    return pt
+      and frame
+      and pt.x >= frame.x
+      and pt.x <= frame.x + frame.w
+      and pt.y >= frame.y
+      and pt.y <= frame.y + frame.h
+  end
 
   local function pickScreen()
     return hs.mouse.getCurrentScreen()
@@ -114,9 +132,14 @@ function Popover.new(app, cfg, deps)
     return behavior
   end
 
-  -- When Always on Top is off, the popover is a normal key window and must take
-  -- app focus on show. When Always on Top is on, the panel is nonactivating
-  -- (see windowStyle below) so mouse works without stealing keyboard focus.
+  -- A+B focus model when Always on Top (popover is a utility overlay, not a
+  -- workspace you focus into for work; header active-window stays the user's
+  -- real window underneath):
+  --   A) mouse hits the popover (click/drag/resize) via nonactivating panel
+  --   B) keyboard stays on the user's frontmost window
+  -- Hammerspoon detail: allowTextEntry gates canBecomeKeyWindow. If true, a
+  -- click makes the webview key and steals keyboard — keep it false in AOT.
+  -- When Always on Top is off, take normal key/app focus on show.
   local function focusPanelWindow(panelRef)
     if cfg.popoverAlwaysOnTop then
       return
@@ -140,6 +163,167 @@ function Popover.new(app, cfg, deps)
       if win and win.focus then
         win:focus()
       end
+    end
+  end
+
+  local function abandonFocusHandback()
+    focusHandbackGeneration = focusHandbackGeneration + 1
+  end
+
+  local function scheduleFocusHandback()
+    -- Only undo accidental self-focus. Never yank focus after pair/activate
+    -- already moved it to a real target window.
+    focusHandbackGeneration = focusHandbackGeneration + 1
+    local gen = focusHandbackGeneration
+    local target = activeWin or callerWin
+    hs.timer.doAfter(0.05, function()
+      if gen ~= focusHandbackGeneration or not cfg.popoverAlwaysOnTop or not target then
+        return
+      end
+      local view = panel and panel.getWebview and panel:getWebview() or nil
+      local selfWin = nil
+      if view and view.hswindow then
+        local ok, win = pcall(function()
+          return view:hswindow()
+        end)
+        if ok then
+          selfWin = win
+        end
+      end
+      local front = hs.window.frontmostWindow()
+      local frontId = front and front.id and front:id() or nil
+      local selfId = selfWin and selfWin.id and selfWin:id() or nil
+      if not frontId or not selfId or frontId ~= selfId then
+        return
+      end
+      pcall(function()
+        target:focus()
+      end)
+    end)
+  end
+
+  local function currentWindowStyle()
+    local style = hs.webview.windowMasks.borderless
+    -- nonactivating only for Always on Top; normal show/hide should be a real key window.
+    if cfg.popoverAlwaysOnTop then
+      style = style | hs.webview.windowMasks.nonactivating
+    end
+    return style
+  end
+
+  local function clearPointerHover(panelRef)
+    pendingPointerHoverX = nil
+    pendingPointerHoverY = nil
+    if pointerHoverFlushTimer then
+      pointerHoverFlushTimer:stop()
+      pointerHoverFlushTimer = nil
+    end
+    lastPointerHoverX = nil
+    lastPointerHoverY = nil
+    pointerInsidePopover = false
+    if panelRef then
+      panelRef:evaluateJavaScript(
+        "window.tapshopClearPointerHover && window.tapshopClearPointerHover()"
+      )
+    end
+  end
+
+  local function flushPointerHover(panelRef)
+    pointerHoverFlushTimer = nil
+    local x = pendingPointerHoverX
+    local y = pendingPointerHoverY
+    pendingPointerHoverX = nil
+    pendingPointerHoverY = nil
+    if x == nil or y == nil or not panelRef then
+      return
+    end
+    local rx = math.floor(x + 0.5)
+    local ry = math.floor(y + 0.5)
+    if rx == lastPointerHoverX and ry == lastPointerHoverY then
+      return
+    end
+    lastPointerHoverX = rx
+    lastPointerHoverY = ry
+    panelRef:evaluateJavaScript(
+      "window.tapshopPointerHoverAt && window.tapshopPointerHoverAt("
+        .. string.format("%.2f", x)
+        .. ","
+        .. string.format("%.2f", y)
+        .. ")"
+    )
+  end
+
+  -- Non-key webviews often skip CSS :hover; drive control hover from live
+  -- mouse vs webview:frame(). HS webview frames are Y-flipped (top-left origin,
+  -- same as DOM) — same space used by topLeft persistence and drag/resize.
+  local function updatePointerHover(panelRef)
+    local view = panelRef and panelRef.getWebview and panelRef:getWebview() or nil
+    if not view then
+      return
+    end
+
+    local pt = hs.mouse.absolutePosition()
+    local frame = view:frame()
+    if not isPointInFrame(pt, frame) then
+      if pointerInsidePopover or lastPointerHoverX ~= nil or pendingPointerHoverX ~= nil then
+        clearPointerHover(panelRef)
+      end
+      return
+    end
+
+    pointerInsidePopover = true
+    pendingPointerHoverX = pt.x - frame.x
+    pendingPointerHoverY = pt.y - frame.y
+    if pointerHoverFlushTimer then
+      return
+    end
+    pointerHoverFlushTimer = hs.timer.doAfter(POINTER_HOVER_INTERVAL, function()
+      flushPointerHover(panelRef)
+    end)
+  end
+
+  local function stopPointerHoverTap()
+    if pointerHoverTap then
+      pointerHoverTap:stop()
+      pointerHoverTap = nil
+    end
+  end
+
+  local function startPointerHoverTap()
+    if pointerHoverTap or not cfg.popoverAlwaysOnTop then
+      return
+    end
+    pointerHoverTap = hs.eventtap.new({ hs.eventtap.event.types.mouseMoved }, function()
+      if not panel or not panel:isShown() or not cfg.popoverAlwaysOnTop then
+        return false
+      end
+      updatePointerHover(panel)
+      return false
+    end)
+    pointerHoverTap:start()
+  end
+
+  local function syncAlwaysOnTopFocusPolicy(panelRef)
+    local view = panelRef and panelRef.getWebview and panelRef:getWebview() or nil
+    if view and view.windowStyle then
+      view:windowStyle(currentWindowStyle())
+    end
+    if panelRef and panelRef.syncAllowTextEntry then
+      panelRef:syncAllowTextEntry()
+    end
+    if panelRef then
+      panelRef:evaluateJavaScript(
+        "document.body && document.body.classList.toggle('is-utility-overlay', "
+          .. (cfg.popoverAlwaysOnTop and "true" or "false")
+          .. ")"
+      )
+    end
+    if cfg.popoverAlwaysOnTop then
+      startPointerHoverTap()
+      updatePointerHover(panelRef or panel)
+    else
+      stopPointerHoverTap()
+      clearPointerHover(panelRef or panel)
     end
   end
 
@@ -213,6 +397,7 @@ function Popover.new(app, cfg, deps)
       headerAppName = headerAppName,
       config = {
         hidePairButtons = cfg.popoverHidePairButtons == true,
+        utilityOverlay = cfg.popoverAlwaysOnTop == true,
       },
       activeProfileId = app.getActiveProfileId and app:getActiveProfileId() or 1,
       profileCount = app.getProfileCount and app:getProfileCount() or 1,
@@ -241,6 +426,9 @@ function Popover.new(app, cfg, deps)
 
     if panel:isShown() then
       panel:refresh()
+      -- Full HTML rebuild drops DOM hover classes and body flags; re-apply policy.
+      syncAlwaysOnTopFocusPolicy(panel)
+      requestBoundsRecompute(panel)
       return
     end
 
@@ -285,15 +473,16 @@ function Popover.new(app, cfg, deps)
       local screen = hs.mouse.getCurrentScreen() or hs.screen.mainScreen()
       return centeredRect(screen)
     end,
-    -- Always on Top uses a nonactivating panel: mouse hits the webview without
-    -- making Hammerspoon the key/active app, so keyboard stays on the user's
-    -- frontmost window (YouTube/Chrome/etc.). TAPSHOP hotkeys remain global.
-    -- Do not hs.focus()/win:focus() the popover in that mode.
-    windowStyle = hs.webview.windowMasks.borderless | hs.webview.windowMasks.nonactivating,
+    -- Always on Top: borderless|nonactivating + allowTextEntry false so the
+    -- panel accepts mouse without becoming key (A+B). Do not hs.focus() it.
+    windowStyle = currentWindowStyle,
     transparent = true,
     level = currentPopoverLevel,
     behavior = currentPopoverBehavior,
-    allowTextEntry = true,
+    -- false while Always on Top: HS uses this for canBecomeKeyWindow.
+    allowTextEntry = function()
+      return not cfg.popoverAlwaysOnTop
+    end,
     buildHtml = function()
       return popoverRender.buildHtml(buildRenderContext())
     end,
@@ -303,6 +492,7 @@ function Popover.new(app, cfg, deps)
 
       if action == "dragStart" then
         isDragging = true
+        clearPointerHover(panelRef)
         return
       end
       if action == "dragMove" then
@@ -329,6 +519,7 @@ function Popover.new(app, cfg, deps)
       if action == "resizeStart" then
         isResizing = true
         resizeDirection = tostring(body.direction or "")
+        clearPointerHover(panelRef)
         return
       end
       if action == "resizeMove" then
@@ -433,6 +624,9 @@ function Popover.new(app, cfg, deps)
         resizeDirection = ""
         saveTopLeftFromFrame(panelRef)
         saveSizeFromFrame(panelRef)
+        if cfg.popoverAlwaysOnTop then
+          updatePointerHover(panelRef)
+        end
         return
       end
       if action == "close" then
@@ -444,10 +638,17 @@ function Popover.new(app, cfg, deps)
         body.sourceWindow = activeWin or callerWin
       end
       local result = app:handlePopoverAction(body)
+      -- Slot activate / pair intentionally change frontmost; abandon any
+      -- accidental-focus handback so we do not undo that navigation.
+      if action == "activateSlot" or action == "pair" then
+        abandonFocusHandback()
+      end
       if action == "setAlwaysOnTop" then
         panelRef:setLevel(currentPopoverLevel())
+        syncAlwaysOnTopFocusPolicy(panelRef)
       end
       if result ~= false and cfg.popoverAutoHideAfterAction and AUTO_HIDE_ACTIONS[action] then
+        abandonFocusHandback()
         panelRef:hide()
       end
       return result
@@ -455,7 +656,9 @@ function Popover.new(app, cfg, deps)
     windowCallback = function(panelRef, act, _, focusState)
       if act == "focusChange" then
         isFocused = focusState == true
-        if focusState == false and panelRef:isShown() and not cfg.popoverAlwaysOnTop then
+        if focusState == true and cfg.popoverAlwaysOnTop then
+          scheduleFocusHandback()
+        elseif focusState == false and panelRef:isShown() and not cfg.popoverAlwaysOnTop then
           panelRef:hide()
         end
       end
@@ -479,7 +682,8 @@ function Popover.new(app, cfg, deps)
     afterShow = function(panelRef)
       focusPanelWindow(panelRef)
       requestBoundsRecompute(panelRef)
-      -- Only force webview keyboard surface when this panel is a normal key window.
+      syncAlwaysOnTopFocusPolicy(panelRef)
+      -- Keyboard surface only when this panel is allowed to become key.
       if not cfg.popoverAlwaysOnTop then
         panelRef:evaluateJavaScript("window.tapshopFocusKeyboardSurface && window.tapshopFocusKeyboardSurface()")
       end
@@ -489,6 +693,8 @@ function Popover.new(app, cfg, deps)
       isResizing = false
       resizeDirection = ""
       isFocused = false
+      stopPointerHoverTap()
+      clearPointerHover(panel)
       panel:evaluateJavaScript(
         "window.tapshopResetInteractionGestures && window.tapshopResetInteractionGestures()"
       )
@@ -530,9 +736,17 @@ function Popover.new(app, cfg, deps)
   function instance:refreshIfShown()
     if panel:isShown() then
       panel:refresh()
+      syncAlwaysOnTopFocusPolicy(panel)
+      requestBoundsRecompute(panel)
       return
     end
     panel:markDirty()
+  end
+
+  function instance:syncWindowLevel()
+    panel:setLevel(currentPopoverLevel())
+    panel:syncBehavior()
+    syncAlwaysOnTopFocusPolicy(panel)
   end
 
   function instance:refreshCache()
@@ -540,6 +754,7 @@ function Popover.new(app, cfg, deps)
     cachedThemeCss = nil
     panel:setLevel(currentPopoverLevel())
     panel:syncBehavior()
+    syncAlwaysOnTopFocusPolicy(panel)
     if panel:isShown() then
       panel:refresh()
       requestBoundsRecompute(panel)
@@ -575,11 +790,6 @@ function Popover.new(app, cfg, deps)
 
   function instance:updateActiveWindow(win)
     self:requestActiveWindowUpdate(win)
-  end
-
-  function instance:syncWindowLevel()
-    panel:setLevel(currentPopoverLevel())
-    panel:syncBehavior()
   end
 
   function instance:pushOpacityUpdate(percent)

@@ -317,7 +317,8 @@ input {
   line-height: 1;
 }
 
-.profile-btn:hover {
+.profile-btn:hover,
+.profile-btn.is-pointer-hover {
   background: rgba(255, 255, 255, 0.14);
 }
 
@@ -366,7 +367,8 @@ input {
   color: var(--text-strong);
 }
 
-.header-danger:hover {
+.header-danger:hover,
+.header-danger.is-pointer-hover {
   background: var(--danger-hover);
 }
 
@@ -375,7 +377,8 @@ input {
   color: #d2d2d2;
 }
 
-.header-config:hover {
+.header-config:hover,
+.header-config.is-pointer-hover {
   background: #5a5a5a;
   color: #fff;
 }
@@ -385,7 +388,8 @@ input {
   color: #777;
 }
 
-.header-close:hover {
+.header-close:hover,
+.header-close.is-pointer-hover {
   background: #3a3a3a;
   color: #aaa;
 }
@@ -461,9 +465,75 @@ input {
 }
 
 .row:has(.slot-icon-btn:hover),
+.row:has(.slot-icon-btn.is-pointer-hover),
+.row.is-pointer-hover,
 .row:has(.slot-icon-btn:focus-visible) {
   background: rgba(255, 255, 255, 0.07);
   box-shadow: inset 0 0 0 1px rgba(120, 215, 255, 0.42);
+}
+
+/* Always-on-top utility overlay: ignore native :hover (often sticky/wrong on
+   non-key WKWebViews). Pointer hover classes are authoritative. */
+body.is-utility-overlay .row:has(.slot-icon-btn:hover) {
+  background: transparent;
+  box-shadow: none;
+}
+body.is-utility-overlay .row:has(.slot-icon-btn.is-pointer-hover),
+body.is-utility-overlay .row.is-pointer-hover {
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(120, 215, 255, 0.42);
+}
+
+body.is-utility-overlay .profile-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+body.is-utility-overlay .profile-btn.is-pointer-hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+body.is-utility-overlay .header-danger:hover {
+  background: var(--danger);
+  color: var(--text-strong);
+}
+body.is-utility-overlay .header-danger.is-pointer-hover {
+  background: var(--danger-hover);
+}
+body.is-utility-overlay .header-config:hover {
+  background: #4b4b4b;
+  color: #d2d2d2;
+}
+body.is-utility-overlay .header-config.is-pointer-hover {
+  background: #5a5a5a;
+  color: #fff;
+}
+body.is-utility-overlay .header-close:hover {
+  background: #2a2a2a;
+  color: #777;
+}
+body.is-utility-overlay .header-close.is-pointer-hover {
+  background: #3a3a3a;
+  color: #aaa;
+}
+body.is-utility-overlay .btn-primary:hover {
+  background: var(--accent);
+  color: var(--text-strong);
+}
+body.is-utility-overlay .btn-primary.is-pointer-hover {
+  background: var(--accent-hover);
+}
+body.is-utility-overlay .btn-unpair:hover {
+  background: #444;
+  color: #bbb;
+}
+body.is-utility-overlay .btn-unpair.is-pointer-hover {
+  background: #555;
+}
+body.is-utility-overlay .btn-danger:hover {
+  background: rgba(220, 80, 80, 0.22);
+  color: #ff9a9a;
+}
+body.is-utility-overlay .btn-danger.is-pointer-hover {
+  background: rgba(220, 80, 80, 0.34);
+  color: #ffc0c0;
 }
 
 .slot-num {
@@ -527,8 +597,19 @@ input {
   outline: none;
 }
 
-.slot-icon-btn:hover .slot-app-icon:not(.is-muted) {
+.slot-icon-btn:hover .slot-app-icon:not(.is-muted),
+.slot-icon-btn.is-pointer-hover .slot-app-icon:not(.is-muted) {
   filter: brightness(1.12);
+}
+
+body.is-utility-overlay .slot-icon-btn:hover .slot-app-icon:not(.is-muted) {
+  filter: none;
+}
+body.is-utility-overlay .slot-icon-btn.is-pointer-hover .slot-app-icon:not(.is-muted) {
+  filter: brightness(1.12);
+}
+body.is-utility-overlay .slot-icon-btn.is-pointer-hover .slot-app-icon.is-muted {
+  filter: grayscale(1) saturate(0);
 }
 
 .slot-app-icon.is-muted {
@@ -592,7 +673,8 @@ input {
   color: var(--text-strong);
 }
 
-.btn-primary:hover {
+.btn-primary:hover,
+.btn-primary.is-pointer-hover {
   background: var(--accent-hover);
 }
 
@@ -601,7 +683,8 @@ input {
   color: #bbb;
 }
 
-.btn-unpair:hover {
+.btn-unpair:hover,
+.btn-unpair.is-pointer-hover {
   background: #555;
 }
 
@@ -616,7 +699,8 @@ input {
   border: 1px solid rgba(220, 80, 80, 0.35);
 }
 
-.btn-danger:hover {
+.btn-danger:hover,
+.btn-danger.is-pointer-hover {
   background: rgba(220, 80, 80, 0.34);
   color: #ffc0c0;
 }

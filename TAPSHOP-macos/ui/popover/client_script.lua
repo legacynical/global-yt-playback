@@ -23,6 +23,7 @@ function sendAction(action, extra) {
 }
 
 function focusKeyboardSurface() {
+  if (document.body && document.body.classList.contains("is-utility-overlay")) return;
   if (!document.body || typeof document.body.focus !== "function") return;
   try {
     document.body.focus({ preventScroll: true });
@@ -244,6 +245,61 @@ window.tapshopRecomputeBounds = function () {
 };
 
 window.tapshopFocusKeyboardSurface = focusKeyboardSurface;
+
+window.tapshopClearPointerHover = function () {
+  document.querySelectorAll(".is-pointer-hover").forEach(function (el) {
+    el.classList.remove("is-pointer-hover");
+  });
+  window.__tapshopPointerHoverEl = null;
+};
+
+function pointInRect(x, y, rect) {
+  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+}
+
+function findPointerHoverTarget(x, y) {
+  // Prefer explicit rect hit-tests over elementFromPoint: inactive/non-key
+  // WKWebViews are unreliable for the latter, and --ui-scale + resize change
+  // layout without changing the top-left client mapping from Lua.
+  var selectors = [".slot-icon-btn", ".btn", ".header-btn", ".profile-btn"];
+  for (var s = 0; s < selectors.length; s++) {
+    var nodes = document.querySelectorAll(selectors[s]);
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      if (!node || node.disabled || node.getAttribute("aria-disabled") === "true") continue;
+      if (node.classList.contains("off") || node.hasAttribute("hidden")) continue;
+      if (node.closest && node.closest("[hidden]")) continue;
+      var style = window.getComputedStyle(node);
+      if (style.pointerEvents === "none" || style.visibility === "hidden" || style.display === "none") {
+        continue;
+      }
+      if (pointInRect(x, y, node.getBoundingClientRect())) {
+        return node;
+      }
+    }
+  }
+  return null;
+}
+
+window.tapshopPointerHoverAt = function (x, y) {
+  var next = null;
+  if (x != null && y != null && !isNaN(x) && !isNaN(y)) {
+    next = findPointerHoverTarget(x, y);
+  }
+  if (next === window.__tapshopPointerHoverEl) {
+    if (!next) window.tapshopClearPointerHover();
+    return;
+  }
+  window.tapshopClearPointerHover();
+  window.__tapshopPointerHoverEl = next;
+  if (next) {
+    next.classList.add("is-pointer-hover");
+    if (next.classList.contains("slot-icon-btn")) {
+      var row = next.closest(".row");
+      if (row) row.classList.add("is-pointer-hover");
+    }
+  }
+};
 
 window.tapshopUpdateOpacity = function (percent) {
   var p = parseInt(percent, 10);

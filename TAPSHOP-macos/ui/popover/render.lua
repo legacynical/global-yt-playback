@@ -91,10 +91,16 @@ end
 function Render.buildHtml(ctx)
   local headerAppIcon = icons.appIconHtml(ctx.headerBundleID, ctx.headerAppName, "header-active-win-icon", 16)
   local brandIcon = icons.tapshopBrandIconHtml("title-brand-icon", 16)
+  local bodyClass = ""
+  if ctx.config and ctx.config.utilityOverlay then
+    bodyClass = " class=\"is-utility-overlay\""
+  end
   local parts = {
     "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\">\n  <style>\n",
     ctx.css,
-    "\n  </style>\n</head>\n<body tabindex=\"0\">\n  <div class=\"container\">\n    <div class=\"header\">\n      <div class=\"title-wrap\">\n        <button class=\"title-logo\" type=\"button\" aria-label=\"Tapshop\">",
+    "\n  </style>\n</head>\n<body tabindex=\"0\"",
+    bodyClass,
+    ">\n  <div class=\"container\">\n    <div class=\"header\">\n      <div class=\"title-wrap\">\n        <button class=\"title-logo\" type=\"button\" aria-label=\"Tapshop\">",
     brandIcon,
     "</button>\n      </div>\n      <div class=\"header-active-win\">",
     headerAppIcon,
