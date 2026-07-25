@@ -191,6 +191,36 @@ local function startWindowFilter()
   end)
 end
 
+local function startSpaceWatcher()
+  if app.spaceWatcher then
+    return
+  end
+  if not (hs.spaces and hs.spaces.watcher and type(hs.spaces.watcher.new) == "function") then
+    debugLogger:record("startup", "warn", "space_watcher_unavailable", "hs.spaces.watcher unavailable")
+    return
+  end
+
+  local ok, watcherOrErr = pcall(function()
+    return hs.spaces.watcher.new(function()
+      app:handleFocusedSpaceChange()
+    end)
+  end)
+  if not ok or not watcherOrErr then
+    debugLogger:record("startup", "warn", "space_watcher_create_failed", "failed to create spaces watcher", function()
+      return {
+        error = tostring(watcherOrErr),
+      }
+    end)
+    return
+  end
+
+  app.spaceWatcher = watcherOrErr
+  pcall(function()
+    app.spaceWatcher:start()
+  end)
+  debugLogger:record("startup", "debug", "space_watcher_started", "spaces watcher started")
+end
+
 hotkeyManager:bindAll()
 debugLogger:record("startup", "info", "hotkeys_bound", "hotkeys bound")
 
@@ -199,7 +229,10 @@ toast(Toast.message.status("TAPSHOP ready (Hammerspoon)", {
 }))
 debugLogger:record("startup", "info", "app_ready", "TAPSHOP ready")
 
-hs.timer.doAfter(0.05, startWindowFilter)
+hs.timer.doAfter(0.05, function()
+  startWindowFilter()
+  startSpaceWatcher()
+end)
 
 hs.timer.doAfter(0.25, function()
   if popover.warmStaticCaches then

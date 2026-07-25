@@ -120,10 +120,17 @@ function Popover.new(app, cfg, deps)
   end
 
   local function currentPopoverBehavior()
+    -- Live toggle (not a launch-only flag): when "Hide during fullscreens" is
+    -- on, omit fullScreenAuxiliary. Active hide/restore lives in
+    -- state/popover_fullscreen_visibility (canJoinAllSpaces can still show an
+    -- AOT panel during FS visits). Turning the setting off restores
+    -- fullScreenAuxiliary via syncWindowLevel.
     local behavior = {
       "canJoinAllSpaces",
-      "fullScreenAuxiliary",
     }
+    if not cfg.popoverHideOnFullscreenWorkspace then
+      behavior[#behavior + 1] = "fullScreenAuxiliary"
+    end
 
     if cfg.popoverAlwaysOnTop then
       behavior[#behavior + 1] = "transient"
@@ -701,6 +708,9 @@ function Popover.new(app, cfg, deps)
       end
       if action == "close" then
         panelRef:hide()
+        if app.notePopoverIntentionalDismiss then
+          app:notePopoverIntentionalDismiss()
+        end
         return
       end
 
@@ -727,6 +737,9 @@ function Popover.new(app, cfg, deps)
       if result ~= false and cfg.popoverAutoHideAfterAction and AUTO_HIDE_ACTIONS[action] then
         abandonFocusHandback()
         panelRef:hide()
+        if app.notePopoverIntentionalDismiss then
+          app:notePopoverIntentionalDismiss()
+        end
       end
       return result
     end,
@@ -737,6 +750,9 @@ function Popover.new(app, cfg, deps)
           scheduleFocusHandback()
         elseif focusState == false and panelRef:isShown() and not cfg.popoverAlwaysOnTop then
           panelRef:hide()
+          if app.notePopoverIntentionalDismiss then
+            app:notePopoverIntentionalDismiss()
+          end
         end
       end
     end,
@@ -789,14 +805,40 @@ function Popover.new(app, cfg, deps)
     panel:hide()
   end
 
+  function instance:isShown()
+    return panel:isShown()
+  end
+
+  -- Re-assert visibility after Space changes. isShown can stay true while AppKit
+  -- has ordered the webview out during a fullscreen Space visit.
+  function instance:ensureVisible()
+    if panel:isShown() then
+      local view = panel.getWebview and panel:getWebview() or nil
+      if view and view.show then
+        view:show()
+      end
+      panel:setLevel(currentPopoverLevel())
+      panel:syncBehavior()
+      return
+    end
+    panel:show()
+  end
+
   function instance:toggle()
+    local wasShown = panel:isShown()
     panel:toggle()
+    if wasShown and not panel:isShown() and app.notePopoverIntentionalDismiss then
+      app:notePopoverIntentionalDismiss()
+    end
   end
 
   function instance:toggleOrFocus()
     if cfg.popoverAlwaysOnTop then
       if panel:isShown() then
         panel:hide()
+        if app.notePopoverIntentionalDismiss then
+          app:notePopoverIntentionalDismiss()
+        end
       else
         panel:show()
       end
@@ -805,6 +847,9 @@ function Popover.new(app, cfg, deps)
 
     if panel:isShown() and isFocused then
       panel:hide()
+      if app.notePopoverIntentionalDismiss then
+        app:notePopoverIntentionalDismiss()
+      end
       return
     end
 

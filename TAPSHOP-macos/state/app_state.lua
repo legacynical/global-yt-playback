@@ -10,6 +10,7 @@ local Workspace = require("state.workspace")
 local SlotRecord = require("state.slot_record")
 local SlotRow = require("state.slot_row")
 local Layout = require("state.layout")
+local PopoverFullscreenVisibility = require("state.popover_fullscreen_visibility")
 local Toast = require("ui.toast")
 
 local AppState = {}
@@ -105,12 +106,47 @@ function AppState.new(cfg, deps)
 
   self:_refreshFocusedSpaceId()
   self:_restoreStartupWorkspaceState()
+  self:_initPopoverFullscreenVisibility()
   return self
+end
+
+function AppState:_initPopoverFullscreenVisibility()
+  self.popoverFullscreenVisibility = PopoverFullscreenVisibility.new({
+    isEnabled = function()
+      return self.cfg.popoverHideOnFullscreenWorkspace == true
+    end,
+    isSpaceFullscreen = function(spaceId)
+      return self:_spaceIsFullscreen(spaceId)
+    end,
+    getFocusedSpaceId = function()
+      return self.session.focusedSpaceId
+    end,
+    refreshFocusedSpaceId = function()
+      return self:_refreshFocusedSpaceId()
+    end,
+    getPopover = function()
+      return self.popover
+    end,
+  })
+end
+
+function AppState:_popoverFullscreenPolicy()
+  if not self.popoverFullscreenVisibility then
+    self:_initPopoverFullscreenVisibility()
+  end
+  return self.popoverFullscreenVisibility
 end
 
 function AppState:attachUi(popover, settingsWindow)
   self.popover = popover
   self.settingsWindow = settingsWindow
+end
+
+function AppState:notePopoverIntentionalDismiss()
+  local policy = self:_popoverFullscreenPolicy()
+  if policy then
+    policy:noteIntentionalDismiss()
+  end
 end
 
 function AppState:attachHotkeyManager(hotkeyManager)
@@ -292,6 +328,7 @@ function AppState:_runPairingAction(actionFn)
   self:_syncWorkspaceUi()
   if self.cfg.popoverAutoHideAfterAction and self.popover and self.popover.hide then
     self.popover:hide()
+    self:notePopoverIntentionalDismiss()
   end
   return true
 end
@@ -304,13 +341,10 @@ function AppState:_runWorkspaceAction(actionFn)
   self:_syncWorkspaceUi()
 end
 
-function AppState:_hidePopoverForFullscreenWorkspaceActivation()
-  if not self.cfg.popoverHideOnFullscreenWorkspace then
-    return
-  end
-  if self.popover and self.popover.hide then
-    self.popover:hide()
-  end
+function AppState:_spaceIsFullscreen(spaceId)
+  return spaceId ~= nil
+    and type(self.windowService.isFullscreenSpace) == "function"
+    and self.windowService.isFullscreenSpace(spaceId) == true
 end
 
 function AppState:_getWorkspace(index, profileId)
@@ -811,6 +845,8 @@ function AppState:_resolvedTargetSpaceFromSpaceIds(spaceIds, focusedSpaceId)
 end
 
 function AppState:_requestWindowInSpace(workspace, windowId, spaceId, activationPath, onSuccess)
+  self:_popoverFullscreenPolicy():beforeEnteringSpace(spaceId)
+
   local slot = workspace and workspace:getIndex() or nil
   local profileId = self.session.activeProfileId
   local function recordResult(result)
@@ -847,6 +883,8 @@ function AppState:_requestWindowInSpace(workspace, windowId, spaceId, activation
       end
     else
       spaceSwitchFailureToast(outcome.code)
+      self:_refreshFocusedSpaceId()
+      self:_popoverFullscreenPolicy():onFocusedSpaceChanged()
     end
     self:_syncWorkspaceUi("slot_space_switch_result")
   end)
@@ -854,6 +892,8 @@ function AppState:_requestWindowInSpace(workspace, windowId, spaceId, activation
   if not result.ok then
     recordResult(result)
     spaceSwitchFailureToast(result.code)
+    self:_refreshFocusedSpaceId()
+    self:_popoverFullscreenPolicy():onFocusedSpaceChanged()
     return "space-switch-failed"
   end
 
@@ -1772,7 +1812,7 @@ function AppState:activateSlot(index)
           if focusedSpaceId == resolvedFullscreenSpaceId then
             local fullscreenWin = self.windowService.getWindowById(workspace:getFullscreenTargetWindowId())
             if fullscreenWin then
-              self:_hidePopoverForFullscreenWorkspaceActivation()
+              self:_popoverFullscreenPolicy():beforeEnteringSpace(resolvedFullscreenSpaceId)
               workspace:setFullscreenState({
                 fullscreenWindowId = fullscreenWin:id(),
                 fullscreenSpaceId = resolvedFullscreenSpaceId,
@@ -1783,7 +1823,8 @@ function AppState:activateSlot(index)
               return
             end
           else
-            local activation = self:_requestWindowInSpace(
+            -- _requestWindowInSpace hides when the target Space is fullscreen.
+            self:_requestWindowInSpace(
               workspace,
               workspace:getFullscreenTargetWindowId(),
               resolvedFullscreenSpaceId,
@@ -1797,9 +1838,6 @@ function AppState:activateSlot(index)
                 self:_refreshWorkspaceFingerprint(workspace, fullscreenWin)
               end
             )
-            if activation ~= "space-switch-failed" then
-              self:_hidePopoverForFullscreenWorkspaceActivation()
-            end
             return
           end
         else
@@ -2005,6 +2043,7 @@ end
 function AppState:setPopoverHideOnFullscreenWorkspace(enabled)
   self.cfg.popoverHideOnFullscreenWorkspace = enabled == true
   self.settings.setPopoverHideOnFullscreenWorkspace(self.cfg.popoverHideOnFullscreenWorkspace)
+  self:_popoverFullscreenPolicy():onSettingChanged(self.cfg.popoverHideOnFullscreenWorkspace)
   self:syncUi()
 end
 
@@ -2184,6 +2223,7 @@ function AppState:handleWindowEvent(event, win)
     end)
     self:_scheduleWorkspacePairingPersist()
     self:syncUi()
+    self:_popoverFullscreenPolicy():onWindowFullscreened()
     return
   end
 
@@ -2210,6 +2250,7 @@ function AppState:handleWindowEvent(event, win)
     end)
     self:_scheduleWorkspacePairingPersist()
     self:syncUi()
+    self:_popoverFullscreenPolicy():onWindowUnfullscreened()
     return
   end
 
@@ -2245,11 +2286,34 @@ function AppState:handleActiveWindowChange(win)
     windowId = windowId,
   })
   if spaceChanged then
+    self:_popoverFullscreenPolicy():onFocusedSpaceChanged()
     if self.popover and self.popover.requestRefresh then
       self.popover:requestRefresh("focused_space_change", win)
     end
   elseif self.popover and self.popover.requestActiveWindowUpdate then
     self.popover:requestActiveWindowUpdate(win)
+  end
+end
+
+-- Primary Space-switch signal (Mission Control / trackpad). windowFocused often
+-- does not fire on a plain swipe, so restore cannot rely on handleActiveWindowChange.
+function AppState:handleFocusedSpaceChange()
+  local previousSpaceId = self.session.focusedSpaceId
+  self:_refreshFocusedSpaceId()
+  local spaceChanged = previousSpaceId ~= self.session.focusedSpaceId
+  local policy = self:_popoverFullscreenPolicy()
+  self:_recordDebug("focus", "debug", "focused_space_changed", "focused Space changed", function()
+    return {
+      previousSpaceId = previousSpaceId,
+      focusedSpaceId = self.session.focusedSpaceId,
+      focusedIsFullscreen = self:_spaceIsFullscreen(self.session.focusedSpaceId),
+      restorePinned = policy and policy:isRestorePinned() or false,
+    }
+  end)
+  policy:onFocusedSpaceChanged()
+  if spaceChanged and self.popover and self.popover.requestRefresh then
+    local win = hs.window.frontmostWindow()
+    self.popover:requestRefresh("focused_space_change", win)
   end
 end
 
