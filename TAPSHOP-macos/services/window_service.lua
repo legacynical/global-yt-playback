@@ -294,6 +294,11 @@ function WindowService.schedulePendingFrontmost(delay, token, callback)
   return true
 end
 
+-- True when token still matches the live pending-focus generation.
+function WindowService.isCurrentFrontmostToken(token)
+  return token ~= nil and token == pendingFrontmostSerial
+end
+
 function WindowService.focusedSpaceId()
   local focusedSpaceFn = hs.spaces and hs.spaces.focusedSpace
   if type(focusedSpaceFn) == "function" then

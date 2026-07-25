@@ -98,6 +98,7 @@ function YoutubeService.new(cfg, windowService, toast)
     pendingCommands = {},
     focusSendInFlight = false,
     focusGeneration = 0,
+    focusToken = nil,
     sendSerial = 0,
     sendTimer = nil,
   }, YoutubeService)
@@ -130,6 +131,7 @@ local function clearFocusSendQueue(self)
   self.focusGeneration = (self.focusGeneration or 0) + 1
   self.pendingCommands = {}
   self.focusSendInFlight = false
+  self.focusToken = nil
 end
 
 -- Remember the pre-YT window and (re)arm a delayed restore. Safe to call again
@@ -167,6 +169,7 @@ local function flushPendingCommands(self, targetId, targetApp, target)
   local keys = self.pendingCommands
   self.pendingCommands = {}
   self.focusSendInFlight = false
+  self.focusToken = nil
   stopSendTimer(self)
 
   local focusedTarget = self.windowService.getWindowById(targetId) or target
@@ -178,6 +181,42 @@ local function flushPendingCommands(self, targetId, targetApp, target)
   end
 
   armRestore(self, self.cfg.inputDelay or 0, self.pendingRestoreId, self.pendingRestoreWindow, targetId)
+end
+
+-- Start (or restart) async focus + queued key flush for the YT target.
+local function startFocusFallback(self, target, targetApp, targetId)
+  self.focusSendInFlight = true
+  self.focusGeneration = (self.focusGeneration or 0) + 1
+  local focusGeneration = self.focusGeneration
+  stopSendTimer(self)
+
+  local started = self.windowService.ensureFrontmostAsync(target, self.cfg, function(focusResult, _resolved, _token)
+    if focusGeneration ~= self.focusGeneration then
+      return
+    end
+    if not focusResult.ok then
+      clearFocusSendQueue(self)
+      clearPendingRestore(self)
+      self.toast(Toast.message.status("Focus failed for YT window"))
+      return
+    end
+
+    local settleDelay = self.cfg.inputDelay or 0
+    -- Own the settle timer so WindowService token churn cannot drop queued keys.
+    stopSendTimer(self)
+    self.sendSerial = (self.sendSerial or 0) + 1
+    local sendSerial = self.sendSerial
+    self.focusToken = nil
+    self.sendTimer = hs.timer.doAfter(settleDelay, function()
+      self.sendTimer = nil
+      if sendSerial ~= self.sendSerial or focusGeneration ~= self.focusGeneration then
+        return
+      end
+      flushPendingCommands(self, targetId, targetApp, target)
+    end)
+  end)
+
+  self.focusToken = started and started.token or nil
 end
 
 -- Prefer an in-flight restore target over current frontmost (which may already
@@ -355,6 +394,16 @@ function YoutubeService:sendCommand(keyPress)
         focusResult = nil,
       }
     end
+    -- Pairing/workspace focus cancelled our token without a callback: restart
+    -- so queued playback commands are not stranded forever.
+    if not self.windowService.isCurrentFrontmostToken(self.focusToken) then
+      startFocusFallback(self, target, targetApp, targetId)
+      return {
+        ok = true,
+        code = "focus_send_restarted",
+        focusResult = nil,
+      }
+    end
     return {
       ok = true,
       code = "focus_send_queued",
@@ -398,34 +447,7 @@ function YoutubeService:sendCommand(keyPress)
   end
 
   self.pendingCommands = { keyPress }
-  self.focusSendInFlight = true
-  self.focusGeneration = (self.focusGeneration or 0) + 1
-  local focusGeneration = self.focusGeneration
-
-  self.windowService.ensureFrontmostAsync(target, self.cfg, function(focusResult, _resolved, _token)
-    if focusGeneration ~= self.focusGeneration then
-      return
-    end
-    if not focusResult.ok then
-      clearFocusSendQueue(self)
-      clearPendingRestore(self)
-      self.toast(Toast.message.status("Focus failed for YT window"))
-      return
-    end
-
-    local settleDelay = self.cfg.inputDelay or 0
-    -- Own the settle timer so WindowService token churn cannot drop queued keys.
-    stopSendTimer(self)
-    self.sendSerial = (self.sendSerial or 0) + 1
-    local sendSerial = self.sendSerial
-    self.sendTimer = hs.timer.doAfter(settleDelay, function()
-      self.sendTimer = nil
-      if sendSerial ~= self.sendSerial or focusGeneration ~= self.focusGeneration then
-        return
-      end
-      flushPendingCommands(self, targetId, targetApp, target)
-    end)
-  end)
+  startFocusFallback(self, target, targetApp, targetId)
 
   return {
     ok = true,
