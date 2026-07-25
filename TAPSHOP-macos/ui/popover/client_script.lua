@@ -460,6 +460,9 @@ function resetInteractionGestures() {
   resizeState.active = false;
   resizeState.direction = "";
   setInteractionCursor("");
+  // Hide can run without reloading the DOM; clear confirm so re-show is clean
+  // and the Lua Escape tap is not left responsible for a leftover overlay.
+  hideUnpairAllConfirm();
 }
 
 window.tapshopResetInteractionGestures = resetInteractionGestures;

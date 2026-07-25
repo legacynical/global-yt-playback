@@ -1,7 +1,6 @@
 local Assert = require("assert")
 local FakeHs = require("fake_hs")
 local Fakes = require("fakes")
-local TestEnv = require("test_env")
 
 local function makeConfig()
   return {
@@ -15,12 +14,19 @@ end
 
 local function makeApp(windowService, overrides)
   overrides = overrides or {}
-  TestEnv.reset({
+  -- Clear modules without FakeHs.install(): cases install FakeHs and register
+  -- windows first; a second install would wipe windowsById / Space state.
+  for _, name in ipairs({
     "state.workspace",
     "state.slot_record",
     "state.slot_row",
     "state.app_state",
-  })
+  }) do
+    package.loaded[name] = nil
+  end
+  if not rawget(_G, "hs") then
+    FakeHs.install()
+  end
   local AppState = require("state.app_state")
   return AppState.new(makeConfig(), {
     settings = overrides.settings or Fakes.createSettingsStore(),

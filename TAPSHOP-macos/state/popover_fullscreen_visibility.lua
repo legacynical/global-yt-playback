@@ -158,7 +158,14 @@ function PopoverFullscreenVisibility:onSettingChanged(enabled)
     end
     self:_reconcile()
   elseif enabled == false then
-    -- Setting off: do not restore from a stale pin; user turned the policy off.
+    -- Setting off: undo a policy hide so the panel is not left stranded.
+    if self._restorePinned then
+      if popover and type(popover.ensureVisible) == "function" then
+        popover:ensureVisible()
+      elseif popover and type(popover.show) == "function" then
+        popover:show()
+      end
+    end
     self._restorePinned = false
   end
 end

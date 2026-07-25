@@ -176,21 +176,23 @@ return {
       end,
     },
     {
-      name = "disabling the setting clears a stale restore pin",
+      name = "disabling the setting restores if pinned then clears the pin",
       run = function()
         local ctx = makePolicy({ shown = true, focusedSpaceId = 9 })
         ctx.policy:onFocusedSpaceChanged()
         Assert.equal(ctx.policy:isRestorePinned(), true)
+        Assert.equal(ctx.popover.hideCalls, 1)
 
         ctx.setEnabled(false)
         ctx.policy:onSettingChanged(false)
 
         Assert.equal(ctx.popover.syncCalls, 1)
+        Assert.equal(ctx.popover.ensureCalls, 1)
         Assert.equal(ctx.policy:isRestorePinned(), false)
 
         ctx.setFocusedSpaceId(1)
         ctx.policy:onFocusedSpaceChanged()
-        Assert.equal(ctx.popover.ensureCalls, 0)
+        Assert.equal(ctx.popover.ensureCalls, 1)
       end,
     },
     {

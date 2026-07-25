@@ -98,6 +98,8 @@ local function installHsStubs()
   }
 end
 
+local unpack = table.unpack or unpack
+
 local settings = {
   getHotkeyOverrides = function()
     return settingsState.overrides or {}
@@ -106,7 +108,7 @@ local settings = {
     local copy = {}
     for id, value in pairs(overrides) do
       copy[id] = {
-        mods = value.mods and { table.unpack(value.mods) } or nil,
+        mods = value.mods and { unpack(value.mods) } or nil,
         key = value.key,
         enabled = value.enabled,
       }

@@ -330,6 +330,11 @@ function Popover.new(app, cfg, deps)
     if pointerHoverTap or not cfg.popoverAlwaysOnTop then
       return
     end
+    -- Only while shown: syncWindowLevel/refreshCache can run while hidden and
+    -- would otherwise leave a process-lifetime mouseMoved tap running.
+    if not (panel and panel:isShown()) then
+      return
+    end
     pointerHoverTap = hs.eventtap.new({ hs.eventtap.event.types.mouseMoved }, function()
       if not panel or not panel:isShown() or not cfg.popoverAlwaysOnTop then
         return false

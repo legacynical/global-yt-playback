@@ -221,7 +221,11 @@ function Fakes.createSettingsStore()
   end
 
   function store.getPopoverTopLeft()
-    return cloneTable(store.values[POPOVER_TOP_LEFT_KEY])
+    local value = store.values[POPOVER_TOP_LEFT_KEY]
+    if value == nil then
+      return nil
+    end
+    return cloneTable(value)
   end
 
   function store.setPopoverTopLeft(value)
@@ -229,7 +233,11 @@ function Fakes.createSettingsStore()
   end
 
   function store.getPopoverSize()
-    return cloneTable(store.values[POPOVER_SIZE_KEY])
+    local value = store.values[POPOVER_SIZE_KEY]
+    if value == nil then
+      return nil
+    end
+    return cloneTable(value)
   end
 
   function store.setPopoverSize(value)
@@ -237,7 +245,11 @@ function Fakes.createSettingsStore()
   end
 
   function store.getSettingsWindowTopLeft()
-    return cloneTable(store.values[SETTINGS_TOP_LEFT_KEY])
+    local value = store.values[SETTINGS_TOP_LEFT_KEY]
+    if value == nil then
+      return nil
+    end
+    return cloneTable(value)
   end
 
   function store.setSettingsWindowTopLeft(value)
@@ -245,7 +257,11 @@ function Fakes.createSettingsStore()
   end
 
   function store.getSettingsWindowSize()
-    return cloneTable(store.values[SETTINGS_SIZE_KEY])
+    local value = store.values[SETTINGS_SIZE_KEY]
+    if value == nil then
+      return nil
+    end
+    return cloneTable(value)
   end
 
   function store.setSettingsWindowSize(value)
@@ -426,9 +442,13 @@ function Fakes.createWindowService(initialWindows)
   end
 
   local function resolveEnsureFrontmostResult(win)
-    local result = service.ensureFrontmostAsyncResult or service.ensureFrontmostResult
-    if not result then
+    local template = service.ensureFrontmostAsyncResult or service.ensureFrontmostResult
+    local result
+    if not template then
       result = { ok = true, code = "focus_verified", windowId = win and win:id() or nil }
+    else
+      -- Clone so back-filling windowId does not mutate the shared template.
+      result = cloneTable(template)
     end
     if result.windowId == nil and win then
       result.windowId = win:id()
@@ -480,10 +500,11 @@ function Fakes.createWindowService(initialWindows)
       win = win,
       cfg = cfg,
     }
-    if service.requestFrontmostResult and service.requestFrontmostResult.windowId == nil and win then
-      service.requestFrontmostResult.windowId = win:id()
+    local result = cloneTable(service.requestFrontmostResult or {})
+    if result.windowId == nil and win then
+      result.windowId = win:id()
     end
-    return service.requestFrontmostResult
+    return result
   end
 
   function service.requestFrontmostAfterSpaceSwitch(win, cfg)
@@ -491,12 +512,11 @@ function Fakes.createWindowService(initialWindows)
       win = win,
       cfg = cfg,
     }
-    if service.requestFrontmostAfterSpaceSwitchResult
-      and service.requestFrontmostAfterSpaceSwitchResult.windowId == nil
-      and win then
-      service.requestFrontmostAfterSpaceSwitchResult.windowId = win:id()
+    local result = cloneTable(service.requestFrontmostAfterSpaceSwitchResult or {})
+    if result.windowId == nil and win then
+      result.windowId = win:id()
     end
-    return service.requestFrontmostAfterSpaceSwitchResult
+    return result
   end
 
   function service.requestFrontmostInSpace(target, spaceId, cfg, onComplete)
@@ -511,8 +531,8 @@ function Fakes.createWindowService(initialWindows)
       cfg = cfg,
     }
 
-    local result = service.requestFrontmostInSpaceResult
-      or { ok = true, code = "space_switch_requested", windowId = windowId, spaceId = spaceId }
+    local result = cloneTable(service.requestFrontmostInSpaceResult
+      or { ok = true, code = "space_switch_requested", windowId = windowId, spaceId = spaceId })
     result.windowId = windowId
     result.spaceId = spaceId
     if result.ok ~= false then
@@ -541,7 +561,7 @@ function Fakes.createWindowService(initialWindows)
       spaceId = spaceId,
       cfg = cfg,
     }
-    local result = service.gotoSpaceResult or { ok = true, code = "space_switch_verified", spaceId = spaceId }
+    local result = cloneTable(service.gotoSpaceResult or { ok = true, code = "space_switch_verified", spaceId = spaceId })
     if result.spaceId == nil then
       result.spaceId = spaceId
     end
@@ -551,7 +571,6 @@ function Fakes.createWindowService(initialWindows)
         result.code = "space_switch_verified"
       end
     end
-    service.gotoSpaceResult = result
     return result
   end
 

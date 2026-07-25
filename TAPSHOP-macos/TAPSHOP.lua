@@ -215,9 +215,18 @@ local function startSpaceWatcher()
   end
 
   app.spaceWatcher = watcherOrErr
-  pcall(function()
+  local startOk, startErr = pcall(function()
     app.spaceWatcher:start()
   end)
+  if not startOk then
+    app.spaceWatcher = nil
+    debugLogger:record("startup", "warn", "space_watcher_start_failed", "failed to start spaces watcher", function()
+      return {
+        error = tostring(startErr),
+      }
+    end)
+    return
+  end
   debugLogger:record("startup", "debug", "space_watcher_started", "spaces watcher started")
 end
 
