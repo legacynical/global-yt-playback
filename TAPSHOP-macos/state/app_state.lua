@@ -61,6 +61,9 @@ function AppState.new(cfg, deps)
     session = {
       focusedSpaceId = nil,
       activeProfileId = initialProfileId,
+      recoveryMatchIndex = nil,
+      recoveryMatchIndexDirty = true,
+      recoverableSlotCount = 0,
     },
     hotkeyManager = nil,
     popover = nil,
@@ -593,6 +596,7 @@ function AppState:_restoreWorkspacePairings(pairings, opts)
       end
     end
   end
+  self:_markRecoveryMatchIndexDirty()
   self:_recordDebug("persistence", "debug", "workspace_pairings_restore_result", "workspace pairings restore result", function()
     return {
       operation = "read",
@@ -658,8 +662,52 @@ function AppState:_refreshPairedWorkspaceMetadataForWindow(win, opts)
   return matchedWorkspace
 end
 
+function AppState:_markRecoveryMatchIndexDirty()
+  self.session.recoveryMatchIndexDirty = true
+end
+
+function AppState:_rebuildRecoveryMatchIndex()
+  local index = {}
+  local recoverableCount = 0
+  self:_forEachWorkspace(function(workspace)
+    if not workspace:canRecover() then
+      return
+    end
+    recoverableCount = recoverableCount + 1
+    local fingerprint = workspace:getFingerprint()
+    local bundleID = fingerprint and fingerprint.bundleID
+    local titleNormalized = fingerprint and fingerprint.titleNormalized
+    if type(bundleID) ~= "string" or bundleID == ""
+      or type(titleNormalized) ~= "string" or titleNormalized == "" then
+      return
+    end
+    local byTitle = index[bundleID]
+    if not byTitle then
+      byTitle = {}
+      index[bundleID] = byTitle
+    end
+    local bucket = byTitle[titleNormalized]
+    if not bucket then
+      bucket = {}
+      byTitle[titleNormalized] = bucket
+    end
+    bucket[#bucket + 1] = workspace
+  end)
+  self.session.recoveryMatchIndex = index
+  self.session.recoverableSlotCount = recoverableCount
+  self.session.recoveryMatchIndexDirty = false
+end
+
+function AppState:_ensureRecoveryMatchIndex()
+  if self.session.recoveryMatchIndexDirty or self.session.recoveryMatchIndex == nil then
+    self:_rebuildRecoveryMatchIndex()
+  end
+  return self.session.recoveryMatchIndex
+end
+
 function AppState:_pairWorkspace(workspace, windowId, win)
   workspace:pair(windowId, self.windowService.pairingMetadata(win))
+  self:_markRecoveryMatchIndexDirty()
   local spaceId = self:_updateWorkspaceBindingSpaceState(
     workspace,
     win
@@ -973,21 +1021,32 @@ function AppState:_restoreRecoverableWorkspacesForCandidate(win, opts)
     windowId = candidateWindowId,
   })
 
-  self:_forEachWorkspace(function(workspace)
-    if workspace:canRecover() then
-      recoverableCount = recoverableCount + 1
+  -- Derived fingerprint index: lookup matching recoverables instead of
+  -- scanning every profile/slot on each candidate event.
+  self:_ensureRecoveryMatchIndex()
+  recoverableCount = self.session.recoverableSlotCount or 0
+  local byTitle = self.session.recoveryMatchIndex
+    and candidateMeta.bundleID
+    and self.session.recoveryMatchIndex[candidateMeta.bundleID]
+  local indexedMatches = byTitle and candidateMeta.titleNormalized and byTitle[candidateMeta.titleNormalized] or nil
+  if type(indexedMatches) == "table" then
+    local snapshot = {}
+    for index, workspace in ipairs(indexedMatches) do
+      snapshot[index] = workspace
     end
-    if workspace:canRecover() and workspace:matchesRecoveryCandidate(candidateMeta) then
-      matchedSlots[#matchedSlots + 1] = {
-        index = workspace:getIndex(),
-        name = workspace:getName(),
-        storedTitle = workspace:getStoredWindowTitle(),
-      }
-      self:_pairWorkspace(workspace, candidateId, win)
-      restoredWorkspaces[#restoredWorkspaces + 1] = workspace
-      restoredLookup[workspace] = true
+    for _, workspace in ipairs(snapshot) do
+      if workspace:canRecover() and workspace:matchesRecoveryCandidate(candidateMeta) then
+        matchedSlots[#matchedSlots + 1] = {
+          index = workspace:getIndex(),
+          name = workspace:getName(),
+          storedTitle = workspace:getStoredWindowTitle(),
+        }
+        self:_pairWorkspace(workspace, candidateId, win)
+        restoredWorkspaces[#restoredWorkspaces + 1] = workspace
+        restoredLookup[workspace] = true
+      end
     end
-  end)
+  end
 
   if eventName == hs.window.filter.windowCreated then
     self:_forEachWorkspace(function(workspace)
@@ -1124,6 +1183,15 @@ function AppState:_recoverFromWindowEvent(event, win)
   end
 
   if not self:_hasWorkspaceEligibleForRecoveryEvent(event) then
+    return false
+  end
+
+  -- Reject non-candidates before pairingMetadata / slot scans / Spaces
+  -- probes. Eligibility alone is not enough: any paired slot makes every
+  -- windowCreated eligible for stale-pair consideration.
+  local isRecoveryCandidateWindow = self.windowService.isRecoveryCandidateWindow
+    or self.windowService.isCandidateWindow
+  if not (isRecoveryCandidateWindow and isRecoveryCandidateWindow(win)) then
     return false
   end
 
@@ -1399,6 +1467,9 @@ function AppState:_clearRecoverableWorkspaces()
       changed = true
     end
   end)
+  if changed then
+    self:_markRecoveryMatchIndexDirty()
+  end
   return changed
 end
 
@@ -1407,6 +1478,7 @@ function AppState:_clearWorkspaceAndPersist(workspace)
     return
   end
   workspace:clear()
+  self:_markRecoveryMatchIndexDirty()
   self:_persistWorkspacePairings()
 end
 
@@ -1584,6 +1656,7 @@ function AppState:unpairSlot(index)
       local win = self:_resolvePairedWindow(workspace)
       local toastPayload = self:_formatUnpairToast(workspace, win)
       workspace:clear()
+      self:_markRecoveryMatchIndexDirty()
       self.toast(toastPayload)
     else
       self.toast(Toast.message.plain(workspace:getName() .. " is already unpaired!"))
@@ -1599,6 +1672,9 @@ function AppState:unpairAll()
         workspace:clear()
         cleared = true
       end
+    end
+    if cleared then
+      self:_markRecoveryMatchIndexDirty()
     end
     self.toast(Toast.message.plain(cleared and "[Unpaired All Windows]" or "[No Paired Windows]"))
   end)
@@ -1881,6 +1957,7 @@ function AppState:handleWindowEvent(event, win)
     end)
 
     if basePairingChanged then
+      self:_markRecoveryMatchIndexDirty()
       self:_persistWorkspacePairings()
       if closedWindowToast then
         self.toast(closedWindowToast)
