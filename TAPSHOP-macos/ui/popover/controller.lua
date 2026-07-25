@@ -42,6 +42,9 @@ function Popover.new(app, cfg, deps)
   local isFocused = false
   local cachedThemeCss = nil
   local profileTextEntryActive = false
+  -- Mirrored from client so full HTML rebuilds can restore profiles mode.
+  local profileListMode = "slots"
+  local deferredRefreshWhileEditing = false
   local savedTopLeft = appdata.getPopoverTopLeft()
   local savedSize = popoverLayout.loadSavedSize(appdata)
   local runtimeBounds = popoverLayout.initialRuntimeBounds()
@@ -523,6 +526,7 @@ function Popover.new(app, cfg, deps)
       profileCount = app.getProfileCount and app:getProfileCount() or 1,
       profileRows = app.getProfileRowModels and app:getProfileRowModels() or {},
       profilePaletteColors = ProfilePalette.COLORS,
+      profileListMode = profileListMode,
       rows = app:getWorkspaceRowModels(),
     }
   end
@@ -728,13 +732,18 @@ function Popover.new(app, cfg, deps)
     pendingRefresh = false
     stopRefreshTimer()
     applyPendingActiveWin()
+
+    -- Do not tear down an in-progress rename; apply when edit ends.
+    if profileTextEntryActive then
+      deferredRefreshWhileEditing = true
+      panel:markDirty()
+      return
+    end
+
     lastSlotsProfileId = nil
     lastSlotsSignature = nil
-    -- Keep last HTML as fallback paint; bump generations so settle rewarms truth.
-    -- Do not warm/prefetch here — panel:refresh() already paid for active-row
-    -- probes via buildHtml; neighbor probes belong only on switch settle.
-    spaceGeneration = spaceGeneration + 1
-    pairingGeneration = pairingGeneration + 1
+    -- Generations are bumped by the requestRefresh reason (or surgical invalidate).
+    -- Do not nuke neighbor caches here on every full rebuild.
 
     if panel:isShown() then
       clearProfileTextEntryState(panel)
@@ -814,37 +823,43 @@ function Popover.new(app, cfg, deps)
     -- Paint chrome immediately; include cached slots when warm so rapid cycles
     -- never sit blank waiting for Accessibility probes.
     if opts.beginSwitch == true then
-      -- Begin is async and may omit slotsHtml on cache miss. When settle will
-      -- follow, invalidate the "already committed" marker so settle cannot no-op
-      -- and leave the wrong bank on screen.
-      if opts.settleSlots == true then
+      -- Click path already ran an optimistic client begin for this epoch.
+      -- Lua owns begin only for hotkeys / non-client switches.
+      local clientOwnedBegin = opts.clientEpoch ~= nil
+      if not clientOwnedBegin then
+        -- Begin is async and may omit slotsHtml on cache miss. When settle will
+        -- follow, invalidate the "already committed" marker so settle cannot no-op
+        -- and leave the wrong bank on screen.
+        if opts.settleSlots == true then
+          lastSlotsProfileId = nil
+          lastSlotsSignature = nil
+        end
+
+        local beginPayload = {
+          epoch = epoch,
+          activeProfile = activeProfile,
+          returnToSlots = returnToSlots,
+        }
+        -- Only paint generation-current cache; stale Space/pairing HTML is worse
+        -- than keeping the previous bank until settle.
+        if cached
+          and type(cached.html) == "string"
+          and cached.spaceGeneration == spaceGeneration
+          and cached.pairingGeneration == pairingGeneration
+        then
+          beginPayload.slotsHtml = cached.html
+        end
+        local beginEncoded = hs.json.encode(beginPayload) or "{}"
+        panel:evaluateJavaScript(
+          "(function(){ return !!(window.tapshopBeginProfileSwitch && window.tapshopBeginProfileSwitch("
+            .. beginEncoded
+            .. ")); })()"
+        )
+      elseif opts.settleSlots == true then
+        -- Client begin already painted; still force settle to apply truth.
         lastSlotsProfileId = nil
         lastSlotsSignature = nil
       end
-
-      local beginPayload = {
-        epoch = epoch,
-        activeProfile = activeProfile,
-        returnToSlots = returnToSlots,
-      }
-      -- Only paint generation-current cache; stale Space/pairing HTML is worse
-      -- than keeping the previous bank until settle.
-      if cached
-        and type(cached.html) == "string"
-        and cached.spaceGeneration == spaceGeneration
-        and cached.pairingGeneration == pairingGeneration
-      then
-        beginPayload.slotsHtml = cached.html
-      end
-      -- Click path already ran an optimistic client begin for this epoch; Lua
-      -- begin still helps when the client had no warm HTML. Client-side epoch
-      -- gating prevents a late begin from clobbering a landed settle.
-      local beginEncoded = hs.json.encode(beginPayload) or "{}"
-      panel:evaluateJavaScript(
-        "(function(){ return !!(window.tapshopBeginProfileSwitch && window.tapshopBeginProfileSwitch("
-          .. beginEncoded
-          .. ")); })()"
-      )
     end
 
     if opts.includeProfiles == true then
@@ -982,6 +997,10 @@ function Popover.new(app, cfg, deps)
       end
       if action == "profileEditEnd" then
         setProfileTextEntryActive(false, panelRef)
+        if deferredRefreshWhileEditing then
+          deferredRefreshWhileEditing = false
+          queueRefresh(INTERACTIVE_REFRESH_DELAY_SECONDS)
+        end
         if cfg.popoverAlwaysOnTop then
           panelRef:evaluateJavaScript(
             "(function(){ return !!(window.tapshopNeedsEscapeArm && window.tapshopNeedsEscapeArm()); })()",
@@ -994,6 +1013,11 @@ function Popover.new(app, cfg, deps)
             end
           )
         end
+        return
+      end
+      if action == "profileModeChanged" then
+        local mode = tostring(body.mode or "")
+        profileListMode = mode == "profiles" and "profiles" or "slots"
         return
       end
       if action == "resizeStart" then
@@ -1324,6 +1348,26 @@ function Popover.new(app, cfg, deps)
         beginSwitch = reason == "profile_switch",
         settleSlots = reason == "profile_switch" and not modeOnly,
         clientEpoch = opts.clientEpoch,
+      }) then
+        return
+      end
+      queueRefresh(INTERACTIVE_REFRESH_DELAY_SECONDS)
+      return
+    end
+
+    -- Lifecycle / workspace truth: prefer surgical slots apply so neighbor caches survive.
+    if reason == "window_destroyed"
+      or reason == "fullscreen_change"
+      or reason == "workspace_state"
+      or reason == "window_event"
+      or reason == "slot_space_switch_result"
+    then
+      -- While renaming, skip profilesHtml so tapshopApplyProfileUi cannot
+      -- rehydrate beginProfileEdit from server name/color and wipe the draft.
+      if pushProfileUiUpdate({
+        includeSlots = true,
+        includeProfiles = profileListMode == "profiles" and not profileTextEntryActive,
+        skipUnchangedSlots = false,
       }) then
         return
       end

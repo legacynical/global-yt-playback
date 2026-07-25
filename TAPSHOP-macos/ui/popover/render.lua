@@ -173,6 +173,9 @@ local function profileSwitcherHtml(ctx)
     style = ' style="--profile-tint: ' .. escapeAttr(color) .. ';"'
   end
   local tintClass = hasColor and " has-profile-tint" or ""
+  if ctx.profileListMode == "profiles" then
+    tintClass = tintClass .. " is-profiles-mode"
+  end
 
   return table.concat({
     '<button type="button" class="header-btn header-profile',
@@ -202,11 +205,14 @@ function Render.buildHtml(ctx)
   local activeColor = active.color
   local hasActiveColor = type(activeColor) == "string" and activeColor ~= ""
   local shellStyle = ""
-  local shellClass = "body-shell is-slots-mode"
+  local listMode = ctx.profileListMode == "profiles" and "profiles" or "slots"
+  local shellClass = "body-shell is-" .. listMode .. "-mode"
   if hasActiveColor then
     shellClass = shellClass .. " has-active-color"
     shellStyle = ' style="--active-profile-color: ' .. escapeAttr(activeColor) .. ';"'
   end
+  local slotsHidden = listMode == "profiles" and " hidden" or ""
+  local profilesHidden = listMode ~= "profiles" and " hidden" or ""
 
   local parts = {
     "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\">\n  <style>\n",
@@ -246,9 +252,13 @@ function Render.buildHtml(ctx)
     shellClass,
     "\" id=\"body-shell\"",
     shellStyle,
-    ">\n      <div class=\"workspace-list is-slots-list\" id=\"slots-list\">\n",
+    ">\n      <div class=\"workspace-list is-slots-list\" id=\"slots-list\"",
+    slotsHidden,
+    ">\n",
     Render.slotsListInnerHtml(ctx.rows, ctx.config),
-    "      </div>\n      <div class=\"workspace-list is-profiles-list\" id=\"profiles-list\" hidden>\n",
+    "      </div>\n      <div class=\"workspace-list is-profiles-list\" id=\"profiles-list\"",
+    profilesHidden,
+    ">\n",
     Render.profilesListInnerHtml(ctx.profileRows),
     "      </div>\n    </div>\n",
     '    <div class="color-picker" id="profile-color-picker" hidden aria-label="Profile color palette">\n',

@@ -535,6 +535,7 @@ function setProfileMode(mode, opts) {
   if (mode === "slots" && profileUiState.editingId != null) {
     cancelProfileEdit(true);
   }
+  var previous = profileUiState.mode;
   profileUiState.mode = mode === "profiles" ? "profiles" : "slots";
   if (profileUiState.mode !== "profiles") closeColorPicker();
 
@@ -552,6 +553,9 @@ function setProfileMode(mode, opts) {
     applyActiveProfileChrome(window.tapshopActiveProfile);
   }
   syncEscapeArm();
+  if (!opts.skipNotify && previous !== profileUiState.mode) {
+    sendAction("profileModeChanged", { mode: profileUiState.mode });
+  }
 }
 
 function markSlotsSwitching(isSwitching) {
@@ -1350,6 +1354,12 @@ if (titleLogo) {
 
 window.addEventListener("focus", focusKeyboardSurface);
 window.addEventListener("resize", updateUiScale);
+(function syncProfileModeFromDom() {
+  var shell = bodyShell();
+  if (shell && shell.classList.contains("is-profiles-mode")) {
+    profileUiState.mode = "profiles";
+  }
+})();
 applyActiveProfileChrome(window.tapshopActiveProfile);
 wireProfileListInteractions(profilesList());
 updateUiScale();

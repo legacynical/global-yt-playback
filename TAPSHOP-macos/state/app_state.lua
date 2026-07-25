@@ -2486,6 +2486,9 @@ function AppState:handleWindowEvent(event, win)
       if workspace:getFullscreenTargetWindowId() == deadId and workspace:getBaseWindowId() ~= deadId then
         workspace:clearFullscreenState()
         fullscreenStateChanged = true
+        if profile then
+          self:_invalidateProfileSlotsCache(profile.id)
+        end
       end
       if workspace:getBaseWindowId() == deadId then
         if workspace:hasTrackedFullscreenTarget()
@@ -2497,6 +2500,9 @@ function AppState:handleWindowEvent(event, win)
           and self.windowService.isWindowFullscreen(win) then
           workspace:clearFullscreenState()
           fullscreenStateChanged = true
+          if profile then
+            self:_invalidateProfileSlotsCache(profile.id)
+          end
           return
         end
         if self.cfg.recoverClosedWindows then
@@ -2518,10 +2524,10 @@ function AppState:handleWindowEvent(event, win)
       if closedWindowToast then
         self.toast(closedWindowToast)
       end
-      self:syncUi()
+      self:_syncWorkspaceUi("window_destroyed")
     elseif fullscreenStateChanged then
       self:_scheduleWorkspacePairingPersist()
-      self:syncUi()
+      self:_syncWorkspaceUi("fullscreen_change")
     end
     return
   end
@@ -2532,7 +2538,7 @@ function AppState:handleWindowEvent(event, win)
     end
     self:_refreshFocusedSpaceId()
     local winId = win:id()
-    self:_forEachWorkspace(function(workspace)
+    self:_forEachWorkspace(function(workspace, profile)
       if workspace:getBaseWindowId() == winId then
         local fullscreenSpaceId = self.windowService.getPrimarySpaceForWindow(win)
         -- Preserve existing advisory home; do not store the fullscreen Space as baseSpaceId.
@@ -2540,10 +2546,13 @@ function AppState:handleWindowEvent(event, win)
           fullscreenWindowId = win:id(),
           fullscreenSpaceId = fullscreenSpaceId,
         })
+        if profile then
+          self:_invalidateProfileSlotsCache(profile.id)
+        end
       end
     end)
     self:_scheduleWorkspacePairingPersist()
-    self:syncUi()
+    self:_syncWorkspaceUi("fullscreen_change")
     self:_popoverFullscreenPolicy():onWindowFullscreened()
     return
   end
@@ -2554,12 +2563,15 @@ function AppState:handleWindowEvent(event, win)
     end
     self:_refreshFocusedSpaceId()
     local winId = win:id()
-    self:_forEachWorkspace(function(workspace)
+    self:_forEachWorkspace(function(workspace, profile)
       if workspace:getFullscreenTargetWindowId() == winId then
         local spaceId = self:_updateWorkspaceBindingSpaceState(workspace, win)
         workspace:clearFullscreenState()
         if spaceId ~= nil then
           workspace:setBaseSpaceId(spaceId)
+        end
+        if profile then
+          self:_invalidateProfileSlotsCache(profile.id)
         end
       elseif workspace:getBaseWindowId() == winId then
         local spaceId = self:_updateWorkspaceBindingSpaceState(workspace, win)
@@ -2567,10 +2579,13 @@ function AppState:handleWindowEvent(event, win)
         if spaceId ~= nil then
           workspace:setBaseSpaceId(spaceId)
         end
+        if profile then
+          self:_invalidateProfileSlotsCache(profile.id)
+        end
       end
     end)
     self:_scheduleWorkspacePairingPersist()
-    self:syncUi()
+    self:_syncWorkspaceUi("fullscreen_change")
     self:_popoverFullscreenPolicy():onWindowUnfullscreened()
     return
   end
