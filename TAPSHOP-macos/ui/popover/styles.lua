@@ -139,7 +139,9 @@ local function rootVars(theme)
   --tooltip-bg: rgba(10, 10, 10, 0.94);
   --resize-ring: 3px;
   --resize-edge-inset: 3px;
-  --resize-corner: calc(var(--resize-ring) + var(--resize-edge-inset));
+  /* Match .container border-radius so SE/SW hit boxes reach past the curve. */
+  --panel-radius: 12px;
+  --resize-corner: calc(var(--resize-ring) + var(--panel-radius));
 }
 ]=]
 end
@@ -185,7 +187,7 @@ input {
   padding: calc(6px * var(--ui-scale));
   background: var(--panel-bg);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--panel-radius);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   -webkit-backdrop-filter: blur(10px) saturate(115%);
   backdrop-filter: blur(10px) saturate(115%);
@@ -728,8 +730,8 @@ body.is-utility-overlay .slot-icon-btn.is-pointer-hover .slot-app-icon.is-muted 
 
 /* Edge strips live in the outer ring and bite 3px into the panel. */
 .resize-s {
-  left: var(--resize-ring);
-  right: var(--resize-ring);
+  left: var(--resize-corner);
+  right: var(--resize-corner);
   bottom: 0;
   height: calc(var(--resize-ring) + var(--resize-edge-inset));
 }
@@ -737,7 +739,7 @@ body.is-utility-overlay .slot-icon-btn.is-pointer-hover .slot-app-icon.is-muted 
 .resize-e,
 .resize-w {
   top: 0;
-  bottom: var(--resize-ring);
+  bottom: var(--resize-corner);
   width: calc(var(--resize-ring) + var(--resize-edge-inset));
 }
 
