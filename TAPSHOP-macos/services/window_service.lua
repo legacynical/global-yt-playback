@@ -22,8 +22,14 @@ local function isFrontmost(win)
     return false
   end
 
-  local frontmost = hs.window.frontmostWindow()
-  return frontmost and frontmost:id() == win:id() or false
+  local checked, frontmost = pcall(hs.window.frontmostWindow)
+  if not checked or not frontmost then
+    return false
+  end
+  local compared, matches = pcall(function()
+    return frontmost:id() == win:id()
+  end)
+  return compared and matches or false
 end
 
 local function stopPendingFrontmostTimer()
@@ -37,6 +43,33 @@ local function invalidatePendingFrontmostRequest()
   pendingFrontmostSerial = pendingFrontmostSerial + 1
   stopPendingFrontmostTimer()
   return pendingFrontmostSerial
+end
+
+local function schedulePendingFrontmostRequest(delay, token, callback)
+  pendingFrontmostTimer = hs.timer.doAfter(delay, function()
+    pendingFrontmostTimer = nil
+    if token ~= pendingFrontmostSerial then
+      return
+    end
+    callback()
+  end)
+end
+
+local function dismissMissionControl()
+  if not hs.spaces or type(hs.spaces.closeMissionControl) ~= "function" then
+    return false
+  end
+  return pcall(hs.spaces.closeMissionControl)
+end
+
+local function windowIdForTarget(target)
+  if type(target) == "number" then
+    return target
+  end
+  if target and type(target.id) == "function" then
+    return target:id()
+  end
+  return nil
 end
 
 local function requestFrontmostImpl(win)
@@ -213,22 +246,6 @@ function WindowService.currentSpaceId()
   return WindowService.focusedSpaceId()
 end
 
-function WindowService.waitForSpace(spaceId, cfg)
-  if not spaceId then
-    return false
-  end
-  local timeoutSec = (cfg and cfg.spaceSwitchWaitTimeout) or 0.35
-  local pollMicros = (cfg and cfg.spaceSwitchPollMicros) or 10000
-  local start = hs.timer.secondsSinceEpoch()
-  while (hs.timer.secondsSinceEpoch() - start) < timeoutSec do
-    if WindowService.currentSpaceId() == spaceId then
-      return true
-    end
-    hs.timer.usleep(pollMicros)
-  end
-  return WindowService.currentSpaceId() == spaceId
-end
-
 function WindowService.getWindowSpaces(win)
   if not win then
     return {}
@@ -340,36 +357,147 @@ function WindowService.gotoSpace(spaceId, cfg)
   if not spaceId then
     return { ok = false, code = "missing_space_id", spaceId = nil }
   end
-  hs.spaces.gotoSpace(spaceId)
-  if not WindowService.waitForSpace(spaceId, cfg) then
-    return { ok = false, code = "space_switch_timeout", spaceId = spaceId }
+  local called, initiated, initiateError = pcall(hs.spaces.gotoSpace, spaceId)
+  if not called or initiated == nil or initiated == false then
+    dismissMissionControl()
+    return {
+      ok = false,
+      code = "space_switch_not_initiated",
+      error = called and initiateError or initiated,
+      spaceId = spaceId,
+    }
   end
-  if hs.spaces and type(hs.spaces.closeMissionControl) == "function" then
-    pcall(hs.spaces.closeMissionControl)
-  end
-  return { ok = true, code = "space_switch_verified", spaceId = spaceId }
+  return { ok = true, code = "space_switch_requested", spaceId = spaceId }
 end
 
--- After a Space switch, request focus on the next loop turn once the desktop settles.
-function WindowService.requestFrontmostAfterSpaceSwitch(win, cfg)
-  if not win then
-    return focusResult(false, "missing_window", nil)
+-- Space transitions are asynchronous Mission Control operations. Keep one
+-- exact target pending until the destination settles and focus is confirmed.
+function WindowService.requestFrontmostInSpace(target, spaceId, cfg, onComplete)
+  local windowId = windowIdForTarget(target)
+  if not windowId then
+    return { ok = false, code = "missing_window_id", windowId = nil, spaceId = spaceId }
+  end
+  if not spaceId then
+    return { ok = false, code = "missing_space_id", windowId = windowId, spaceId = nil }
   end
 
-  local initialDelay = cfg.fullscreenSpaceSwitchDelay or 0.20
+  cfg = cfg or {}
   local token = invalidatePendingFrontmostRequest()
+  local switchResult = WindowService.gotoSpace(spaceId, cfg)
+  if not switchResult.ok then
+    switchResult.windowId = windowId
+    return switchResult
+  end
 
-  pendingFrontmostTimer = hs.timer.doAfter(initialDelay, function()
-    pendingFrontmostTimer = nil
-    pcall(function()
-      if token ~= pendingFrontmostSerial then
+  local pollInterval = cfg.spaceSwitchPollInterval or 0.05
+  local maxSpaceAttempts = cfg.spaceSwitchMaxAttempts or 60
+  local focusDelay = cfg.fullscreenSpaceSwitchDelay or 0.20
+  local focusVerifyDelay = cfg.spaceSwitchFocusVerifyDelay or 0.05
+  local maxResolveAttempts = cfg.spaceSwitchWindowResolveAttempts or 20
+  local maxFocusAttempts = cfg.spaceSwitchFocusAttempts or 4
+  local spaceAttempts = 0
+  local resolveAttempts = 0
+  local focusAttempts = 0
+
+  local function complete(result, win)
+    if token ~= pendingFrontmostSerial then
+      return
+    end
+    stopPendingFrontmostTimer()
+    if onComplete then
+      pcall(onComplete, result, win)
+    end
+  end
+
+  local function fail(code)
+    dismissMissionControl()
+    complete({
+      ok = false,
+      code = code,
+      windowId = windowId,
+      spaceId = spaceId,
+    })
+  end
+
+  local focusWhenAvailable
+  local verifyFrontmost
+
+  verifyFrontmost = function(win)
+    if WindowService.currentSpaceId() ~= spaceId then
+      fail("space_switch_interrupted")
+      return
+    end
+    if isFrontmost(win) then
+      complete({
+        ok = true,
+        code = "focus_verified_after_space_switch",
+        windowId = windowId,
+        spaceId = spaceId,
+      }, win)
+      return
+    end
+    if focusAttempts >= maxFocusAttempts then
+      fail("focus_timeout_after_space_switch")
+      return
+    end
+    schedulePendingFrontmostRequest(pollInterval, token, focusWhenAvailable)
+  end
+
+  focusWhenAvailable = function()
+    if WindowService.currentSpaceId() ~= spaceId then
+      fail("space_switch_interrupted")
+      return
+    end
+
+    dismissMissionControl()
+    local win = WindowService.getWindowById(windowId)
+    if not win then
+      resolveAttempts = resolveAttempts + 1
+      if resolveAttempts >= maxResolveAttempts then
+        fail("window_unavailable_after_space_switch")
         return
       end
-      requestFrontmostImpl(win)
-    end)
-  end)
+      schedulePendingFrontmostRequest(pollInterval, token, focusWhenAvailable)
+      return
+    end
 
-  return focusResult(true, "focus_requested_after_space_switch", win)
+    focusAttempts = focusAttempts + 1
+    local requested = pcall(requestFrontmostImpl, win)
+    if not requested then
+      if focusAttempts >= maxFocusAttempts then
+        fail("focus_timeout_after_space_switch")
+        return
+      end
+      schedulePendingFrontmostRequest(pollInterval, token, focusWhenAvailable)
+      return
+    end
+    schedulePendingFrontmostRequest(focusVerifyDelay, token, function()
+      verifyFrontmost(win)
+    end)
+  end
+
+  local function waitForSpaceSettlement()
+    if WindowService.currentSpaceId() == spaceId then
+      dismissMissionControl()
+      schedulePendingFrontmostRequest(focusDelay, token, focusWhenAvailable)
+      return
+    end
+
+    spaceAttempts = spaceAttempts + 1
+    if spaceAttempts >= maxSpaceAttempts then
+      fail("space_switch_timeout")
+      return
+    end
+    schedulePendingFrontmostRequest(pollInterval, token, waitForSpaceSettlement)
+  end
+
+  waitForSpaceSettlement()
+  return {
+    ok = true,
+    code = "space_switch_requested",
+    windowId = windowId,
+    spaceId = spaceId,
+  }
 end
 
 function WindowService.cancelPendingFrontmostRequest()

@@ -723,6 +723,63 @@ function AppState:_resolvedTargetSpaceFromSpaceIds(spaceIds, focusedSpaceId)
   return primarySpaceId, false, primarySpaceId
 end
 
+function AppState:_requestWindowInSpace(workspace, windowId, spaceId, activationPath, onSuccess)
+  local slot = workspace and workspace:getIndex() or nil
+  local profileId = self.session.activeProfileId
+  local function recordResult(result)
+    self:_recordDebug("focus", result.ok and "info" or "warn", "slot_space_switch_result", "slot Space switch completed", function()
+      return {
+        slot = slot,
+        profileId = profileId,
+        windowId = windowId,
+        spaceId = spaceId,
+        result = result.code,
+      }
+    end, {
+      slot = slot,
+      profileId = profileId,
+      windowId = windowId,
+      spaceId = spaceId,
+      result = result.code,
+    })
+  end
+
+  local result = self.windowService.requestFrontmostInSpace(windowId, spaceId, self.cfg, function(outcome, resolved)
+    recordResult(outcome)
+    if outcome.ok then
+      if onSuccess then
+        onSuccess(resolved)
+      end
+    else
+      self.toast(Toast.message.plain("Window not found in any spaces"))
+    end
+    self:_syncWorkspaceUi("slot_space_switch_result")
+  end)
+
+  if not result.ok then
+    recordResult(result)
+    self.toast(Toast.message.plain("Window not found in any spaces"))
+    return "space-switch-failed"
+  end
+
+  self:_recordDebug("focus", "info", "slot_space_switch_requested", "slot Space switch requested", function()
+    return {
+      slot = slot,
+      profileId = profileId,
+      windowId = windowId,
+      spaceId = spaceId,
+      result = result.code,
+    }
+  end, {
+    slot = slot,
+    profileId = profileId,
+    windowId = windowId,
+    spaceId = spaceId,
+    result = result.code,
+  })
+  return activationPath
+end
+
 function AppState:_activateResolvedPairedWindow(workspace, paired, focusedSpaceId)
   if not workspace or not paired then
     return nil
@@ -744,15 +801,16 @@ function AppState:_activateResolvedPairedWindow(workspace, paired, focusedSpaceI
     end
 
     if targetSpaceId then
-      local switchResult = self.windowService.gotoSpace(targetSpaceId, self.cfg)
-      if switchResult.ok then
-        workspace:setBaseSpaceId(targetSpaceId)
-        self:_refreshWorkspaceFingerprint(workspace, paired)
-        self.windowService.requestFrontmostAfterSpaceSwitch(paired, self.cfg)
-        return "base-window-space-switch"
-      end
-
-      return nil
+      return self:_requestWindowInSpace(
+        workspace,
+        paired:id(),
+        targetSpaceId,
+        "base-window-space-switch",
+        function(resolved)
+          workspace:setBaseSpaceId(targetSpaceId)
+          self:_refreshWorkspaceFingerprint(workspace, resolved)
+        end
+      )
     end
   end
 
@@ -780,24 +838,20 @@ function AppState:_activateExactWindowIdAcrossSpaces(workspace, focusedSpaceId)
     return nil
   end
 
-  local switchResult = self.windowService.gotoSpace(targetSpaceId, self.cfg)
-  if not switchResult.ok then
-    return nil
-  end
-
-  local resolved = self:_resolvePairedWindow(workspace)
-  if not resolved then
-    return nil
-  end
-
-  self:_updateWorkspaceBindingSpaceState(
+  return self:_requestWindowInSpace(
     workspace,
-    resolved
+    workspace:getBaseWindowId(),
+    targetSpaceId,
+    "base-window-id-space-switch",
+    function(resolved)
+      self:_updateWorkspaceBindingSpaceState(
+        workspace,
+        resolved
+      )
+      workspace:setBaseSpaceId(targetSpaceId)
+      self:_refreshWorkspaceFingerprint(workspace, resolved)
+    end
   )
-  workspace:setBaseSpaceId(targetSpaceId)
-  self:_refreshWorkspaceFingerprint(workspace, resolved)
-  self.windowService.requestFrontmostAfterSpaceSwitch(resolved, self.cfg)
-  return "base-window-id-space-switch"
 end
 
 function AppState:_isWindowAlreadyPaired(windowId)
@@ -1465,21 +1519,24 @@ function AppState:activateSlot(index)
               return
             end
           else
-            local switchResult = self.windowService.gotoSpace(resolvedFullscreenSpaceId, self.cfg)
-            if switchResult.ok then
-              local fullscreenWin = self.windowService.getWindowById(workspace:getFullscreenTargetWindowId())
-              if fullscreenWin then
-                self:_hidePopoverForFullscreenWorkspaceActivation()
+            local activation = self:_requestWindowInSpace(
+              workspace,
+              workspace:getFullscreenTargetWindowId(),
+              resolvedFullscreenSpaceId,
+              "fullscreen-space-switch",
+              function(fullscreenWin)
                 workspace:setFullscreenState({
                   fullscreenWindowId = fullscreenWin:id(),
                   fullscreenSpaceId = resolvedFullscreenSpaceId,
                   lastKnownSpaceId = workspace:getBaseSpaceId(),
                 })
-                self.windowService.requestFrontmostAfterSpaceSwitch(fullscreenWin, self.cfg)
                 self:_refreshWorkspaceFingerprint(workspace, fullscreenWin)
-                return
               end
+            )
+            if activation ~= "space-switch-failed" then
+              self:_hidePopoverForFullscreenWorkspaceActivation()
             end
+            return
           end
         else
           workspace:clearFullscreenState()
