@@ -127,14 +127,22 @@ function SlotRow.build(slot, session, deps)
     iconAppName = nil
   end
 
+  local youtubeService = deps and deps.youtubeService or nil
+  local useYouTubeIcon = false
+  if appearance.showIcon and youtubeService and youtubeService.isYouTubeTarget then
+    useYouTubeIcon = youtubeService:isYouTubeTarget(label, iconBundleID) == true
+  end
+
   return {
     index = slot:getIndex(),
     label = label,
     state = state,
     canPair = true,
     canUnpair = bindingKind == "paired" or bindingKind == "recoverable",
+    canActivate = bindingKind == "paired",
     iconBundleID = iconBundleID,
     iconAppName = iconAppName,
+    useYouTubeIcon = useYouTubeIcon,
     iconMuted = appearance.muteIcon == true,
     badgeText = appearance.badgeText,
     className = appearance.className,

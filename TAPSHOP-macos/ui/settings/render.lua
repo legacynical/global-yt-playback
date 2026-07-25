@@ -238,7 +238,7 @@ local function generalTabHtml(config)
     .. checkedAttr(config.hideOnFullscreenWorkspace)
     .. " data-settings-config=\"hideOnFullscreenWorkspace\""
     .. " onchange=\"sendAction('setHideOnFullscreenWorkspace', { slot: this.checked ? 1 : 0 })\">\n"
-    .. "              <span>Hide when entering fullscreen workspace</span>\n"
+    .. "              <span>Hide during fullscreens</span>\n"
     .. "            </label>\n"
     .. "            <label class=\"settings-item\">\n"
     .. "              <input type=\"checkbox\" "

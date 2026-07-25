@@ -137,6 +137,11 @@ local function rootVars(theme)
   --conflict: #bc5349;
   --focus: rgba(120, 168, 255, 0.92);
   --tooltip-bg: rgba(10, 10, 10, 0.94);
+  --resize-ring: 3px;
+  --resize-edge-inset: 3px;
+  /* Match .container border-radius so SE/SW hit boxes reach past the curve. */
+  --panel-radius: 12px;
+  --resize-corner: calc(var(--resize-ring) + var(--panel-radius));
 }
 ]=]
 end
@@ -157,6 +162,9 @@ html, body {
 }
 
 body {
+  position: relative;
+  /* Outer resize ring on free sides; no top ring so chrome stays flush. */
+  padding: 0 var(--resize-ring) var(--resize-ring);
   background: transparent;
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
@@ -179,7 +187,7 @@ input {
   padding: calc(6px * var(--ui-scale));
   background: var(--panel-bg);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--panel-radius);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   -webkit-backdrop-filter: blur(10px) saturate(115%);
   backdrop-filter: blur(10px) saturate(115%);
@@ -192,7 +200,6 @@ input {
   gap: calc(4px * var(--ui-scale));
   padding-bottom: calc(4px * var(--ui-scale));
   border-bottom: 1px solid #333;
-  cursor: move;
   flex: 0 0 auto;
 }
 
@@ -312,7 +319,8 @@ input {
   line-height: 1;
 }
 
-.profile-btn:hover {
+.profile-btn:hover,
+.profile-btn.is-pointer-hover {
   background: rgba(255, 255, 255, 0.14);
 }
 
@@ -361,7 +369,8 @@ input {
   color: var(--text-strong);
 }
 
-.header-danger:hover {
+.header-danger:hover,
+.header-danger.is-pointer-hover {
   background: var(--danger-hover);
 }
 
@@ -370,7 +379,8 @@ input {
   color: #d2d2d2;
 }
 
-.header-config:hover {
+.header-config:hover,
+.header-config.is-pointer-hover {
   background: #5a5a5a;
   color: #fff;
 }
@@ -380,7 +390,8 @@ input {
   color: #777;
 }
 
-.header-close:hover {
+.header-close:hover,
+.header-close.is-pointer-hover {
   background: #3a3a3a;
   color: #aaa;
 }
@@ -451,6 +462,80 @@ input {
   display: flex;
   align-items: center;
   gap: calc(4px * var(--ui-scale));
+  border-radius: calc(5px * var(--ui-scale));
+  transition: background 90ms ease, box-shadow 90ms ease;
+}
+
+.row:has(.slot-icon-btn:hover),
+.row:has(.slot-icon-btn.is-pointer-hover),
+.row.is-pointer-hover,
+.row:has(.slot-icon-btn:focus-visible) {
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(120, 215, 255, 0.42);
+}
+
+/* Always-on-top utility overlay: ignore native :hover (often sticky/wrong on
+   non-key WKWebViews). Pointer hover classes are authoritative. */
+body.is-utility-overlay .row:has(.slot-icon-btn:hover) {
+  background: transparent;
+  box-shadow: none;
+}
+body.is-utility-overlay .row:has(.slot-icon-btn.is-pointer-hover),
+body.is-utility-overlay .row.is-pointer-hover {
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(120, 215, 255, 0.42);
+}
+
+body.is-utility-overlay .profile-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+body.is-utility-overlay .profile-btn.is-pointer-hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+body.is-utility-overlay .header-danger:hover {
+  background: var(--danger);
+  color: var(--text-strong);
+}
+body.is-utility-overlay .header-danger.is-pointer-hover {
+  background: var(--danger-hover);
+}
+body.is-utility-overlay .header-config:hover {
+  background: #4b4b4b;
+  color: #d2d2d2;
+}
+body.is-utility-overlay .header-config.is-pointer-hover {
+  background: #5a5a5a;
+  color: #fff;
+}
+body.is-utility-overlay .header-close:hover {
+  background: #2a2a2a;
+  color: #777;
+}
+body.is-utility-overlay .header-close.is-pointer-hover {
+  background: #3a3a3a;
+  color: #aaa;
+}
+body.is-utility-overlay .btn-primary:hover {
+  background: var(--accent);
+  color: var(--text-strong);
+}
+body.is-utility-overlay .btn-primary.is-pointer-hover {
+  background: var(--accent-hover);
+}
+body.is-utility-overlay .btn-unpair:hover {
+  background: #444;
+  color: #bbb;
+}
+body.is-utility-overlay .btn-unpair.is-pointer-hover {
+  background: #555;
+}
+body.is-utility-overlay .btn-danger:hover {
+  background: rgba(220, 80, 80, 0.22);
+  color: #ff9a9a;
+}
+body.is-utility-overlay .btn-danger.is-pointer-hover {
+  background: rgba(220, 80, 80, 0.34);
+  color: #ffc0c0;
 }
 
 .slot-num {
@@ -493,6 +578,40 @@ input {
   height: calc(15px * var(--ui-scale));
   border-radius: calc(4px * var(--ui-scale));
   flex-shrink: 0;
+  pointer-events: none;
+}
+
+.slot-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: calc(4px * var(--ui-scale));
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.slot-icon-btn:focus-visible {
+  outline: none;
+}
+
+.slot-icon-btn:hover .slot-app-icon:not(.is-muted),
+.slot-icon-btn.is-pointer-hover .slot-app-icon:not(.is-muted) {
+  filter: brightness(1.12);
+}
+
+body.is-utility-overlay .slot-icon-btn:hover .slot-app-icon:not(.is-muted) {
+  filter: none;
+}
+body.is-utility-overlay .slot-icon-btn.is-pointer-hover .slot-app-icon:not(.is-muted) {
+  filter: brightness(1.12);
+}
+body.is-utility-overlay .slot-icon-btn.is-pointer-hover .slot-app-icon.is-muted {
+  filter: grayscale(1) saturate(0);
 }
 
 .slot-app-icon.is-muted {
@@ -556,7 +675,8 @@ input {
   color: var(--text-strong);
 }
 
-.btn-primary:hover {
+.btn-primary:hover,
+.btn-primary.is-pointer-hover {
   background: var(--accent-hover);
 }
 
@@ -565,13 +685,171 @@ input {
   color: #bbb;
 }
 
-.btn-unpair:hover {
+.btn-unpair:hover,
+.btn-unpair.is-pointer-hover {
   background: #555;
 }
 
 .btn-unpair.off {
   opacity: 0.25;
   pointer-events: none;
+}
+
+.btn-danger {
+  background: rgba(220, 80, 80, 0.22);
+  color: #ff9a9a;
+  border: 1px solid rgba(220, 80, 80, 0.35);
+}
+
+.btn-danger:hover,
+.btn-danger.is-pointer-hover {
+  background: rgba(220, 80, 80, 0.34);
+  color: #ffc0c0;
+}
+
+.confirm-shell[hidden] {
+  display: none;
+}
+
+.resize-handles {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.resize-handles.is-disabled {
+  visibility: hidden;
+}
+
+.resize-handle {
+  position: absolute;
+  pointer-events: auto;
+  background: transparent;
+}
+
+/* Edge strips live in the outer ring and bite 3px into the panel. */
+.resize-s {
+  left: var(--resize-corner);
+  right: var(--resize-corner);
+  bottom: 0;
+  height: calc(var(--resize-ring) + var(--resize-edge-inset));
+}
+
+.resize-e,
+.resize-w {
+  top: 0;
+  bottom: var(--resize-corner);
+  width: calc(var(--resize-ring) + var(--resize-edge-inset));
+}
+
+.resize-e { right: 0; }
+.resize-w { left: 0; }
+
+.resize-sw,
+.resize-se {
+  width: var(--resize-corner);
+  height: var(--resize-corner);
+  z-index: 21;
+}
+
+.resize-sw { left: 0; bottom: 0; }
+.resize-se { right: 0; bottom: 0; }
+
+.confirm-shell {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(8px * var(--ui-scale));
+}
+
+.confirm-backdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  border-radius: inherit;
+  background: rgba(0, 0, 0, 0.42);
+  cursor: default;
+}
+
+.confirm-dialog {
+  position: relative;
+  z-index: 1;
+  width: min(calc(220px * var(--ui-scale)), 100%);
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border: 1px solid var(--line-strong);
+  border-radius: calc(10px * var(--ui-scale));
+  background: rgba(22, 22, 22, 0.98);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+.confirm-title {
+  color: var(--text-strong);
+  font-size: calc(12px * var(--ui-scale));
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.confirm-actions {
+  display: flex;
+  align-items: center;
+  justify-content: stretch;
+  gap: calc(6px * var(--ui-scale));
+}
+
+.confirm-actions .btn {
+  flex: 1 1 0;
+  padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  font-size: calc(11px * var(--ui-scale));
+  font-weight: 600;
+}
+
+.confirm-cancel {
+  background: rgba(255, 255, 255, 0.08);
+  color: #bbb;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.confirm-cancel:hover,
+.confirm-cancel.is-pointer-hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #e8e8e8;
+}
+
+.confirm-ok {
+  background: var(--danger);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.confirm-ok:hover,
+.confirm-ok.is-pointer-hover {
+  background: var(--danger-hover);
+  color: #fff;
+}
+
+body.is-utility-overlay .confirm-cancel:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #bbb;
+}
+body.is-utility-overlay .confirm-cancel.is-pointer-hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #e8e8e8;
+}
+body.is-utility-overlay .confirm-ok:hover {
+  background: var(--danger);
+  color: #fff;
+}
+body.is-utility-overlay .confirm-ok.is-pointer-hover {
+  background: var(--danger-hover);
+  color: #fff;
 }
 
 .paired { color: #7ec87e; }
