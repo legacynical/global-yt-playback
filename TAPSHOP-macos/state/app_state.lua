@@ -1463,15 +1463,44 @@ function AppState:_validateProfileExactState(profile)
     return false
   end
 
+  local profileId = profile.id
   local changed = false
   local pairedCount = 0
+  local aborted = false
+
   for _, workspace in ipairs(profile.workspaces or {}) do
+    -- Rapid profile cycling can pump the runloop during Spaces IPC; stop paying
+    -- for a bank the user already left, and keep the dirty flag for a later settle.
+    if self.session.activeProfileId ~= profileId then
+      aborted = true
+      break
+    end
+
     if workspace:isPaired() then
       pairedCount = pairedCount + 1
       if self:_validateWorkspaceExactState(workspace) then
         changed = true
       end
     end
+  end
+
+  if aborted then
+    self:_recordDebug("persistence", "debug", "profile_exact_validation_aborted", "profile exact validation aborted after profile switch", function()
+      return {
+        profileId = profileId,
+        pairedCount = pairedCount,
+        changed = changed,
+        activeProfileId = self.session.activeProfileId,
+      }
+    end, {
+      profileId = profileId,
+      result = "aborted",
+    })
+    if changed then
+      self:_markRecoveryMatchIndexDirty()
+      self:_scheduleWorkspacePairingPersist()
+    end
+    return changed
   end
 
   profile.needsExactValidation = false
@@ -1491,7 +1520,9 @@ function AppState:_validateProfileExactState(profile)
     self:_scheduleWorkspacePairingPersist()
     -- Publish badge-relevant Space/fullscreen corrections; the profile-switch
     -- paint may have already flushed from shallow cache.
-    self:_syncWorkspaceUi("profile_switch")
+    if self.session.activeProfileId == profileId then
+      self:_syncWorkspaceUi("profile_switch")
+    end
   end
   return changed
 end
