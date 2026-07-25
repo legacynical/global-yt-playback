@@ -35,11 +35,175 @@ function Popover.new(app, cfg, deps)
   local refreshTimer = nil
   local isDragging = false
   local isResizing = false
+  local resizeDirection = ""
   local isFocused = false
   local cachedThemeCss = nil
   local savedTopLeft = appdata.getPopoverTopLeft()
   local savedSize = popoverLayout.loadSavedSize(appdata)
   local runtimeBounds = popoverLayout.initialRuntimeBounds()
+  local hoverTap = nil
+  local pointerInside = false
+  local hoverRestoreWin = nil
+  local hoverGeneration = 0
+  local hoverLeaveTimer = nil
+
+  local function isPointInFrame(pt, frame)
+    return pt
+      and frame
+      and pt.x >= frame.x
+      and pt.x <= frame.x + frame.w
+      and pt.y >= frame.y
+      and pt.y <= frame.y + frame.h
+  end
+
+  local function sameWindow(a, b)
+    if not a or not b then
+      return false
+    end
+    local ok, same = pcall(function()
+      return a:id() == b:id()
+    end)
+    return ok and same == true
+  end
+
+  local function popoverWindow(view)
+    if not view or not view.hswindow then
+      return nil
+    end
+    local ok, win = pcall(function()
+      return view:hswindow()
+    end)
+    return ok and win or nil
+  end
+
+  local function cancelHoverLeaveTimer()
+    if hoverLeaveTimer then
+      hoverLeaveTimer:stop()
+      hoverLeaveTimer = nil
+    end
+  end
+
+  local function clearHoverFocusState()
+    cancelHoverLeaveTimer()
+    pointerInside = false
+    hoverRestoreWin = nil
+    hoverGeneration = hoverGeneration + 1
+  end
+
+  -- Always-on-top panels stay visible without App focus; steal/restore focus on
+  -- pointer enter/leave so buttons and drag work without an extra click.
+  local function focusPopoverForHover(panelRef)
+    local view = panelRef and panelRef.getWebview and panelRef:getWebview() or nil
+    if not view then
+      return
+    end
+
+    if hs.focus then
+      hs.focus()
+    end
+    if view.bringToFront then
+      view:bringToFront(false)
+    end
+    local win = popoverWindow(view)
+    if win and win.focus then
+      win:focus()
+    end
+  end
+
+  local function restoreHoverFocus()
+    local win = hoverRestoreWin
+    hoverRestoreWin = nil
+    if not win then
+      return
+    end
+
+    local view = panel and panel.getWebview and panel:getWebview() or nil
+    local selfWin = popoverWindow(view)
+    local front = hs.window.frontmostWindow()
+    -- If focus already moved to a third window (e.g. slot activate), that
+    -- intentional navigation wins — do not snap back to the pre-hover window.
+    if front and not sameWindow(front, selfWin) and not sameWindow(front, win) then
+      return
+    end
+
+    pcall(function()
+      if win:application() and win:application():isHidden() then
+        win:application():unhide()
+      end
+      if win:isMinimized() then
+        win:unminimize()
+      end
+      win:focus()
+    end)
+  end
+
+  local function abandonHoverRestore()
+    hoverRestoreWin = nil
+  end
+
+  local function handlePointerInsideTransition(inside, view)
+    if not cfg.popoverAlwaysOnTop then
+      pointerInside = inside
+      return
+    end
+
+    if inside == pointerInside then
+      return
+    end
+
+    if inside then
+      cancelHoverLeaveTimer()
+      hoverGeneration = hoverGeneration + 1
+      pointerInside = true
+
+      local front = hs.window.frontmostWindow()
+      local selfWin = popoverWindow(view)
+      if front and not sameWindow(front, selfWin) then
+        hoverRestoreWin = front
+      end
+      focusPopoverForHover(panel)
+      return
+    end
+
+    pointerInside = false
+    local gen = hoverGeneration
+    cancelHoverLeaveTimer()
+    hoverLeaveTimer = hs.timer.doAfter(0.1, function()
+      hoverLeaveTimer = nil
+      if hoverGeneration ~= gen or pointerInside or isDragging or isResizing then
+        return
+      end
+      restoreHoverFocus()
+    end)
+  end
+
+  local function stopHoverTap()
+    if hoverTap then
+      hoverTap:stop()
+      hoverTap = nil
+    end
+  end
+
+  local function startHoverTap()
+    if hoverTap then
+      return
+    end
+    hoverTap = hs.eventtap.new({ hs.eventtap.event.types.mouseMoved }, function()
+      if not panel or not panel:isShown() then
+        return false
+      end
+      local view = panel.getWebview and panel:getWebview() or nil
+      if not view then
+        return false
+      end
+
+      local pt = hs.mouse.absolutePosition()
+      local frame = view:frame()
+      handlePointerInsideTransition(isPointInFrame(pt, frame), view)
+      return false
+    end)
+    hoverTap:start()
+  end
 
   local function pickScreen()
     return hs.mouse.getCurrentScreen()
@@ -316,10 +480,14 @@ function Popover.new(app, cfg, deps)
       if action == "dragEnd" then
         isDragging = false
         saveTopLeftFromFrame(panelRef)
+        if cfg.popoverAlwaysOnTop and not pointerInside then
+          restoreHoverFocus()
+        end
         return
       end
       if action == "resizeStart" then
         isResizing = true
+        resizeDirection = tostring(body.direction or "")
         return
       end
       if action == "resizeMove" then
@@ -421,8 +589,12 @@ function Popover.new(app, cfg, deps)
       end
       if action == "resizeEnd" then
         isResizing = false
+        resizeDirection = ""
         saveTopLeftFromFrame(panelRef)
         saveSizeFromFrame(panelRef)
+        if cfg.popoverAlwaysOnTop and not pointerInside then
+          restoreHoverFocus()
+        end
         return
       end
       if action == "close" then
@@ -434,6 +606,11 @@ function Popover.new(app, cfg, deps)
         body.sourceWindow = activeWin or callerWin
       end
       local result = app:handlePopoverAction(body)
+      -- Slot activate / pair intentionally change the frontmost window; do not
+      -- restore the pre-hover window when the pointer later leaves the popover.
+      if action == "activateSlot" or action == "pair" then
+        abandonHoverRestore()
+      end
       if action == "setAlwaysOnTop" then
         panelRef:setLevel(currentPopoverLevel())
       end
@@ -470,11 +647,23 @@ function Popover.new(app, cfg, deps)
       focusPanelWindow(panelRef)
       requestBoundsRecompute(panelRef)
       panelRef:evaluateJavaScript("window.tapshopFocusKeyboardSurface && window.tapshopFocusKeyboardSurface()")
+      startHoverTap()
+      if cfg.popoverAlwaysOnTop then
+        local view = panelRef.getWebview and panelRef:getWebview() or nil
+        if view and isPointInFrame(hs.mouse.absolutePosition(), view:frame()) then
+          handlePointerInsideTransition(true, view)
+        end
+      end
     end,
     beforeHide = function()
       isDragging = false
       isResizing = false
+      resizeDirection = ""
       isFocused = false
+      -- Drop restore target without focusing it: hide often follows an action that
+      -- already moved focus (pair/activate), and restoring would undo that.
+      clearHoverFocusState()
+      stopHoverTap()
     end,
   })
 

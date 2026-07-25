@@ -184,7 +184,6 @@ input {
   -webkit-backdrop-filter: blur(10px) saturate(115%);
   backdrop-filter: blur(10px) saturate(115%);
   overflow: hidden;
-  cursor: move;
 }
 
 .header {
@@ -619,6 +618,52 @@ input {
 .confirm-shell[hidden] {
   display: none;
 }
+
+.resize-handles {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  pointer-events: none;
+}
+
+.resize-handle {
+  position: absolute;
+  pointer-events: auto;
+  background: transparent;
+}
+
+.resize-n,
+.resize-s {
+  left: 16px;
+  right: 16px;
+  height: 14px;
+}
+
+.resize-n { top: 0; }
+.resize-s { bottom: 0; }
+
+.resize-e,
+.resize-w {
+  top: 16px;
+  bottom: 16px;
+  width: 14px;
+}
+
+.resize-e { right: 0; }
+.resize-w { left: 0; }
+
+.resize-ne,
+.resize-nw,
+.resize-se,
+.resize-sw {
+  width: 16px;
+  height: 16px;
+}
+
+.resize-nw { top: 0; left: 0; }
+.resize-ne { top: 0; right: 0; }
+.resize-sw { bottom: 0; left: 0; }
+.resize-se { bottom: 0; right: 0; }
 
 .confirm-shell {
   position: absolute;

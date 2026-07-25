@@ -3,7 +3,6 @@ local ClientScript = {}
 ClientScript.script = [=[
 var HARD_MIN_UI_SCALE_FLOOR = 0.6;
 var MAX_UI_SCALE = 1.75;
-var RESIZE_ZONE = 10;
 var TITLE_TAP_WINDOW_MS = 650;
 var lastReportedBounds = null;
 
@@ -288,34 +287,10 @@ window.tapshopUpdateActiveWindow = function (payload) {
   return true;
 };
 
-function getResizeDirection(e) {
-  var nearLeft = e.clientX <= RESIZE_ZONE;
-  var nearRight = e.clientX >= window.innerWidth - RESIZE_ZONE;
-  var nearTop = e.clientY <= RESIZE_ZONE;
-  var nearBottom = e.clientY >= window.innerHeight - RESIZE_ZONE;
-
-  if (nearTop && nearLeft) return "nw";
-  if (nearTop && nearRight) return "ne";
-  if (nearBottom && nearLeft) return "sw";
-  if (nearBottom && nearRight) return "se";
-  if (nearLeft) return "w";
-  if (nearRight) return "e";
-  if (nearTop) return "n";
-  if (nearBottom) return "s";
-  return "";
-}
-
-function cursorForDirection(direction) {
-  if (direction === "n" || direction === "s") return "ns-resize";
-  if (direction === "e" || direction === "w") return "ew-resize";
-  if (direction === "ne" || direction === "sw") return "nesw-resize";
-  if (direction === "nw" || direction === "se") return "nwse-resize";
-  return "";
-}
-
-function setGlobalCursor(cursor) {
-  document.documentElement.style.cursor = cursor || "";
-  document.body.style.cursor = cursor || "";
+function getResizeDirectionFromEvent(e) {
+  var handle = e.target && e.target.closest && e.target.closest("[data-resize]");
+  if (!handle) return "";
+  return handle.getAttribute("data-resize") || "";
 }
 
 var container = document.querySelector(".container");
@@ -392,13 +367,12 @@ var resizeState = {
 
 document.addEventListener("mousedown", function (e) {
   if (e.button !== 0) return;
-  var direction = getResizeDirection(e);
+  var direction = getResizeDirectionFromEvent(e);
   if (!direction) return;
   resizeState.active = true;
   resizeState.direction = direction;
   resizeState.lastX = e.screenX;
   resizeState.lastY = e.screenY;
-  setGlobalCursor(cursorForDirection(direction));
   hideHeaderTooltip();
   sendAction("resizeStart", { direction: direction });
   e.preventDefault();
@@ -409,7 +383,7 @@ function isDragExcludedTarget(target) {
   return !!(
     target
     && target.closest
-    && target.closest(".header-actions, .title-logo, .slot-icon-btn, .confirm-shell, button, input, label, a, select, textarea")
+    && target.closest(".header-actions, .title-logo, .slot-icon-btn, .confirm-shell, .resize-handle, button, input, label, a, select, textarea")
   );
 }
 
@@ -446,7 +420,7 @@ document.addEventListener("mousedown", function (e) {
   if (e.button !== 0) return;
   if (isUnpairAllConfirmOpen()) return;
   if (resizeState.active) return;
-  if (getResizeDirection(e)) return;
+  if (getResizeDirectionFromEvent(e)) return;
   if (isDragExcludedTarget(e.target)) return;
   if (!e.target.closest || !e.target.closest(".container")) return;
 
@@ -491,19 +465,8 @@ window.addEventListener("mouseup", function () {
   if (resizeState.active) {
     resizeState.active = false;
     resizeState.direction = "";
-    setGlobalCursor("");
     sendAction("resizeEnd");
   }
-});
-
-document.addEventListener("mousemove", function (e) {
-  if (dragState.active || resizeState.active) return;
-  setGlobalCursor(cursorForDirection(getResizeDirection(e)));
-});
-
-document.addEventListener("mouseleave", function () {
-  if (dragState.active || resizeState.active) return;
-  setGlobalCursor("");
 });
 
 document.addEventListener("keydown", function (e) {
