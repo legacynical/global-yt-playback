@@ -1,3 +1,6 @@
+-- SpotifyService: thin wrappers around hs.spotify / AppleScript for transport,
+-- seek, volume, and like. Seek falls back to AppleScript when getPosition fails.
+
 local SpotifyService = {}
 SpotifyService.__index = SpotifyService
 

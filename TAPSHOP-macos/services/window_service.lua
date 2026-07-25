@@ -1,3 +1,12 @@
+-- WindowService: Spaces-aware window focus helpers for TAPSHOP macos.
+--
+-- Focus model (shared pending serial + one timer):
+--   requestFrontmost              — fire-and-forget; never blocks the hotkey thread
+--   ensureFrontmostAsync          — verify with timers; callback carries a cancel token
+--   requestFrontmostInSpace       — gotoSpace + settle poll + focus verify (async)
+-- Starting any of these invalidates in-flight pending focus work.
+-- Never use hs.timer.usleep on hotkey-reachable paths here.
+
 local WindowService = {}
 local pendingFrontmostTimer = nil
 local pendingFrontmostSerial = 0
@@ -22,8 +31,14 @@ local function isFrontmost(win)
     return false
   end
 
-  local frontmost = hs.window.frontmostWindow()
-  return frontmost and frontmost:id() == win:id() or false
+  local checked, frontmost = pcall(hs.window.frontmostWindow)
+  if not checked or not frontmost then
+    return false
+  end
+  local compared, matches = pcall(function()
+    return frontmost:id() == win:id()
+  end)
+  return compared and matches or false
 end
 
 local function stopPendingFrontmostTimer()
@@ -39,6 +54,34 @@ local function invalidatePendingFrontmostRequest()
   return pendingFrontmostSerial
 end
 
+local function schedulePendingFrontmostRequest(delay, token, callback)
+  stopPendingFrontmostTimer()
+  pendingFrontmostTimer = hs.timer.doAfter(delay, function()
+    pendingFrontmostTimer = nil
+    if token ~= pendingFrontmostSerial then
+      return
+    end
+    callback()
+  end)
+end
+
+local function dismissMissionControl()
+  if not hs.spaces or type(hs.spaces.closeMissionControl) ~= "function" then
+    return false
+  end
+  return pcall(hs.spaces.closeMissionControl)
+end
+
+local function windowIdForTarget(target)
+  if type(target) == "number" then
+    return target
+  end
+  if target and type(target.id) == "function" then
+    return target:id()
+  end
+  return nil
+end
+
 local function requestFrontmostImpl(win)
   local app = win:application()
   if app and app:isHidden() then
@@ -52,20 +95,19 @@ local function requestFrontmostImpl(win)
   win:focus()
 end
 
-local function ensureFrontmostImpl(win, cfg)
-  if not win then
-    return focusResult(false, "missing_window", nil)
+local function focusPollIntervalSec(cfg)
+  cfg = cfg or {}
+  if type(cfg.focusPollInterval) == "number" and cfg.focusPollInterval > 0 then
+    return cfg.focusPollInterval
   end
-
-  if isFrontmost(win) then
-    return focusResult(true, "already_frontmost", win)
+  local micros = cfg.focusPollMicros
+  if type(micros) == "number" and micros > 0 then
+    return micros / 1e6
   end
-
-  requestFrontmostImpl(win)
-  local focused = WindowService.waitForFrontmost(win, cfg)
-  return focusResult(focused, focused and "focus_verified" or "focus_timeout", win)
+  return 0.01
 end
 
+-- Snapshot used by pairing / UI: title, id, app name, bundleID, pid.
 function WindowService.getWindowInfo(win)
   win = win or hs.window.frontmostWindow()
   if not win then
@@ -83,6 +125,7 @@ function WindowService.getWindowInfo(win)
   }
 end
 
+-- Visible, standard windows with a non-empty title (pairing / YT scan pool).
 function WindowService.candidateWindows()
   local wins = hs.window.orderedWindows()
   local out = {}
@@ -130,6 +173,7 @@ function WindowService.normalizeWindowTitle(title)
   return normalizeWindowTitle(title)
 end
 
+-- Durable pairing fingerprint fields (bundle, app name, raw/normalized title).
 function WindowService.pairingMetadata(win)
   if not win then
     return nil
@@ -146,6 +190,7 @@ function WindowService.pairingMetadata(win)
   }
 end
 
+-- Stricter candidate: visible + standard + titled (active pairing targets).
 function WindowService.isCandidateWindow(win)
   if not win then
     return false
@@ -154,6 +199,7 @@ function WindowService.isCandidateWindow(win)
   return win:isVisible() and win:isStandard() and (win:title() or ""):match("%S") ~= nil
 end
 
+-- Looser recovery candidate: standard + titled (may be minimized / not visible).
 function WindowService.isRecoveryCandidateWindow(win)
   if not win then
     return false
@@ -162,20 +208,8 @@ function WindowService.isRecoveryCandidateWindow(win)
   return win:isStandard() and (win:title() or ""):match("%S") ~= nil
 end
 
-function WindowService.waitForFrontmost(win, cfg)
-  local timeoutSec = cfg.focusWaitTimeout
-  local start = hs.timer.secondsSinceEpoch()
-  while (hs.timer.secondsSinceEpoch() - start) < timeoutSec do
-    if isFrontmost(win) then
-      return true
-    end
-    hs.timer.usleep(cfg.focusPollMicros)
-  end
-  return false
-end
-
 -- Request frontmost status opportunistically for slot-style flows.
--- This path should not block the hotkey/UI loop on verification.
+-- Does not wait for verification; invalidates any pending async focus job.
 function WindowService.requestFrontmost(win)
   invalidatePendingFrontmostRequest()
   if not win then
@@ -190,10 +224,79 @@ function WindowService.requestFrontmost(win)
   return focusResult(true, "focus_requested", win)
 end
 
--- Use verified focus only when subsequent input depends on confirmation.
-function WindowService.ensureFrontmost(win, cfg)
-  invalidatePendingFrontmostRequest()
-  return ensureFrontmostImpl(win, cfg)
+-- Verified focus for callers that must confirm before sending input.
+-- Polls with timers so the hotkey/UI thread is never blocked on usleep.
+-- onComplete(result, win, token); use schedulePendingFrontmost for follow-up
+-- work that must cancel with this pending focus generation.
+function WindowService.ensureFrontmostAsync(win, cfg, onComplete)
+  cfg = cfg or {}
+  local token = invalidatePendingFrontmostRequest()
+
+  local function finish(result, resolved)
+    if token ~= pendingFrontmostSerial then
+      return
+    end
+    if onComplete then
+      pcall(onComplete, result, resolved, token)
+    end
+  end
+
+  if not win then
+    finish(focusResult(false, "missing_window", nil), nil)
+    return { ok = true, code = "ensure_frontmost_async_started", token = token }
+  end
+
+  if isFrontmost(win) then
+    finish(focusResult(true, "already_frontmost", win), win)
+    return { ok = true, code = "ensure_frontmost_async_started", token = token }
+  end
+
+  local requested = pcall(requestFrontmostImpl, win)
+  if not requested then
+    finish(focusResult(false, "focus_request_failed", win), win)
+    return { ok = true, code = "ensure_frontmost_async_started", token = token }
+  end
+
+  local timeoutSec = cfg.focusWaitTimeout or 0.22
+  local pollInterval = focusPollIntervalSec(cfg)
+  local deadline = hs.timer.secondsSinceEpoch() + timeoutSec
+
+  local function tick()
+    if token ~= pendingFrontmostSerial then
+      return
+    end
+    if not WindowService.windowStillExists(win) then
+      finish(focusResult(false, "window_unavailable", win), win)
+      return
+    end
+    if isFrontmost(win) then
+      finish(focusResult(true, "focus_verified", win), win)
+      return
+    end
+    if hs.timer.secondsSinceEpoch() >= deadline then
+      finish(focusResult(false, "focus_timeout", win), win)
+      return
+    end
+    schedulePendingFrontmostRequest(pollInterval, token, tick)
+  end
+
+  schedulePendingFrontmostRequest(pollInterval, token, tick)
+  return { ok = true, code = "ensure_frontmost_async_started", token = token }
+end
+
+-- Schedule work on the current pending-focus generation.
+-- Returns false (and skips) if token is already cancelled/superseded.
+function WindowService.schedulePendingFrontmost(delay, token, callback)
+  if token ~= pendingFrontmostSerial then
+    return false
+  end
+  schedulePendingFrontmostRequest(delay or 0, token, callback)
+  return true
+end
+
+-- True when token still matches the live pending-focus generation.
+function WindowService.isCurrentFrontmostToken(token)
+  return token ~= nil and token == pendingFrontmostSerial
 end
 
 function WindowService.focusedSpaceId()
@@ -211,22 +314,6 @@ end
 
 function WindowService.currentSpaceId()
   return WindowService.focusedSpaceId()
-end
-
-function WindowService.waitForSpace(spaceId, cfg)
-  if not spaceId then
-    return false
-  end
-  local timeoutSec = (cfg and cfg.spaceSwitchWaitTimeout) or 0.35
-  local pollMicros = (cfg and cfg.spaceSwitchPollMicros) or 10000
-  local start = hs.timer.secondsSinceEpoch()
-  while (hs.timer.secondsSinceEpoch() - start) < timeoutSec do
-    if WindowService.currentSpaceId() == spaceId then
-      return true
-    end
-    hs.timer.usleep(pollMicros)
-  end
-  return WindowService.currentSpaceId() == spaceId
 end
 
 function WindowService.getWindowSpaces(win)
@@ -261,9 +348,17 @@ function WindowService.isFullscreenSpace(spaceId)
 end
 
 function WindowService.isWindowFullscreen(win)
-  return win ~= nil and win:isFullScreen()
+  if not win then
+    return false
+  end
+
+  local ok, isFullscreen = pcall(function()
+    return win:isFullScreen()
+  end)
+  return ok and isFullscreen == true
 end
 
+-- Prefer a fullscreen Space if the window is on one; else the first listed Space.
 function WindowService.getPrimarySpaceForWindow(win)
   local ok, spaceIdsOrErr = pcall(WindowService.getWindowSpaces, win)
   if not ok then
@@ -329,42 +424,187 @@ function WindowService.bestEffortFrontmostWindowInSpace(spaceId)
   return nil
 end
 
+-- Initiate a Space switch only (Mission Control). Does not wait for settlement.
+-- Returns ok=false when gotoSpace fails to initiate.
 function WindowService.gotoSpace(spaceId, cfg)
   if not spaceId then
     return { ok = false, code = "missing_space_id", spaceId = nil }
   end
-  hs.spaces.gotoSpace(spaceId)
-  if not WindowService.waitForSpace(spaceId, cfg) then
-    return { ok = false, code = "space_switch_timeout", spaceId = spaceId }
+  local called, initiated, initiateError = pcall(hs.spaces.gotoSpace, spaceId)
+  if not called or initiated == nil or initiated == false then
+    dismissMissionControl()
+    return {
+      ok = false,
+      code = "space_switch_not_initiated",
+      error = called and initiateError or initiated,
+      spaceId = spaceId,
+    }
   end
-  if hs.spaces and type(hs.spaces.closeMissionControl) == "function" then
-    pcall(hs.spaces.closeMissionControl)
-  end
-  return { ok = true, code = "space_switch_verified", spaceId = spaceId }
+  return { ok = true, code = "space_switch_requested", spaceId = spaceId }
 end
 
--- After a Space switch, request focus on the next loop turn once the desktop settles.
-function WindowService.requestFrontmostAfterSpaceSwitch(win, cfg)
-  if not win then
-    return focusResult(false, "missing_window", nil)
+-- Space transitions are asynchronous Mission Control operations. Keep one
+-- exact target pending until the destination settles and focus is confirmed.
+-- Poll with adaptive backoff and dismiss Mission Control on settle (plus one
+-- focus-failure retry), not on every resolve/focus tick.
+function WindowService.requestFrontmostInSpace(target, spaceId, cfg, onComplete)
+  local windowId = windowIdForTarget(target)
+  if not windowId then
+    return { ok = false, code = "missing_window_id", windowId = nil, spaceId = spaceId }
+  end
+  if not spaceId then
+    return { ok = false, code = "missing_space_id", windowId = windowId, spaceId = nil }
   end
 
-  local initialDelay = cfg.fullscreenSpaceSwitchDelay or 0.20
+  cfg = cfg or {}
   local token = invalidatePendingFrontmostRequest()
+  local switchResult = WindowService.gotoSpace(spaceId, cfg)
+  if not switchResult.ok then
+    switchResult.windowId = windowId
+    return switchResult
+  end
 
-  pendingFrontmostTimer = hs.timer.doAfter(initialDelay, function()
-    pendingFrontmostTimer = nil
-    pcall(function()
-      if token ~= pendingFrontmostSerial then
+  local pollInterval = cfg.spaceSwitchPollInterval or 0.05
+  local pollMaxInterval = cfg.spaceSwitchPollMaxInterval or 0.20
+  local pollBackoff = cfg.spaceSwitchPollBackoff or 1.5
+  local maxSpaceAttempts = cfg.spaceSwitchMaxAttempts or 60
+  local focusDelay = cfg.fullscreenSpaceSwitchDelay or 0.20
+  local focusVerifyDelay = cfg.spaceSwitchFocusVerifyDelay or 0.05
+  local maxResolveAttempts = cfg.spaceSwitchWindowResolveAttempts or 20
+  local maxFocusAttempts = cfg.spaceSwitchFocusAttempts or 4
+  local spaceAttempts = 0
+  local resolveAttempts = 0
+  local focusAttempts = 0
+  local settleDelay = pollInterval
+  local resolveDelay = pollInterval
+  local focusFailDismissUsed = false
+
+  local function nextBackoffDelay(current)
+    local nextDelay = current * pollBackoff
+    if nextDelay > pollMaxInterval then
+      return pollMaxInterval
+    end
+    if nextDelay < pollInterval then
+      return pollInterval
+    end
+    return nextDelay
+  end
+
+  local function complete(result, win)
+    if token ~= pendingFrontmostSerial then
+      return
+    end
+    stopPendingFrontmostTimer()
+    if onComplete then
+      pcall(onComplete, result, win)
+    end
+  end
+
+  local function fail(code)
+    dismissMissionControl()
+    complete({
+      ok = false,
+      code = code,
+      windowId = windowId,
+      spaceId = spaceId,
+    })
+  end
+
+  local function dismissOnceAfterFocusFailure()
+    if focusFailDismissUsed then
+      return
+    end
+    focusFailDismissUsed = true
+    dismissMissionControl()
+  end
+
+  local focusWhenAvailable
+  local verifyFrontmost
+
+  verifyFrontmost = function(win)
+    if WindowService.currentSpaceId() ~= spaceId then
+      fail("space_switch_interrupted")
+      return
+    end
+    if isFrontmost(win) then
+      complete({
+        ok = true,
+        code = "focus_verified_after_space_switch",
+        windowId = windowId,
+        spaceId = spaceId,
+      }, win)
+      return
+    end
+    if focusAttempts >= maxFocusAttempts then
+      fail("focus_timeout_after_space_switch")
+      return
+    end
+    dismissOnceAfterFocusFailure()
+    schedulePendingFrontmostRequest(resolveDelay, token, focusWhenAvailable)
+    resolveDelay = nextBackoffDelay(resolveDelay)
+  end
+
+  focusWhenAvailable = function()
+    if WindowService.currentSpaceId() ~= spaceId then
+      fail("space_switch_interrupted")
+      return
+    end
+
+    local win = WindowService.getWindowById(windowId)
+    if not win then
+      resolveAttempts = resolveAttempts + 1
+      if resolveAttempts >= maxResolveAttempts then
+        fail("window_unavailable_after_space_switch")
         return
       end
-      requestFrontmostImpl(win)
-    end)
-  end)
+      schedulePendingFrontmostRequest(resolveDelay, token, focusWhenAvailable)
+      resolveDelay = nextBackoffDelay(resolveDelay)
+      return
+    end
 
-  return focusResult(true, "focus_requested_after_space_switch", win)
+    focusAttempts = focusAttempts + 1
+    local requested = pcall(requestFrontmostImpl, win)
+    if not requested then
+      if focusAttempts >= maxFocusAttempts then
+        fail("focus_timeout_after_space_switch")
+        return
+      end
+      dismissOnceAfterFocusFailure()
+      schedulePendingFrontmostRequest(resolveDelay, token, focusWhenAvailable)
+      resolveDelay = nextBackoffDelay(resolveDelay)
+      return
+    end
+    schedulePendingFrontmostRequest(focusVerifyDelay, token, function()
+      verifyFrontmost(win)
+    end)
+  end
+
+  local function waitForSpaceSettlement()
+    if WindowService.currentSpaceId() == spaceId then
+      dismissMissionControl()
+      schedulePendingFrontmostRequest(focusDelay, token, focusWhenAvailable)
+      return
+    end
+
+    spaceAttempts = spaceAttempts + 1
+    if spaceAttempts >= maxSpaceAttempts then
+      fail("space_switch_timeout")
+      return
+    end
+    schedulePendingFrontmostRequest(settleDelay, token, waitForSpaceSettlement)
+    settleDelay = nextBackoffDelay(settleDelay)
+  end
+
+  waitForSpaceSettlement()
+  return {
+    ok = true,
+    code = "space_switch_requested",
+    windowId = windowId,
+    spaceId = spaceId,
+  }
 end
 
+-- Cancel any in-flight ensureFrontmostAsync / requestFrontmostInSpace job.
 function WindowService.cancelPendingFrontmostRequest()
   invalidatePendingFrontmostRequest()
 end
