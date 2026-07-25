@@ -231,6 +231,7 @@ function AppState:getWorkspaceRowModels()
   self:_refreshFocusedSpaceId()
   return SlotRow.buildRows(self:getWorkspaces(), self.session, {
     windowService = self.windowService,
+    youtubeService = self.youtubeService,
   })
 end
 
@@ -2267,6 +2268,10 @@ end
 
 POPOVER_ACTIONS["unpair"] = function(self, body)
   slotAction(self, body, self.unpairSlot)
+end
+
+POPOVER_ACTIONS["activateSlot"] = function(self, body)
+  slotAction(self, body, self.activateSlot)
 end
 
 POPOVER_ACTIONS["unpairAll"] = function(self)

@@ -12,6 +12,7 @@ local AUTO_HIDE_ACTIONS = {
   pair = true,
   unpair = true,
   unpairAll = true,
+  activateSlot = true,
 }
 local popoverLayout = panelLayout.create({
   defaultSize = { w = 500, h = 273 },

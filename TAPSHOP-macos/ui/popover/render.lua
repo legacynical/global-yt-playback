@@ -13,9 +13,25 @@ local function rowHtml(row, config)
   local hidePairButtons = config.hidePairButtons == true
   local unpairClass = row.canUnpair and "btn btn-unpair" or "btn btn-unpair off"
   local appIconClass = row.iconMuted and "slot-app-icon is-muted" or "slot-app-icon"
-  local appIcon = icons.slotAppIconHtml(row.iconBundleID, row.iconAppName, appIconClass)
+  local appIcon = ""
+  if row.useYouTubeIcon then
+    appIcon = icons.youtubeSlotIconHtml(appIconClass)
+  end
+  if appIcon == "" then
+    appIcon = icons.slotAppIconHtml(row.iconBundleID, row.iconAppName, appIconClass)
+  end
   local badgeHtml = ""
   local buttonsHtml = ""
+
+  if row.canActivate and appIcon ~= "" then
+    appIcon = '<button type="button" class="slot-icon-btn" aria-label="Activate slot '
+      .. tostring(row.index)
+      .. '" onclick="sendAction(\'activateSlot\', { slot: '
+      .. tostring(row.index)
+      .. ' })">'
+      .. appIcon
+      .. "</button>"
+  end
 
   if row.badgeText and row.badgeText ~= "" then
     local badgeClass = "slot-badge"
@@ -91,7 +107,7 @@ function Render.buildHtml(ctx)
       className = "header-danger",
       icon = "clearAll",
       tooltip = "Unpair ALL",
-      onclick = "sendAction('unpairAll')",
+      onclick = "showUnpairAllConfirm()",
     }),
     "\n        ",
     icons.headerIconButton({
@@ -115,7 +131,18 @@ function Render.buildHtml(ctx)
   end
 
   parts[#parts + 1] = "      </div>\n"
-  parts[#parts + 1] = "    </div>\n</div>\n<script>\nwindow.tapshopLayoutPolicy = "
+  parts[#parts + 1] = "    </div>\n"
+  parts[#parts + 1] = "    <div class=\"confirm-shell\" id=\"unpair-all-confirm\" hidden>\n"
+  parts[#parts + 1] = "      <button type=\"button\" class=\"confirm-backdrop\" aria-label=\"Cancel\" onclick=\"hideUnpairAllConfirm()\"></button>\n"
+  parts[#parts + 1] = "      <div class=\"confirm-dialog\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"unpair-all-confirm-title\">\n"
+  parts[#parts + 1] = "        <div class=\"confirm-title\" id=\"unpair-all-confirm-title\">Unpair All?</div>\n"
+  parts[#parts + 1] = "        <div class=\"confirm-actions\">\n"
+  parts[#parts + 1] = "          <button type=\"button\" class=\"btn confirm-cancel\" onclick=\"hideUnpairAllConfirm()\">Cancel</button>\n"
+  parts[#parts + 1] = "          <button type=\"button\" class=\"btn confirm-ok\" onclick=\"confirmUnpairAll()\">Confirm</button>\n"
+  parts[#parts + 1] = "        </div>\n"
+  parts[#parts + 1] = "      </div>\n"
+  parts[#parts + 1] = "    </div>\n"
+  parts[#parts + 1] = "  </div>\n<script>\nwindow.tapshopLayoutPolicy = "
   parts[#parts + 1] = hs.json.encode(ctx.layoutPolicy or {}) or "{}"
   parts[#parts + 1] = ";\n"
   parts[#parts + 1] = ctx.script

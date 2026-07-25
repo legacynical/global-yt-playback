@@ -323,6 +323,7 @@ var header = document.querySelector(".header");
 var headerActions = document.querySelector(".header-actions");
 var headerTooltip = document.querySelector(".header-tooltip");
 var titleLogo = document.querySelector(".title-logo");
+var unpairAllConfirm = document.getElementById("unpair-all-confirm");
 var tooltipTarget = null;
 var titleTapTimestamps = [];
 
@@ -404,22 +405,58 @@ document.addEventListener("mousedown", function (e) {
   e.stopPropagation();
 }, true);
 
-if (header) {
-  header.addEventListener("mousedown", function (e) {
-    if (e.button !== 0) return;
-    if (
-      e.target
-      && e.target.closest
-      && e.target.closest(".header-actions, .title-logo, button, input, label")
-    ) return;
-    dragState.active = true;
-    dragState.lastX = e.screenX;
-    dragState.lastY = e.screenY;
-    hideHeaderTooltip();
-    sendAction("dragStart");
-    e.preventDefault();
-  });
+function isDragExcludedTarget(target) {
+  return !!(
+    target
+    && target.closest
+    && target.closest(".header-actions, .title-logo, .slot-icon-btn, .confirm-shell, button, input, label, a, select, textarea")
+  );
 }
+
+function isUnpairAllConfirmOpen() {
+  return !!(unpairAllConfirm && !unpairAllConfirm.hidden);
+}
+
+function showUnpairAllConfirm() {
+  if (!unpairAllConfirm) return;
+  hideHeaderTooltip();
+  unpairAllConfirm.hidden = false;
+  var okBtn = unpairAllConfirm.querySelector(".confirm-ok");
+  if (okBtn && typeof okBtn.focus === "function") {
+    try {
+      okBtn.focus({ preventScroll: true });
+    } catch (_) {
+      okBtn.focus();
+    }
+  }
+}
+
+function hideUnpairAllConfirm() {
+  if (!unpairAllConfirm || unpairAllConfirm.hidden) return;
+  unpairAllConfirm.hidden = true;
+  focusKeyboardSurface();
+}
+
+function confirmUnpairAll() {
+  hideUnpairAllConfirm();
+  sendAction("unpairAll");
+}
+
+document.addEventListener("mousedown", function (e) {
+  if (e.button !== 0) return;
+  if (isUnpairAllConfirmOpen()) return;
+  if (resizeState.active) return;
+  if (getResizeDirection(e)) return;
+  if (isDragExcludedTarget(e.target)) return;
+  if (!e.target.closest || !e.target.closest(".container")) return;
+
+  dragState.active = true;
+  dragState.lastX = e.screenX;
+  dragState.lastY = e.screenY;
+  hideHeaderTooltip();
+  sendAction("dragStart");
+  e.preventDefault();
+});
 
 window.addEventListener("mousemove", function (e) {
   if (dragState.active) {
@@ -473,6 +510,10 @@ document.addEventListener("keydown", function (e) {
   if (e.key === "Escape") {
     e.preventDefault();
     e.stopPropagation();
+    if (isUnpairAllConfirmOpen()) {
+      hideUnpairAllConfirm();
+      return;
+    }
     sendAction("close");
   }
 });
