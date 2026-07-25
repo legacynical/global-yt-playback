@@ -13,9 +13,13 @@
 --      that process's key window, so blind direct dispatch would misdeliver.
 --   Unsupported keyPress values are rejected before any focus work.
 --
--- Overlapping commands: focus-fallback restore is owned here (not the shared
--- WindowService pending token). Rapid commands inherit pendingRestoreId so a
--- second hotkey cannot observe the YT target as "previous" and skip restore.
+-- Overlapping commands:
+--   Restore is owned here (pendingRestoreId + local timer), not the shared
+--   WindowService pending token, so a later hotkey cannot treat the focused YT
+--   target as "previous" and skip restoration.
+--   Focus-fallback sends are queued while focusSendInFlight; a second hotkey
+--   appends instead of restarting ensureFrontmostAsync (which would invalidate
+--   the in-flight token and drop the earlier key).
 
 local YoutubeService = {}
 YoutubeService.__index = YoutubeService
@@ -90,6 +94,12 @@ function YoutubeService.new(cfg, windowService, toast)
     pendingRestoreWindow = nil,
     restoreSerial = 0,
     restoreTimer = nil,
+    -- Queued keyPress values while one focus-fallback cycle is in flight.
+    pendingCommands = {},
+    focusSendInFlight = false,
+    focusGeneration = 0,
+    sendSerial = 0,
+    sendTimer = nil,
   }, YoutubeService)
 end
 
@@ -100,11 +110,26 @@ local function stopRestoreTimer(self)
   end
 end
 
+local function stopSendTimer(self)
+  if self.sendTimer then
+    self.sendTimer:stop()
+    self.sendTimer = nil
+  end
+end
+
 local function clearPendingRestore(self)
   stopRestoreTimer(self)
   self.restoreSerial = (self.restoreSerial or 0) + 1
   self.pendingRestoreId = nil
   self.pendingRestoreWindow = nil
+end
+
+local function clearFocusSendQueue(self)
+  stopSendTimer(self)
+  self.sendSerial = (self.sendSerial or 0) + 1
+  self.focusGeneration = (self.focusGeneration or 0) + 1
+  self.pendingCommands = {}
+  self.focusSendInFlight = false
 end
 
 -- Remember the pre-YT window and (re)arm a delayed restore. Safe to call again
@@ -136,6 +161,23 @@ local function armRestore(self, delay, restoreId, restoreWindow, targetId)
       self.windowService.requestFrontmost(prev)
     end
   end)
+end
+
+local function flushPendingCommands(self, targetId, targetApp, target)
+  local keys = self.pendingCommands
+  self.pendingCommands = {}
+  self.focusSendInFlight = false
+  stopSendTimer(self)
+
+  local focusedTarget = self.windowService.getWindowById(targetId) or target
+  local app = (focusedTarget and focusedTarget:application()) or targetApp
+  for _, keyPress in ipairs(keys) do
+    if not sendKeyStrokes(self.cfg, keyPress, app) then
+      sendKeyStrokes(self.cfg, keyPress, nil)
+    end
+  end
+
+  armRestore(self, self.cfg.inputDelay or 0, self.pendingRestoreId, self.pendingRestoreWindow, targetId)
 end
 
 -- Prefer an in-flight restore target over current frontmost (which may already
@@ -292,6 +334,34 @@ function YoutubeService:sendCommand(keyPress)
     }
   end
 
+  -- Overlapping focus-fallback: queue the key instead of restarting
+  -- ensureFrontmostAsync (which would cancel the in-flight token/send).
+  if self.focusSendInFlight then
+    self.pendingCommands[#self.pendingCommands + 1] = keyPress
+    if restoreId and restoreId ~= targetId then
+      self.pendingRestoreId = restoreId
+      self.pendingRestoreWindow = restoreWindow
+    end
+    -- Focus already landed (settle pending, or token cancelled externally):
+    -- flush now so queued keys are not stuck behind a dead callback.
+    if frontmostId == targetId then
+      self.windowService.cancelPendingFrontmostRequest()
+      self.focusGeneration = (self.focusGeneration or 0) + 1
+      self.sendSerial = (self.sendSerial or 0) + 1
+      flushPendingCommands(self, targetId, targetApp, target)
+      return {
+        ok = true,
+        code = "focus_send_flushed",
+        focusResult = nil,
+      }
+    end
+    return {
+      ok = true,
+      code = "focus_send_queued",
+      focusResult = nil,
+    }
+  end
+
   -- A new command supersedes any armed restore timer; restore target is kept
   -- via pendingRestoreId / restoreId so we can re-arm after this send.
   stopRestoreTimer(self)
@@ -327,25 +397,33 @@ function YoutubeService:sendCommand(keyPress)
     clearPendingRestore(self)
   end
 
-  self.windowService.ensureFrontmostAsync(target, self.cfg, function(focusResult, _resolved, token)
+  self.pendingCommands = { keyPress }
+  self.focusSendInFlight = true
+  self.focusGeneration = (self.focusGeneration or 0) + 1
+  local focusGeneration = self.focusGeneration
+
+  self.windowService.ensureFrontmostAsync(target, self.cfg, function(focusResult, _resolved, _token)
+    if focusGeneration ~= self.focusGeneration then
+      return
+    end
     if not focusResult.ok then
-      -- Focus failed without necessarily leaving the user on YT; drop restore.
+      clearFocusSendQueue(self)
       clearPendingRestore(self)
       self.toast(Toast.message.status("Focus failed for YT window"))
       return
     end
 
     local settleDelay = self.cfg.inputDelay or 0
-    self.windowService.schedulePendingFrontmost(settleDelay, token, function()
-      local focusedTarget = self.windowService.getWindowById(targetId) or target
-      local app = (focusedTarget and focusedTarget:application()) or targetApp
-      if not sendKeyStrokes(self.cfg, keyPress, app) then
-        sendKeyStrokes(self.cfg, keyPress, nil)
+    -- Own the settle timer so WindowService token churn cannot drop queued keys.
+    stopSendTimer(self)
+    self.sendSerial = (self.sendSerial or 0) + 1
+    local sendSerial = self.sendSerial
+    self.sendTimer = hs.timer.doAfter(settleDelay, function()
+      self.sendTimer = nil
+      if sendSerial ~= self.sendSerial or focusGeneration ~= self.focusGeneration then
+        return
       end
-
-      -- Own the restore timer so a later ensureFrontmostAsync (next hotkey)
-      -- cannot cancel restoration by bumping the shared WindowService token.
-      armRestore(self, settleDelay, self.pendingRestoreId, self.pendingRestoreWindow, targetId)
+      flushPendingCommands(self, targetId, targetApp, target)
     end)
   end)
 
