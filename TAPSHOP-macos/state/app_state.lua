@@ -1,3 +1,11 @@
+-- AppState: TAPSHOP macos session orchestrator (profiles, slots, window events,
+-- hotkey actions, popover/settings wiring). Hotkeys call public methods here;
+-- WindowService / YoutubeService / SpotifyService own lower-level mechanics.
+--
+-- Persistence: pairing and active-profile writes are coalesced (idle / short
+-- delay), not flushed on every focus event. Space validation for a newly
+-- activated profile is deferred off the switch edge.
+
 local Workspace = require("state.workspace")
 local SlotRecord = require("state.slot_record")
 local SlotRow = require("state.slot_row")
@@ -1663,6 +1671,7 @@ function AppState:_clearWorkspaceAndPersist(workspace)
   self:_persistWorkspacePairingsNow()
 end
 
+-- Pair frontmost/source window to slot index on the active profile.
 function AppState:pairSlot(index, sourceWindow)
   local workspace = self:_getWorkspace(index)
   if not workspace then
@@ -1681,6 +1690,7 @@ function AppState:pairSlot(index, sourceWindow)
   end)
 end
 
+-- Hotkey: pair if empty, else focus/minimize the paired window (incl. cross-Space).
 function AppState:activateSlot(index)
   local workspace = self:_getWorkspace(index)
   if not workspace then
@@ -1826,6 +1836,7 @@ function AppState:activateSlot(index)
   end
 end
 
+-- Hotkey: clear one slot pairing (and recoverable state) on the active profile.
 function AppState:unpairSlot(index)
   local workspace = self:_getWorkspace(index)
   if not workspace then
@@ -1845,6 +1856,7 @@ function AppState:unpairSlot(index)
   end)
 end
 
+-- Hotkey: clear all slot pairings on the active profile.
 function AppState:unpairAll()
   return self:_runPairingAction(function()
     local cleared = false
@@ -1897,6 +1909,7 @@ function AppState:flushActiveProfilePersistence()
   return true
 end
 
+-- Switch active profile bank; defers Spaces validation off the hotkey edge.
 function AppState:activateProfile(profileId)
   local profile = self:_getProfile(profileId)
   if not profile or profile.id == self.session.activeProfileId then
@@ -2085,6 +2098,7 @@ function AppState:resetAllHotkeys()
   return result
 end
 
+-- hs.window.filter sink: destruction, fullscreen, recovery, YT target, popover UI.
 function AppState:handleWindowEvent(event, win)
   local windowId = safeValue(function()
     return win and win:id()
@@ -2212,6 +2226,7 @@ function AppState:handleWindowEvent(event, win)
 
 end
 
+-- Frontmost-window watcher: Space change may full-refresh popover; else header JS.
 function AppState:handleActiveWindowChange(win)
   local previousSpaceId = self.session.focusedSpaceId
   self:_refreshFocusedSpaceId()
@@ -2327,6 +2342,7 @@ function AppState:handlePopoverAction(body)
   end
 end
 
+-- Hotkey → YoutubeService:sendCommand (direct dispatch or same-browser fallback).
 function AppState:sendYoutubeCommand(keyPress)
   return self.youtubeService:sendCommand(keyPress)
 end

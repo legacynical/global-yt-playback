@@ -1,3 +1,5 @@
+-- SystemAudioService: default output device mute + volume step adjustments.
+
 local SystemAudioService = {}
 SystemAudioService.__index = SystemAudioService
 

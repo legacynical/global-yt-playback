@@ -1,3 +1,18 @@
+-- YoutubeService: global YouTube playback targeting for TAPSHOP macos hotkeys.
+--
+-- Target selection:
+--   Eligible windows are supported browsers whose title contains " - YouTube"
+--   (Subscriptions feed excluded). Focusing / discovering an eligible window
+--   updates ytTargetId; same-window tab switches refresh ytTargetTitle + toast.
+--
+-- Dispatch (sendCommand):
+--   1) Direct app keyStroke when focus-preserving is safe (other app focused,
+--      or already on the target window).
+--   2) Same browser process + different frontmost window → async focus fallback
+--      (focus target, send, delayed restore). App-targeted keystrokes only reach
+--      that process's key window, so blind direct dispatch would misdeliver.
+--   Unsupported keyPress values are rejected before any focus work.
+
 local YoutubeService = {}
 YoutubeService.__index = YoutubeService
 local Toast = require("ui.toast")
@@ -69,10 +84,12 @@ function YoutubeService.new(cfg, windowService, toast)
   }, YoutubeService)
 end
 
+-- True when bundleId is in cfg.browserBundleIDs (Chrome, Safari, etc.).
 function YoutubeService:isSupportedBrowser(bundleId)
   return self.cfg.browserBundleIDs[bundleId or ""] == true
 end
 
+-- Title-based YT page detection for a visible supported-browser window.
 function YoutubeService:isYouTubeWindow(win)
   if not win or not win:isVisible() then
     return false
@@ -109,6 +126,8 @@ local function announceTarget(self, win, title)
   }))
 end
 
+-- Window-filter hook: adopt eligible windows as the YT target.
+-- Same id + new title (tab switch) keeps the id and re-toasts the video title.
 function YoutubeService:handleWindowCandidate(win)
   if not (win and self:isYouTubeWindow(win)) then
     return
@@ -143,6 +162,8 @@ function YoutubeService:getTargetId()
   return self.ytTargetId
 end
 
+-- Prefer sticky ytTargetId while it remains an eligible YT window; else scan
+-- candidates and adopt the first match. Does not change focus.
 function YoutubeService:getTargetWindow()
   if self.ytTargetId then
     local win = self.windowService.getWindowById(self.ytTargetId)
@@ -163,6 +184,8 @@ function YoutubeService:getTargetWindow()
   return nil
 end
 
+-- Hotkey entry: deliver keyPress to the YT target (see module dispatch rules).
+-- Returns immediately; async fallback reports focus failure via toast.
 function YoutubeService:sendCommand(keyPress)
   local target = self:getTargetWindow()
   if not target then

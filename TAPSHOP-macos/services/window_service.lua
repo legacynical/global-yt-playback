@@ -1,3 +1,12 @@
+-- WindowService: Spaces-aware window focus helpers for TAPSHOP macos.
+--
+-- Focus model (shared pending serial + one timer):
+--   requestFrontmost              — fire-and-forget; never blocks the hotkey thread
+--   ensureFrontmostAsync          — verify with timers; callback carries a cancel token
+--   requestFrontmostInSpace       — gotoSpace + settle poll + focus verify (async)
+-- Starting any of these invalidates in-flight pending focus work.
+-- Never use hs.timer.usleep on hotkey-reachable paths here.
+
 local WindowService = {}
 local pendingFrontmostTimer = nil
 local pendingFrontmostSerial = 0
@@ -98,6 +107,7 @@ local function focusPollIntervalSec(cfg)
   return 0.01
 end
 
+-- Snapshot used by pairing / UI: title, id, app name, bundleID, pid.
 function WindowService.getWindowInfo(win)
   win = win or hs.window.frontmostWindow()
   if not win then
@@ -115,6 +125,7 @@ function WindowService.getWindowInfo(win)
   }
 end
 
+-- Visible, standard windows with a non-empty title (pairing / YT scan pool).
 function WindowService.candidateWindows()
   local wins = hs.window.orderedWindows()
   local out = {}
@@ -162,6 +173,7 @@ function WindowService.normalizeWindowTitle(title)
   return normalizeWindowTitle(title)
 end
 
+-- Durable pairing fingerprint fields (bundle, app name, raw/normalized title).
 function WindowService.pairingMetadata(win)
   if not win then
     return nil
@@ -178,6 +190,7 @@ function WindowService.pairingMetadata(win)
   }
 end
 
+-- Stricter candidate: visible + standard + titled (active pairing targets).
 function WindowService.isCandidateWindow(win)
   if not win then
     return false
@@ -186,6 +199,7 @@ function WindowService.isCandidateWindow(win)
   return win:isVisible() and win:isStandard() and (win:title() or ""):match("%S") ~= nil
 end
 
+-- Looser recovery candidate: standard + titled (may be minimized / not visible).
 function WindowService.isRecoveryCandidateWindow(win)
   if not win then
     return false
@@ -195,7 +209,7 @@ function WindowService.isRecoveryCandidateWindow(win)
 end
 
 -- Request frontmost status opportunistically for slot-style flows.
--- This path should not block the hotkey/UI loop on verification.
+-- Does not wait for verification; invalidates any pending async focus job.
 function WindowService.requestFrontmost(win)
   invalidatePendingFrontmostRequest()
   if not win then
@@ -270,6 +284,8 @@ function WindowService.ensureFrontmostAsync(win, cfg, onComplete)
   return { ok = true, code = "ensure_frontmost_async_started", token = token }
 end
 
+-- Schedule work on the current pending-focus generation.
+-- Returns false (and skips) if token is already cancelled/superseded.
 function WindowService.schedulePendingFrontmost(delay, token, callback)
   if token ~= pendingFrontmostSerial then
     return false
@@ -337,6 +353,7 @@ function WindowService.isWindowFullscreen(win)
   return ok and isFullscreen == true
 end
 
+-- Prefer a fullscreen Space if the window is on one; else the first listed Space.
 function WindowService.getPrimarySpaceForWindow(win)
   local ok, spaceIdsOrErr = pcall(WindowService.getWindowSpaces, win)
   if not ok then
@@ -402,6 +419,8 @@ function WindowService.bestEffortFrontmostWindowInSpace(spaceId)
   return nil
 end
 
+-- Initiate a Space switch only (Mission Control). Does not wait for settlement.
+-- Returns ok=false when gotoSpace fails to initiate.
 function WindowService.gotoSpace(spaceId, cfg)
   if not spaceId then
     return { ok = false, code = "missing_space_id", spaceId = nil }
@@ -580,6 +599,7 @@ function WindowService.requestFrontmostInSpace(target, spaceId, cfg, onComplete)
   }
 end
 
+-- Cancel any in-flight ensureFrontmostAsync / requestFrontmostInSpace job.
 function WindowService.cancelPendingFrontmostRequest()
   invalidatePendingFrontmostRequest()
 end
