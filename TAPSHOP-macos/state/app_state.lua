@@ -656,16 +656,17 @@ end
 
 function AppState:_refreshPairedWorkspaceMetadataForWindow(win, opts)
   if not win then
-    return false
+    return false, false
   end
 
   local id = win:id()
   if not id then
-    return false
+    return false, false
   end
 
   local refreshBaseSpace = type(opts) == "table" and opts.refreshBaseSpace == true
   local matchedWorkspace = false
+  local rowStateChanged = false
   local meta = nil
   self:_forEachWorkspace(function(workspace)
     if workspace:getBaseWindowId() == id or workspace:getFullscreenTargetWindowId() == id then
@@ -673,14 +674,23 @@ function AppState:_refreshPairedWorkspaceMetadataForWindow(win, opts)
       if not meta then
         meta = self.windowService.pairingMetadata(win)
       end
+      local previousFingerprint = workspace:getFingerprint() or {}
+      local previousSpaceId = workspace:getBaseSpaceId()
       workspace:setFingerprint(meta)
       if refreshBaseSpace and workspace:getBaseWindowId() == id then
         self:_updateWorkspaceBindingSpaceState(workspace, win)
       end
+      local nextFingerprint = workspace:getFingerprint() or {}
+      if (previousFingerprint.titleRaw or "") ~= (nextFingerprint.titleRaw or "")
+        or (previousFingerprint.bundleID or "") ~= (nextFingerprint.bundleID or "")
+        or (previousFingerprint.appName or "") ~= (nextFingerprint.appName or "")
+        or previousSpaceId ~= workspace:getBaseSpaceId() then
+        rowStateChanged = true
+      end
     end
   end)
 
-  return matchedWorkspace
+  return matchedWorkspace, rowStateChanged
 end
 
 function AppState:_markRecoveryMatchIndexDirty()
@@ -1293,20 +1303,34 @@ function AppState:_recoverFromWindowEvent(event, win)
 end
 
 function AppState:_refreshUiStateFromWindowEvent(event, win)
-  local pairedWorkspaceTouched = self:_refreshPairedWorkspaceMetadataForWindow(win, {
+  local pairedWorkspaceTouched, rowStateChanged = self:_refreshPairedWorkspaceMetadataForWindow(win, {
     refreshBaseSpace = event == hs.window.filter.windowFocused,
   })
   self.youtubeService:handleWindowCandidate(win)
 
-  local shouldRefreshPopover = event == hs.window.filter.windowFocused or pairedWorkspaceTouched
+  -- Minimize/visible can change row appearance without fingerprint/space churn.
+  if rowStateChanged
+    or (pairedWorkspaceTouched and (
+      event == hs.window.filter.windowMinimized
+      or event == hs.window.filter.windowUnminimized
+      or event == hs.window.filter.windowVisible
+    )) then
+    return "rows"
+  end
+
+  -- Focus UI is owned by handleActiveWindowChange (header JS, or full refresh on Space change).
+  if event == hs.window.filter.windowFocused then
+    return nil
+  end
+
   if win then
     local frontmost = hs.window.frontmostWindow()
     if frontmost and frontmost:id() == win:id() then
-      shouldRefreshPopover = true
+      return "header"
     end
   end
 
-  return shouldRefreshPopover
+  return nil
 end
 
 function AppState:_restoreRecoverableWorkspacesFromExistingCandidates()
@@ -2167,28 +2191,40 @@ function AppState:handleWindowEvent(event, win)
   end
 
   local restored = self:_recoverFromWindowEvent(event, win)
-  local shouldRefreshPopover = self:_refreshUiStateFromWindowEvent(event, win) or restored
+  local refreshKind = self:_refreshUiStateFromWindowEvent(event, win)
+  if restored then
+    refreshKind = "rows"
+  end
 
-  if shouldRefreshPopover and self.popover and self.popover.requestRefresh then
+  if refreshKind == "rows" and self.popover and self.popover.requestRefresh then
     self.popover:requestRefresh("window_event")
+  elseif refreshKind == "header" and self.popover and self.popover.requestActiveWindowUpdate then
+    self.popover:requestActiveWindowUpdate(win)
   end
 
 end
 
 function AppState:handleActiveWindowChange(win)
+  local previousSpaceId = self.session.focusedSpaceId
   self:_refreshFocusedSpaceId()
+  local spaceChanged = previousSpaceId ~= self.session.focusedSpaceId
   local windowId = safeValue(function()
     return win and win:id()
   end)
   self:_recordDebug("focus", "debug", "active_window_changed", "active window changed", function()
     return {
       focusedSpaceId = self.session.focusedSpaceId,
+      focusedSpaceChanged = spaceChanged,
       window = self:_windowDebugSnapshot(win),
     }
   end, {
     windowId = windowId,
   })
-  if self.popover and self.popover.requestActiveWindowUpdate then
+  if spaceChanged then
+    if self.popover and self.popover.requestRefresh then
+      self.popover:requestRefresh("focused_space_change", win)
+    end
+  elseif self.popover and self.popover.requestActiveWindowUpdate then
     self.popover:requestActiveWindowUpdate(win)
   end
 end

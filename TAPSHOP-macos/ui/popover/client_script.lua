@@ -250,6 +250,43 @@ window.tapshopUpdateOpacity = function (percent) {
   }
 };
 
+window.tapshopUpdateActiveWindow = function (payload) {
+  payload = payload || {};
+  var wrap = document.querySelector(".header-active-win");
+  if (!wrap) return;
+
+  var titleEl = wrap.querySelector(".header-active-win-title");
+  if (titleEl && payload.title != null) {
+    titleEl.textContent = String(payload.title);
+  }
+
+  var iconEl = wrap.querySelector(".header-active-win-icon");
+  var iconUrl = typeof payload.iconUrl === "string" ? payload.iconUrl : "";
+  var appName = payload.appName != null ? String(payload.appName) : "";
+
+  if (!iconUrl) {
+    if (iconEl) iconEl.remove();
+    return;
+  }
+
+  if (!iconEl) {
+    iconEl = document.createElement("img");
+    iconEl.className = "header-active-win-icon";
+    iconEl.alt = "";
+    iconEl.setAttribute("aria-hidden", "true");
+    if (titleEl) {
+      wrap.insertBefore(iconEl, titleEl);
+    } else {
+      wrap.insertBefore(iconEl, wrap.firstChild);
+    }
+  }
+
+  if (iconEl.getAttribute("src") !== iconUrl) {
+    iconEl.setAttribute("src", iconUrl);
+  }
+  iconEl.setAttribute("title", appName);
+};
+
 function getResizeDirection(e) {
   var nearLeft = e.clientX <= RESIZE_ZONE;
   var nearRight = e.clientX >= window.innerWidth - RESIZE_ZONE;

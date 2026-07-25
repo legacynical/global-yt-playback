@@ -1,4 +1,5 @@
 local clientScript = require("ui.popover.client_script")
+local icons = require("ui.icons")
 local panelLayout = require("ui.panel_layout")
 local popoverRender = require("ui.popover.render")
 local popoverStyles = require("ui.popover.styles")
@@ -221,14 +222,17 @@ function Popover.new(app, cfg, deps)
     end
   end
 
-  local function flushQueuedRefresh()
-    pendingRefresh = false
-    stopRefreshTimer()
-
+  local function applyPendingActiveWin()
     if pendingActiveWin ~= nil then
       activeWin = pendingActiveWin
       pendingActiveWin = nil
     end
+  end
+
+  local function flushQueuedRefresh()
+    pendingRefresh = false
+    stopRefreshTimer()
+    applyPendingActiveWin()
 
     if panel:isShown() then
       panel:refresh()
@@ -242,6 +246,23 @@ function Popover.new(app, cfg, deps)
     pendingRefresh = true
     stopRefreshTimer()
     refreshTimer = hs.timer.doAfter(delay or REFRESH_DEBOUNCE_SECONDS, flushQueuedRefresh)
+  end
+
+  local function pushActiveWindowHeaderUpdate()
+    if not panel:isShown() or not panel:hasContent() then
+      return false
+    end
+
+    local primaryLine, headerBundleID, headerAppName = currentHeaderLines()
+    local encoded = hs.json.encode({
+      title = primaryLine,
+      iconUrl = icons.appIconUrl(headerBundleID, 16),
+      appName = headerAppName or "",
+    }) or "{}"
+    panel:evaluateJavaScript(
+      "window.tapshopUpdateActiveWindow && window.tapshopUpdateActiveWindow(" .. encoded .. ")"
+    )
+    return true
   end
 
   panel = webviewPanel.new({
@@ -503,7 +524,10 @@ function Popover.new(app, cfg, deps)
     cachedThemeCss = popoverStyles.buildCss(theme)
   end
 
-  function instance:requestRefresh(reason)
+  function instance:requestRefresh(reason, win)
+    if win ~= nil then
+      pendingActiveWin = win
+    end
     if reason == "profile_switch" then
       queueRefresh(INTERACTIVE_REFRESH_DELAY_SECONDS)
       return
@@ -513,7 +537,13 @@ function Popover.new(app, cfg, deps)
 
   function instance:requestActiveWindowUpdate(win)
     pendingActiveWin = win or hs.window.frontmostWindow() or activeWin
-    queueRefresh()
+    applyPendingActiveWin()
+
+    if pushActiveWindowHeaderUpdate() then
+      return
+    end
+
+    panel:markDirty()
   end
 
   function instance:updateActiveWindow(win)
