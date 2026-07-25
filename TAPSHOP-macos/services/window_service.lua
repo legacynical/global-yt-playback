@@ -46,6 +46,7 @@ local function invalidatePendingFrontmostRequest()
 end
 
 local function schedulePendingFrontmostRequest(delay, token, callback)
+  stopPendingFrontmostTimer()
   pendingFrontmostTimer = hs.timer.doAfter(delay, function()
     pendingFrontmostTimer = nil
     if token ~= pendingFrontmostSerial then

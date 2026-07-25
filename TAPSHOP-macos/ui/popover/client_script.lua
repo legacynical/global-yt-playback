@@ -253,7 +253,7 @@ window.tapshopUpdateOpacity = function (percent) {
 window.tapshopUpdateActiveWindow = function (payload) {
   payload = payload || {};
   var wrap = document.querySelector(".header-active-win");
-  if (!wrap) return;
+  if (!wrap) return false;
 
   var titleEl = wrap.querySelector(".header-active-win-title");
   if (titleEl && payload.title != null) {
@@ -266,7 +266,7 @@ window.tapshopUpdateActiveWindow = function (payload) {
 
   if (!iconUrl) {
     if (iconEl) iconEl.remove();
-    return;
+    return true;
   }
 
   if (!iconEl) {
@@ -285,6 +285,7 @@ window.tapshopUpdateActiveWindow = function (payload) {
     iconEl.setAttribute("src", iconUrl);
   }
   iconEl.setAttribute("title", appName);
+  return true;
 };
 
 function getResizeDirection(e) {

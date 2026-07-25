@@ -822,6 +822,14 @@ function AppState:_requestWindowInSpace(workspace, windowId, spaceId, activation
     })
   end
 
+  local function spaceSwitchFailureToast(code)
+    local message = "Could not switch to the window's Space"
+    if code == "window_unavailable_after_space_switch" or code == "missing_window_id" then
+      message = "Window not found in any spaces"
+    end
+    self.toast(Toast.message.plain(message))
+  end
+
   local result = self.windowService.requestFrontmostInSpace(windowId, spaceId, self.cfg, function(outcome, resolved)
     recordResult(outcome)
     if outcome.ok then
@@ -829,14 +837,14 @@ function AppState:_requestWindowInSpace(workspace, windowId, spaceId, activation
         onSuccess(resolved)
       end
     else
-      self.toast(Toast.message.plain("Window not found in any spaces"))
+      spaceSwitchFailureToast(outcome.code)
     end
     self:_syncWorkspaceUi("slot_space_switch_result")
   end)
 
   if not result.ok then
     recordResult(result)
-    self.toast(Toast.message.plain("Window not found in any spaces"))
+    spaceSwitchFailureToast(result.code)
     return "space-switch-failed"
   end
 

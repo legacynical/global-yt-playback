@@ -259,8 +259,17 @@ function Popover.new(app, cfg, deps)
       iconUrl = icons.appIconUrl(headerBundleID, 16),
       appName = headerAppName or "",
     }) or "{}"
+    -- Queue the lightweight header update; markDirty on callback failure so a
+    -- stale header is rebuilt the next time the popover is shown.
     panel:evaluateJavaScript(
-      "window.tapshopUpdateActiveWindow && window.tapshopUpdateActiveWindow(" .. encoded .. ")"
+      "(function(){ return !!(window.tapshopUpdateActiveWindow && window.tapshopUpdateActiveWindow("
+        .. encoded
+        .. ")); })()",
+      function(result, err)
+        if err or not result then
+          panel:markDirty()
+        end
+      end
     )
     return true
   end

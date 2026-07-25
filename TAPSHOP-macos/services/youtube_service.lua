@@ -177,6 +177,14 @@ function YoutubeService:sendCommand(keyPress)
   local targetApp = target:application()
   local frontmost = hs.window.frontmostWindow()
 
+  if not keyStrokeMap[keyPress] and not (type(keyPress) == "string" and #keyPress == 1) then
+    return {
+      ok = false,
+      code = "unsupported_key",
+      focusResult = nil,
+    }
+  end
+
   -- Primary: focus-preserving direct dispatch when the key window is not
   -- another window of the same browser process (Doc / renamed sibling case).
   if shouldUseDirectDispatch(self.cfg, target, targetApp, frontmost) then
