@@ -951,23 +951,68 @@ function AppState:_isWindowAlreadyPaired(windowId)
   return paired
 end
 
-function AppState:_pairedWorkspaceHasExactTargetEvidence(workspace)
+function AppState:_liveWindowCorroboratesWorkspaceIdentity(workspace, win)
+  if not workspace or not win then
+    return false
+  end
+
+  local fingerprint = workspace:getFingerprint()
+  local expectedBundleID = fingerprint and fingerprint.bundleID or nil
+  if type(expectedBundleID) ~= "string" or expectedBundleID == "" then
+    -- No durable app identity to corroborate against; treat a live id as
+    -- exact-target evidence (same as a plain getWindowById hit).
+    return true
+  end
+
+  local meta = self.windowService.pairingMetadata and self.windowService.pairingMetadata(win)
+  local liveBundleID = meta and meta.bundleID or nil
+  if type(liveBundleID) ~= "string" or liveBundleID == "" then
+    local app = safeValue(function()
+      return win:application()
+    end)
+    liveBundleID = app and safeValue(function()
+      return app:bundleID()
+    end) or nil
+  end
+
+  return liveBundleID == expectedBundleID
+end
+
+-- Stale-pair exact-target evidence (not activation routing):
+-- Grade A: live window id + same-app corroboration (cheap; rejects recycled ids
+-- belonging to a different app). Title drift alone must not invalidate.
+-- Grade B: Spaces probe only when local id evidence is missing and caller opts in
+-- (active-profile stale repair). Never Spaces-probe after a positive id that fails
+-- corroboration — that id is usurped, not "off-space".
+function AppState:_pairedWorkspaceHasExactTargetEvidence(workspace, opts)
   if not workspace or not workspace:getBaseWindowId() then
     return false
   end
 
-  if self:_resolvePairedWindow(workspace) then
-    return true
+  local allowSpacesProbe = type(opts) == "table" and opts.allowSpacesProbe == true
+  local baseWindowId = workspace:getBaseWindowId()
+  local baseWin = self:_resolvePairedWindow(workspace)
+  if baseWin then
+    return self:_liveWindowCorroboratesWorkspaceIdentity(workspace, baseWin)
   end
 
   if workspace:hasTrackedFullscreenTarget() then
-    local _, fullscreenSpaceId = self:_resolveFullscreenTargetForActivation(workspace)
-    if fullscreenSpaceId then
+    local fullscreenTargetWindowId = workspace:getFullscreenTargetWindowId()
+    local fullscreenWin = self.windowService.getWindowById(fullscreenTargetWindowId)
+    if fullscreenWin then
+      return self:_liveWindowCorroboratesWorkspaceIdentity(workspace, fullscreenWin)
+    end
+
+    if allowSpacesProbe and self:_resolveTrackedSpaceByWindowId(fullscreenTargetWindowId) then
       return true
     end
   end
 
-  return self:_resolveTrackedSpaceByWindowId(workspace:getBaseWindowId()) ~= nil
+  if not allowSpacesProbe then
+    return false
+  end
+
+  return self:_resolveTrackedSpaceByWindowId(baseWindowId) ~= nil
 end
 
 function AppState:_restoreRecoverableWorkspacesForCandidate(win, opts)
@@ -1088,7 +1133,8 @@ function AppState:_restoreRecoverableWorkspacesForCandidate(win, opts)
   end
 
   if eventName == hs.window.filter.windowCreated then
-    self:_forEachWorkspace(function(workspace)
+    local inactiveDemoted = false
+    self:_forEachWorkspace(function(workspace, profile)
       if restoredLookup[workspace] then
         return
       end
@@ -1097,7 +1143,10 @@ function AppState:_restoreRecoverableWorkspacesForCandidate(win, opts)
       end
 
       stalePairedCandidateCount = stalePairedCandidateCount + 1
-      local exactTargetStillValid = self:_pairedWorkspaceHasExactTargetEvidence(workspace)
+      local isActiveProfile = profile and profile.id == self.session.activeProfileId
+      local exactTargetStillValid = self:_pairedWorkspaceHasExactTargetEvidence(workspace, {
+        allowSpacesProbe = isActiveProfile == true,
+      })
       if exactTargetStillValid then
         stalePairedRejectedSlots[#stalePairedRejectedSlots + 1] = {
           index = workspace:getIndex(),
@@ -1105,6 +1154,23 @@ function AppState:_restoreRecoverableWorkspacesForCandidate(win, opts)
           storedTitle = workspace:getStoredWindowTitle(),
           reason = "exact_target_still_valid",
         }
+        return
+      end
+
+      -- Promote only on the active profile. Inactive mismatches demote to
+      -- recoverable (no Spaces probe, no candidate claim) so recycled ids
+      -- cannot freeze wrong bindings until profile switch.
+      if not isActiveProfile then
+        if self.cfg.recoverClosedWindows then
+          workspace:markClosedForRecovery()
+          inactiveDemoted = true
+          stalePairedRejectedSlots[#stalePairedRejectedSlots + 1] = {
+            index = workspace:getIndex(),
+            name = workspace:getName(),
+            storedTitle = workspace:getStoredWindowTitle(),
+            reason = "inactive_exact_target_demoted",
+          }
+        end
         return
       end
 
@@ -1120,6 +1186,10 @@ function AppState:_restoreRecoverableWorkspacesForCandidate(win, opts)
       restoredWorkspaces[#restoredWorkspaces + 1] = workspace
       restoredLookup[workspace] = true
     end)
+    if inactiveDemoted then
+      self:_markRecoveryMatchIndexDirty()
+      self:_scheduleWorkspacePairingPersist()
+    end
   end
 
   self:_recordDebug("recovery", "debug", "slot_match_result", "recovery slot match result", function()
@@ -1307,6 +1377,16 @@ function AppState:_validateWorkspaceExactState(workspace)
   local before = SlotRecord.encode(workspace.binding)
   local baseWin = self.windowService.getWindowById(baseWindowId)
   if baseWin then
+    if not self:_liveWindowCorroboratesWorkspaceIdentity(workspace, baseWin) then
+      -- Recycled / usurped id: do not refresh fingerprint from the wrong window.
+      if self.cfg.recoverClosedWindows then
+        workspace:markClosedForRecovery()
+      else
+        workspace:clear()
+      end
+      return not deepEqual(before, SlotRecord.encode(workspace.binding))
+    end
+
     local baseSpaceId = self:_updateWorkspaceBindingSpaceState(workspace, baseWin)
     if not baseSpaceId then
       workspace:setBaseSpaceId(nil)
@@ -1406,6 +1486,7 @@ function AppState:_validateProfileExactState(profile)
   })
 
   if changed then
+    self:_markRecoveryMatchIndexDirty()
     self:_scheduleWorkspacePairingPersist()
   end
   return changed
