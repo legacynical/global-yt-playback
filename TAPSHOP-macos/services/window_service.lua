@@ -372,6 +372,8 @@ end
 
 -- Space transitions are asynchronous Mission Control operations. Keep one
 -- exact target pending until the destination settles and focus is confirmed.
+-- Poll with adaptive backoff and dismiss Mission Control on settle (plus one
+-- focus-failure retry), not on every resolve/focus tick.
 function WindowService.requestFrontmostInSpace(target, spaceId, cfg, onComplete)
   local windowId = windowIdForTarget(target)
   if not windowId then
@@ -390,6 +392,8 @@ function WindowService.requestFrontmostInSpace(target, spaceId, cfg, onComplete)
   end
 
   local pollInterval = cfg.spaceSwitchPollInterval or 0.05
+  local pollMaxInterval = cfg.spaceSwitchPollMaxInterval or 0.20
+  local pollBackoff = cfg.spaceSwitchPollBackoff or 1.5
   local maxSpaceAttempts = cfg.spaceSwitchMaxAttempts or 60
   local focusDelay = cfg.fullscreenSpaceSwitchDelay or 0.20
   local focusVerifyDelay = cfg.spaceSwitchFocusVerifyDelay or 0.05
@@ -398,6 +402,20 @@ function WindowService.requestFrontmostInSpace(target, spaceId, cfg, onComplete)
   local spaceAttempts = 0
   local resolveAttempts = 0
   local focusAttempts = 0
+  local settleDelay = pollInterval
+  local resolveDelay = pollInterval
+  local focusFailDismissUsed = false
+
+  local function nextBackoffDelay(current)
+    local nextDelay = current * pollBackoff
+    if nextDelay > pollMaxInterval then
+      return pollMaxInterval
+    end
+    if nextDelay < pollInterval then
+      return pollInterval
+    end
+    return nextDelay
+  end
 
   local function complete(result, win)
     if token ~= pendingFrontmostSerial then
@@ -417,6 +435,14 @@ function WindowService.requestFrontmostInSpace(target, spaceId, cfg, onComplete)
       windowId = windowId,
       spaceId = spaceId,
     })
+  end
+
+  local function dismissOnceAfterFocusFailure()
+    if focusFailDismissUsed then
+      return
+    end
+    focusFailDismissUsed = true
+    dismissMissionControl()
   end
 
   local focusWhenAvailable
@@ -440,7 +466,9 @@ function WindowService.requestFrontmostInSpace(target, spaceId, cfg, onComplete)
       fail("focus_timeout_after_space_switch")
       return
     end
-    schedulePendingFrontmostRequest(pollInterval, token, focusWhenAvailable)
+    dismissOnceAfterFocusFailure()
+    schedulePendingFrontmostRequest(resolveDelay, token, focusWhenAvailable)
+    resolveDelay = nextBackoffDelay(resolveDelay)
   end
 
   focusWhenAvailable = function()
@@ -449,7 +477,6 @@ function WindowService.requestFrontmostInSpace(target, spaceId, cfg, onComplete)
       return
     end
 
-    dismissMissionControl()
     local win = WindowService.getWindowById(windowId)
     if not win then
       resolveAttempts = resolveAttempts + 1
@@ -457,7 +484,8 @@ function WindowService.requestFrontmostInSpace(target, spaceId, cfg, onComplete)
         fail("window_unavailable_after_space_switch")
         return
       end
-      schedulePendingFrontmostRequest(pollInterval, token, focusWhenAvailable)
+      schedulePendingFrontmostRequest(resolveDelay, token, focusWhenAvailable)
+      resolveDelay = nextBackoffDelay(resolveDelay)
       return
     end
 
@@ -468,7 +496,9 @@ function WindowService.requestFrontmostInSpace(target, spaceId, cfg, onComplete)
         fail("focus_timeout_after_space_switch")
         return
       end
-      schedulePendingFrontmostRequest(pollInterval, token, focusWhenAvailable)
+      dismissOnceAfterFocusFailure()
+      schedulePendingFrontmostRequest(resolveDelay, token, focusWhenAvailable)
+      resolveDelay = nextBackoffDelay(resolveDelay)
       return
     end
     schedulePendingFrontmostRequest(focusVerifyDelay, token, function()
@@ -488,7 +518,8 @@ function WindowService.requestFrontmostInSpace(target, spaceId, cfg, onComplete)
       fail("space_switch_timeout")
       return
     end
-    schedulePendingFrontmostRequest(pollInterval, token, waitForSpaceSettlement)
+    schedulePendingFrontmostRequest(settleDelay, token, waitForSpaceSettlement)
+    settleDelay = nextBackoffDelay(settleDelay)
   end
 
   waitForSpaceSettlement()
