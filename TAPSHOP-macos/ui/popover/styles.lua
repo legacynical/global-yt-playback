@@ -137,6 +137,9 @@ local function rootVars(theme)
   --conflict: #bc5349;
   --focus: rgba(120, 168, 255, 0.92);
   --tooltip-bg: rgba(10, 10, 10, 0.94);
+  --resize-ring: 3px;
+  --resize-edge-inset: 3px;
+  --resize-corner: calc(var(--resize-ring) + var(--resize-edge-inset));
 }
 ]=]
 end
@@ -157,6 +160,9 @@ html, body {
 }
 
 body {
+  position: relative;
+  /* Outer resize ring on free sides; no top ring so chrome stays flush. */
+  padding: 0 var(--resize-ring) var(--resize-ring);
   background: transparent;
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
@@ -622,8 +628,12 @@ input {
 .resize-handles {
   position: absolute;
   inset: 0;
-  z-index: 25;
+  z-index: 20;
   pointer-events: none;
+}
+
+.resize-handles.is-disabled {
+  visibility: hidden;
 }
 
 .resize-handle {
@@ -632,38 +642,33 @@ input {
   background: transparent;
 }
 
-.resize-n,
+/* Edge strips live in the outer ring and bite 3px into the panel. */
 .resize-s {
-  left: 16px;
-  right: 16px;
-  height: 14px;
+  left: var(--resize-ring);
+  right: var(--resize-ring);
+  bottom: 0;
+  height: calc(var(--resize-ring) + var(--resize-edge-inset));
 }
-
-.resize-n { top: 0; }
-.resize-s { bottom: 0; }
 
 .resize-e,
 .resize-w {
-  top: 16px;
-  bottom: 16px;
-  width: 14px;
+  top: 0;
+  bottom: var(--resize-ring);
+  width: calc(var(--resize-ring) + var(--resize-edge-inset));
 }
 
 .resize-e { right: 0; }
 .resize-w { left: 0; }
 
-.resize-ne,
-.resize-nw,
-.resize-se,
-.resize-sw {
-  width: 16px;
-  height: 16px;
+.resize-sw,
+.resize-se {
+  width: var(--resize-corner);
+  height: var(--resize-corner);
+  z-index: 21;
 }
 
-.resize-nw { top: 0; left: 0; }
-.resize-ne { top: 0; right: 0; }
-.resize-sw { bottom: 0; left: 0; }
-.resize-se { bottom: 0; right: 0; }
+.resize-sw { left: 0; bottom: 0; }
+.resize-se { right: 0; bottom: 0; }
 
 .confirm-shell {
   position: absolute;

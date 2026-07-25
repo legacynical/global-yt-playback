@@ -489,6 +489,9 @@ function Popover.new(app, cfg, deps)
       isResizing = false
       resizeDirection = ""
       isFocused = false
+      panel:evaluateJavaScript(
+        "window.tapshopResetInteractionGestures && window.tapshopResetInteractionGestures()"
+      )
     end,
   })
 

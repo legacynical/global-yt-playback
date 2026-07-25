@@ -39,6 +39,11 @@ function readPx(value) {
   return parseFloat(value || "0") || 0;
 }
 
+function resizeRingVerticalPx() {
+  var bodyStyle = window.getComputedStyle(document.body);
+  return readPx(bodyStyle.paddingTop) + readPx(bodyStyle.paddingBottom);
+}
+
 function measureContainerChromeHeight(scale) {
   var container = document.querySelector(".container");
   var header = document.querySelector(".header");
@@ -54,7 +59,8 @@ function measureContainerChromeHeight(scale) {
     + readPx(containerStyle.borderTopWidth)
     + readPx(containerStyle.borderBottomWidth)
     + header.getBoundingClientRect().height
-    + containerGap;
+    + containerGap
+    + resizeRingVerticalPx();
 }
 
 function measureWorkspaceHeightAtScale(scale) {
@@ -293,6 +299,26 @@ function getResizeDirectionFromEvent(e) {
   return handle.getAttribute("data-resize") || "";
 }
 
+function cursorForDirection(direction) {
+  if (direction === "n" || direction === "s") return "ns-resize";
+  if (direction === "e" || direction === "w") return "ew-resize";
+  if (direction === "ne" || direction === "sw") return "nesw-resize";
+  if (direction === "nw" || direction === "se") return "nwse-resize";
+  return "";
+}
+
+function setInteractionCursor(cursor) {
+  var value = cursor || "";
+  document.documentElement.style.cursor = value;
+  document.body.style.cursor = value;
+}
+
+function setResizeHandlesEnabled(enabled) {
+  var handles = document.querySelector(".resize-handles");
+  if (!handles) return;
+  handles.classList.toggle("is-disabled", !enabled);
+}
+
 var container = document.querySelector(".container");
 var header = document.querySelector(".header");
 var headerActions = document.querySelector(".header-actions");
@@ -365,14 +391,25 @@ var resizeState = {
   direction: ""
 };
 
+function resetInteractionGestures() {
+  dragState.active = false;
+  resizeState.active = false;
+  resizeState.direction = "";
+  setInteractionCursor("");
+}
+
+window.tapshopResetInteractionGestures = resetInteractionGestures;
+
 document.addEventListener("mousedown", function (e) {
   if (e.button !== 0) return;
+  if (isUnpairAllConfirmOpen()) return;
   var direction = getResizeDirectionFromEvent(e);
   if (!direction) return;
   resizeState.active = true;
   resizeState.direction = direction;
   resizeState.lastX = e.screenX;
   resizeState.lastY = e.screenY;
+  setInteractionCursor(cursorForDirection(direction));
   hideHeaderTooltip();
   sendAction("resizeStart", { direction: direction });
   e.preventDefault();
@@ -395,6 +432,7 @@ function showUnpairAllConfirm() {
   if (!unpairAllConfirm) return;
   hideHeaderTooltip();
   unpairAllConfirm.hidden = false;
+  setResizeHandlesEnabled(false);
   var okBtn = unpairAllConfirm.querySelector(".confirm-ok");
   if (okBtn && typeof okBtn.focus === "function") {
     try {
@@ -408,6 +446,7 @@ function showUnpairAllConfirm() {
 function hideUnpairAllConfirm() {
   if (!unpairAllConfirm || unpairAllConfirm.hidden) return;
   unpairAllConfirm.hidden = true;
+  setResizeHandlesEnabled(true);
   focusKeyboardSurface();
 }
 
@@ -427,6 +466,7 @@ document.addEventListener("mousedown", function (e) {
   dragState.active = true;
   dragState.lastX = e.screenX;
   dragState.lastY = e.screenY;
+  setInteractionCursor("move");
   hideHeaderTooltip();
   sendAction("dragStart");
   e.preventDefault();
@@ -459,12 +499,14 @@ window.addEventListener("mouseup", function () {
 
   if (dragState.active) {
     dragState.active = false;
+    setInteractionCursor("");
     sendAction("dragEnd");
   }
 
   if (resizeState.active) {
     resizeState.active = false;
     resizeState.direction = "";
+    setInteractionCursor("");
     sendAction("resizeEnd");
   }
 });
