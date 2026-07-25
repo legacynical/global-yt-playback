@@ -27,6 +27,10 @@ local HEADER_ICON_SVGS = {
 <path d="M3 6h18" />
 <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
 ]=],
+  profile = [=[
+<circle cx="12" cy="8" r="4" />
+<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+]=],
   restore = [=[
 <path d="M3 2v6h6" />
 <path d="M3 8a9 9 0 1 0 3-6.7L3 4" />

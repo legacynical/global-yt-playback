@@ -10,6 +10,7 @@ local Workspace = require("state.workspace")
 local SlotRecord = require("state.slot_record")
 local SlotRow = require("state.slot_row")
 local Layout = require("state.layout")
+local ProfilePalette = require("state.profile_palette")
 local PopoverFullscreenVisibility = require("state.popover_fullscreen_visibility")
 local Toast = require("ui.toast")
 
@@ -90,7 +91,8 @@ function AppState.new(cfg, deps)
   for profileId = 1, Layout.MAX_PROFILES do
     local profile = {
       id = profileId,
-      name = "Profile " .. tostring(profileId),
+      name = ProfilePalette.defaultName(profileId),
+      color = ProfilePalette.defaultColor(profileId),
       workspaces = {},
       needsExactValidation = profileId ~= initialProfileId,
     }
@@ -104,6 +106,7 @@ function AppState.new(cfg, deps)
     self.profiles[#self.profiles + 1] = profile
   end
 
+  self:_restoreProfileMetadata()
   self:_refreshFocusedSpaceId()
   self:_restoreStartupWorkspaceState()
   self:_initPopoverFullscreenVisibility()
@@ -271,6 +274,107 @@ function AppState:getWorkspaceRowModels()
   })
 end
 
+-- Build slot rows for any profile bank without changing the active profile.
+-- Used to warm neighbor caches after a settle-gated switch.
+function AppState:getWorkspaceRowModelsForProfile(profileId)
+  local profile = self:_getProfile(profileId)
+  if not profile then
+    return {}
+  end
+  self:_refreshFocusedSpaceId()
+  return SlotRow.buildRows(profile.workspaces or {}, self.session, {
+    windowService = self.windowService,
+    youtubeService = self.youtubeService,
+  })
+end
+
+-- Previous/next non-empty profile ids for cycle prefetch (wraps; may be empty).
+function AppState:getAdjacentNonEmptyProfileIds(profileId)
+  local count = self:getProfileCount()
+  if count < 1 then
+    return nil, nil
+  end
+  local current = tonumber(profileId) or self.session.activeProfileId
+  local prevId, nextId = nil, nil
+  for offset = 1, count do
+    local candidate = current - offset
+    if candidate < 1 then
+      candidate = candidate + count
+    end
+    if candidate ~= current and self:_profileIsNonEmpty(candidate) then
+      prevId = candidate
+      break
+    end
+  end
+  for offset = 1, count do
+    local candidate = current + offset
+    if candidate > count then
+      candidate = candidate - count
+    end
+    if candidate ~= current and self:_profileIsNonEmpty(candidate) then
+      nextId = candidate
+      break
+    end
+  end
+  return prevId, nextId
+end
+
+function AppState:getProfilePairedCount(profileId)
+  local profile = self:_getProfile(profileId)
+  if not profile then
+    return 0
+  end
+  local count = 0
+  for _, workspace in ipairs(profile.workspaces or {}) do
+    if workspace and (workspace:isPaired() or workspace:isRecoverable()) then
+      count = count + 1
+    end
+  end
+  return count
+end
+
+function AppState:getProfileDisplayName(profileId)
+  local profile = self:_getProfile(profileId)
+  if not profile then
+    return ProfilePalette.defaultName(profileId)
+  end
+  return ProfilePalette.normalizeName(profile.name, profile.id)
+end
+
+function AppState:getProfileColor(profileId)
+  local profile = self:_getProfile(profileId)
+  if not profile then
+    return ProfilePalette.defaultColor(profileId)
+  end
+  return ProfilePalette.normalizeColor(profile.color)
+end
+
+function AppState:getProfileRowModels()
+  local rows = {}
+  local activeId = self.session.activeProfileId
+  for _, profile in ipairs(self.profiles) do
+    local pairedCount = self:getProfilePairedCount(profile.id)
+    rows[#rows + 1] = {
+      id = profile.id,
+      name = self:getProfileDisplayName(profile.id),
+      color = self:getProfileColor(profile.id),
+      pairedCount = pairedCount,
+      isActive = profile.id == activeId,
+      isEmpty = pairedCount <= 0,
+    }
+  end
+  return rows
+end
+
+function AppState:getActiveProfilePresentation()
+  local id = self.session.activeProfileId
+  return {
+    id = id,
+    name = self:getProfileDisplayName(id),
+    color = self:getProfileColor(id),
+  }
+end
+
 function AppState:getProfileCount()
   return #self.profiles
 end
@@ -311,12 +415,44 @@ function AppState:syncUi(opacityPercent)
   end
 end
 
-function AppState:_syncWorkspaceUi(reason)
+function AppState:_syncWorkspaceUi(reason, opts)
   if self.popover and self.popover.requestRefresh then
-    self.popover:requestRefresh(reason or "workspace_state")
+    self.popover:requestRefresh(reason or "workspace_state", nil, opts)
   elseif self.popover and self.popover.refreshIfShown then
     self.popover:refreshIfShown()
   end
+end
+
+-- Drop cached slots HTML for a profile after pairing/recovery mutations so
+-- begin-paint cannot flash pre-mutation banks during rapid switches.
+function AppState:_invalidateProfileSlotsCache(profileId)
+  if profileId == nil or not self.popover or not self.popover.invalidateSlotsCache then
+    return false
+  end
+  self.popover:invalidateSlotsCache({
+    profileId = profileId,
+    pairing = true,
+  })
+  return true
+end
+
+function AppState:_profileIdForWorkspace(workspace)
+  if not workspace then
+    return nil
+  end
+  for _, profile in ipairs(self.profiles or {}) do
+    for _, candidate in ipairs(profile.workspaces or {}) do
+      if candidate == workspace then
+        return profile.id
+      end
+    end
+  end
+  return nil
+end
+
+function AppState:_invalidateWorkspaceSlotsCache(workspace, profileId)
+  local id = profileId or self:_profileIdForWorkspace(workspace) or self.session.activeProfileId
+  return self:_invalidateProfileSlotsCache(id)
 end
 
 function AppState:_runPairingAction(actionFn)
@@ -325,6 +461,7 @@ function AppState:_runPairingAction(actionFn)
   end
   actionFn()
   self:_persistWorkspacePairingsNow()
+  self:_invalidateProfileSlotsCache(self.session.activeProfileId)
   self:_syncWorkspaceUi()
   if self.cfg.popoverAutoHideAfterAction and self.popover and self.popover.hide then
     local wasShown = self.popover.isShown and self.popover:isShown()
@@ -547,6 +684,26 @@ function AppState:_restoreWorkspaceFromPersistedRecord(workspace, persisted, opt
   return false
 end
 
+-- Factory defaults are already applied; overlay persisted name/color when present.
+function AppState:_restoreProfileMetadata()
+  if not self.appdata or not self.appdata.getProfileRecords then
+    return
+  end
+
+  local records = self.appdata.getProfileRecords()
+  for profileId, record in pairs(records or {}) do
+    local profile = self:_getProfile(profileId)
+    if profile and type(record) == "table" then
+      if record.name ~= nil then
+        profile.name = ProfilePalette.normalizeName(record.name, profile.id)
+      end
+      if record.colorPresent then
+        profile.color = ProfilePalette.normalizeColor(record.color)
+      end
+    end
+  end
+end
+
 function AppState:_workspacePairingSnapshot(profile)
   local pairings = {}
   for index, workspace in ipairs((profile and profile.workspaces) or {}) do
@@ -563,10 +720,12 @@ end
 function AppState:_profilePairingSnapshot()
   local profiles = {}
   for _, profile in ipairs(self.profiles) do
-    local pairings = self:_workspacePairingSnapshot(profile)
-    if next(pairings) ~= nil then
-      profiles[profile.id] = pairings
-    end
+    profiles[profile.id] = {
+      pairings = self:_workspacePairingSnapshot(profile),
+      name = ProfilePalette.normalizeName(profile.name, profile.id),
+      color = ProfilePalette.normalizeColor(profile.color),
+      colorPresent = true,
+    }
   end
   return profiles
 end
@@ -784,7 +943,7 @@ function AppState:_ensureRecoveryMatchIndex()
   return self.session.recoveryMatchIndex
 end
 
-function AppState:_pairWorkspace(workspace, windowId, win)
+function AppState:_pairWorkspace(workspace, windowId, win, profileId)
   workspace:pair(windowId, self.windowService.pairingMetadata(win))
   self:_markRecoveryMatchIndexDirty()
   if self.windowService.isWindowFullscreen(win) then
@@ -798,6 +957,7 @@ function AppState:_pairWorkspace(workspace, windowId, win)
   else
     self:_updateWorkspaceBindingSpaceState(workspace, win)
   end
+  self:_invalidateWorkspaceSlotsCache(workspace, profileId)
 end
 
 function AppState:_updateWorkspaceBindingSpaceState(workspace, win)
@@ -1217,6 +1377,7 @@ function AppState:_restoreRecoverableWorkspacesForCandidate(win, opts)
         if self.cfg.recoverClosedWindows then
           workspace:markClosedForRecovery()
           inactiveDemoted = true
+          self:_invalidateProfileSlotsCache(profile.id)
           stalePairedRejectedSlots[#stalePairedRejectedSlots + 1] = {
             index = workspace:getIndex(),
             name = workspace:getName(),
@@ -1235,7 +1396,7 @@ function AppState:_restoreRecoverableWorkspacesForCandidate(win, opts)
       }
       matchedSlots[#matchedSlots + 1] = promotedSlot
       stalePairedPromotedSlots[#stalePairedPromotedSlots + 1] = promotedSlot
-      self:_pairWorkspace(workspace, candidateId, win)
+      self:_pairWorkspace(workspace, candidateId, win, profile.id)
       restoredWorkspaces[#restoredWorkspaces + 1] = workspace
       restoredLookup[workspace] = true
     end)
@@ -1425,7 +1586,14 @@ function AppState:_restoreStartupWorkspaceState()
   })
   self:_restoreRecoverableWorkspacesFromExistingCandidates()
 
-  local restoredPairings = self:_profilePairingSnapshot()
+  -- Persisted load shape is pairings-only; full metadata snapshots always differ.
+  local restoredPairings = {}
+  for profileId, record in pairs(self:_profilePairingSnapshot()) do
+    local pairings = type(record) == "table" and record.pairings or record
+    if type(pairings) == "table" and next(pairings) ~= nil then
+      restoredPairings[profileId] = pairings
+    end
+  end
   if not deepEqual(restoredPairings, persistedPairings) then
     self:_persistWorkspacePairingsNow()
   end
@@ -1601,7 +1769,7 @@ function AppState:_validateProfileExactState(profile)
     -- Publish badge-relevant Space/fullscreen corrections; the profile-switch
     -- paint may have already flushed from shallow cache.
     if self.session.activeProfileId == profileId then
-      self:_syncWorkspaceUi("profile_switch")
+      self:_syncWorkspaceUi("profile_validation")
     end
   end
   return changed
@@ -1631,14 +1799,29 @@ function AppState:_queueActiveProfileValidation(profile)
   end)
 end
 
+function AppState:_workspaceActionLabel(workspace)
+  local slotIndex = workspace and workspace.getIndex and workspace:getIndex() or nil
+  local profileName = self:getProfileDisplayName(self.session.activeProfileId)
+  if slotIndex then
+    return string.format("%s [%d]", profileName, slotIndex)
+  end
+  return profileName
+end
+
+function AppState:_activeProfileToastColor()
+  return self:getProfileColor(self.session.activeProfileId)
+end
+
 function AppState:_formatPairToast(workspace, win)
   local app = win and win:application() or nil
   local label = self.windowService.windowTitle and self.windowService.windowTitle(win) or self.windowService.displayTitle(win)
   return Toast.message.windowAction({
-    prefixText = string.format("Pairing %s: ", workspace:getName()),
+    prefixText = "Pairing ",
+    labelText = self:_workspaceActionLabel(workspace) .. ": ",
     titleText = label,
     bundleID = app and app:bundleID() or nil,
     appName = app and app:name() or nil,
+    imageColor = self:_activeProfileToastColor(),
     prefixColor = TOAST_WHITE,
     titleColor = PAIR_TOAST_COLOR,
     duration = 2.0,
@@ -1653,10 +1836,12 @@ function AppState:_formatUnpairToast(workspace, win)
     label = workspace:getStoredWindowTitle()
   end
   return Toast.message.windowAction({
-    prefixText = string.format("Unpairing %s: ", workspace:getName()),
+    prefixText = "Unpairing ",
+    labelText = self:_workspaceActionLabel(workspace) .. ": ",
     titleText = label,
     bundleID = app and app:bundleID() or fingerprint.bundleID or nil,
     appName = app and app:name() or fingerprint.appName or nil,
+    imageColor = self:_activeProfileToastColor(),
     prefixColor = TOAST_WHITE,
     titleColor = UNPAIR_TOAST_COLOR,
   })
@@ -1665,10 +1850,12 @@ end
 function AppState:_formatClosedWindowUnpairToast(workspace)
   local fingerprint = workspace and workspace:getFingerprint() or {}
   return Toast.message.windowAction({
-    prefixText = "[Unpaired Closed Window: ",
+    prefixText = "[Unpaired Closed Window · ",
+    labelText = self:_workspaceActionLabel(workspace) .. ": ",
     titleText = workspace and workspace:getStoredWindowTitle() or "[empty]",
     bundleID = fingerprint.bundleID or nil,
     appName = fingerprint.appName or nil,
+    imageColor = self:_activeProfileToastColor(),
     prefixColor = TOAST_WHITE,
     titleColor = UNPAIR_TOAST_COLOR,
     suffixText = "]",
@@ -1681,13 +1868,15 @@ function AppState:_formatRestoreToast(workspaces, win)
   local label = self.windowService.windowTitle and self.windowService.windowTitle(win) or self.windowService.displayTitle(win)
   local names = {}
   for _, ws in ipairs(workspaces) do
-    names[#names + 1] = ws:getName()
+    names[#names + 1] = self:_workspaceActionLabel(ws)
   end
   return Toast.message.windowAction({
-    prefixText = "Restored " .. table.concat(names, ", ") .. ": ",
+    prefixText = "Restored ",
+    labelText = table.concat(names, ", ") .. ": ",
     titleText = label,
     bundleID = app and app:bundleID() or nil,
     appName = app and app:name() or nil,
+    imageColor = self:_activeProfileToastColor(),
     prefixColor = TOAST_WHITE,
     titleColor = PAIR_TOAST_COLOR,
     duration = 2.0,
@@ -1696,10 +1885,13 @@ end
 
 function AppState:_clearRecoverableWorkspaces()
   local changed = false
-  self:_forEachWorkspace(function(workspace)
+  self:_forEachWorkspace(function(workspace, profile)
     if workspace:isRecoverable() then
       workspace:clear()
       changed = true
+      if profile then
+        self:_invalidateProfileSlotsCache(profile.id)
+      end
     end
   end)
   if changed then
@@ -1713,6 +1905,7 @@ function AppState:_clearWorkspaceAndPersist(workspace)
     return
   end
   workspace:clear()
+  self:_invalidateWorkspaceSlotsCache(workspace)
   self:_markRecoveryMatchIndexDirty()
   self:_persistWorkspacePairingsNow()
 end
@@ -1895,7 +2088,9 @@ function AppState:unpairSlot(index)
       self:_markRecoveryMatchIndexDirty()
       self.toast(toastPayload)
     else
-      self.toast(Toast.message.plain(workspace:getName() .. " is already unpaired!"))
+      self.toast(Toast.message.status(self:_workspaceActionLabel(workspace) .. " is already unpaired!", {
+        imageColor = self:_activeProfileToastColor(),
+      }))
     end
   end)
 end
@@ -1954,18 +2149,80 @@ function AppState:flushActiveProfilePersistence()
 end
 
 -- Switch active profile bank; defers Spaces validation off the hotkey edge.
-function AppState:activateProfile(profileId)
+function AppState:activateProfile(profileId, opts)
   local profile = self:_getProfile(profileId)
-  if not profile or profile.id == self.session.activeProfileId then
+  if not profile then
+    return false
+  end
+
+  opts = opts or {}
+  if profile.id == self.session.activeProfileId then
+    -- Already active: return to slots without settle probes / row rebuilds.
+    if opts.returnToSlots == true and self.popover and self.popover.requestRefresh then
+      self.popover:requestRefresh("profile_switch", nil, {
+        returnToSlots = true,
+        clientEpoch = opts.clientEpoch,
+        modeOnly = true,
+      })
+    end
     return false
   end
 
   self.session.activeProfileId = profile.id
   self:_queueActiveProfilePersistence()
   self:_queueActiveProfileValidation(profile)
-  self:_syncWorkspaceUi("profile_switch")
-  self.toast(Toast.message.plain(string.format("[Active Profile: %d]", profile.id)))
+  self:_syncWorkspaceUi("profile_switch", {
+    returnToSlots = opts.returnToSlots == true,
+    clientEpoch = opts.clientEpoch,
+  })
+  -- One toast line per hop (matches UI cycling). Capture name/color now so a
+  -- deferred render cannot rewrite earlier stack lines to the final bank.
+  local toastName = self:getProfileDisplayName(profile.id)
+  local toastColor = self:getProfileColor(profile.id)
+  hs.timer.doAfter(0, function()
+    self.toast(Toast.message.profile(toastName, toastColor, { duration = 2.0 }))
+  end)
   return true
+end
+
+function AppState:_profileIsNonEmpty(profileId)
+  return self:getProfilePairedCount(profileId) > 0
+end
+
+function AppState:activatePreviousNonEmptyProfile()
+  local count = self:getProfileCount()
+  if count < 1 then
+    return false
+  end
+  local current = self.session.activeProfileId
+  for offset = 1, count do
+    local candidate = current - offset
+    if candidate < 1 then
+      candidate = candidate + count
+    end
+    if self:_profileIsNonEmpty(candidate) then
+      return self:activateProfile(candidate, { returnToSlots = true })
+    end
+  end
+  return false
+end
+
+function AppState:activateNextNonEmptyProfile()
+  local count = self:getProfileCount()
+  if count < 1 then
+    return false
+  end
+  local current = self.session.activeProfileId
+  for offset = 1, count do
+    local candidate = current + offset
+    if candidate > count then
+      candidate = candidate - count
+    end
+    if self:_profileIsNonEmpty(candidate) then
+      return self:activateProfile(candidate, { returnToSlots = true })
+    end
+  end
+  return false
 end
 
 function AppState:activatePreviousProfile()
@@ -1973,7 +2230,7 @@ function AppState:activatePreviousProfile()
   if profileId < 1 then
     profileId = self:getProfileCount()
   end
-  return self:activateProfile(profileId)
+  return self:activateProfile(profileId, { returnToSlots = true })
 end
 
 function AppState:activateNextProfile()
@@ -1981,7 +2238,63 @@ function AppState:activateNextProfile()
   if profileId > self:getProfileCount() then
     profileId = 1
   end
-  return self:activateProfile(profileId)
+  return self:activateProfile(profileId, { returnToSlots = true })
+end
+
+function AppState:_colorOwnedByOtherProfile(color, exceptProfileId)
+  local normalized = ProfilePalette.normalizeColor(color)
+  if not normalized then
+    return false
+  end
+  for _, profile in ipairs(self.profiles) do
+    if profile.id ~= exceptProfileId and ProfilePalette.normalizeColor(profile.color) == normalized then
+      return true
+    end
+  end
+  return false
+end
+
+function AppState:updateProfileMetadata(profileId, opts)
+  local profile = self:_getProfile(profileId)
+  if not profile or type(opts) ~= "table" then
+    return false
+  end
+
+  local changed = false
+  if opts.name ~= nil then
+    local nextName = ProfilePalette.normalizeName(opts.name, profile.id)
+    if nextName ~= profile.name then
+      profile.name = nextName
+      changed = true
+    end
+  end
+
+  if opts.color ~= nil or opts.clearColor == true then
+    local nextColor = nil
+    if opts.clearColor == true then
+      nextColor = nil
+    else
+      nextColor = ProfilePalette.normalizeColor(opts.color)
+      if opts.color ~= false and opts.color ~= "" and opts.color ~= "none" and nextColor == nil then
+        return false
+      end
+      if nextColor and self:_colorOwnedByOtherProfile(nextColor, profile.id) then
+        return false
+      end
+    end
+    if nextColor ~= ProfilePalette.normalizeColor(profile.color) then
+      profile.color = nextColor
+      changed = true
+    end
+  end
+
+  if not changed then
+    return true
+  end
+
+  self:_persistWorkspacePairingsNow()
+  self:_syncWorkspaceUi("profile_metadata")
+  return true
 end
 
 function AppState:togglePopover()
@@ -2169,7 +2482,7 @@ function AppState:handleWindowEvent(event, win)
     local basePairingChanged = false
     local fullscreenStateChanged = false
     local closedWindowToast = nil
-    self:_forEachWorkspace(function(workspace)
+    self:_forEachWorkspace(function(workspace, profile)
       if workspace:getFullscreenTargetWindowId() == deadId and workspace:getBaseWindowId() ~= deadId then
         workspace:clearFullscreenState()
         fullscreenStateChanged = true
@@ -2193,6 +2506,9 @@ function AppState:handleWindowEvent(event, win)
           workspace:clear()
         end
         basePairingChanged = true
+        if profile then
+          self:_invalidateProfileSlotsCache(profile.id)
+        end
       end
     end)
 
@@ -2354,7 +2670,10 @@ end
 POPOVER_ACTIONS["activateProfile"] = function(self, body)
   local profileId = tonumber(body.profile)
   if profileId then
-    self:activateProfile(profileId)
+    self:activateProfile(profileId, {
+      returnToSlots = body.returnToSlots == true or body.returnToSlots == 1,
+      clientEpoch = tonumber(body.epoch),
+    })
   end
 end
 
@@ -2364,6 +2683,31 @@ end
 
 POPOVER_ACTIONS["activateNextProfile"] = function(self)
   self:activateNextProfile()
+end
+
+POPOVER_ACTIONS["activatePreviousNonEmptyProfile"] = function(self)
+  self:activatePreviousNonEmptyProfile()
+end
+
+POPOVER_ACTIONS["activateNextNonEmptyProfile"] = function(self)
+  self:activateNextNonEmptyProfile()
+end
+
+POPOVER_ACTIONS["updateProfileMetadata"] = function(self, body)
+  local profileId = tonumber(body.profile)
+  if not profileId then
+    return
+  end
+  local opts = {}
+  if body.name ~= nil then
+    opts.name = body.name
+  end
+  if body.clearColor == true or body.clearColor == 1 or body.color == "none" then
+    opts.clearColor = true
+  elseif body.color ~= nil then
+    opts.color = body.color
+  end
+  self:updateProfileMetadata(profileId, opts)
 end
 
 POPOVER_ACTIONS["setAutoHideAfterAction"] = function(self, body)

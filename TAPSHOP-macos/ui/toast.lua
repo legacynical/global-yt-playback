@@ -1,6 +1,7 @@
 local Toast = {}
 
 local DEFAULT_TEXT_COLOR = { white = 1, alpha = 1 }
+local SWATCH_IMAGE_CACHE = {}
 
 local function copyTable(value)
   if type(value) ~= "table" then
@@ -12,6 +13,82 @@ local function copyTable(value)
     out[key] = item
   end
   return out
+end
+
+local function parseHexColor(value)
+  if type(value) ~= "string" then
+    return nil
+  end
+  local r, g, b = value:match("^%s*#(%x%x)(%x%x)(%x%x)%s*$")
+  if not r then
+    return nil
+  end
+  return {
+    red = tonumber(r, 16) / 255,
+    green = tonumber(g, 16) / 255,
+    blue = tonumber(b, 16) / 255,
+    alpha = 1,
+  }
+end
+
+local function normalizeColorValue(value)
+  if type(value) == "table" and value.red ~= nil then
+    return {
+      red = tonumber(value.red) or 0,
+      green = tonumber(value.green) or 0,
+      blue = tonumber(value.blue) or 0,
+      alpha = tonumber(value.alpha) or 1,
+    }
+  end
+  return parseHexColor(value)
+end
+
+function Toast.colorSwatchImage(color, size)
+  local fill = normalizeColorValue(color)
+  if not fill or not hs.canvas then
+    return nil
+  end
+
+  local px = math.max(12, math.floor(tonumber(size) or 16))
+  local cacheKey = string.format(
+    "%d_%.3f_%.3f_%.3f_%.3f",
+    px,
+    fill.red,
+    fill.green,
+    fill.blue,
+    fill.alpha
+  )
+  local cached = SWATCH_IMAGE_CACHE[cacheKey]
+  if cached then
+    return cached
+  end
+
+  local radius = math.max(2, math.floor(px * 0.22))
+  local canvas = hs.canvas.new({ x = 0, y = 0, w = px, h = px })
+  canvas[1] = {
+    type = "rectangle",
+    action = "fill",
+    frame = { x = 0, y = 0, w = px, h = px },
+    fillColor = fill,
+    roundedRectRadii = { xRadius = radius, yRadius = radius },
+  }
+  canvas[2] = {
+    type = "rectangle",
+    action = "stroke",
+    frame = { x = 0.5, y = 0.5, w = px - 1, h = px - 1 },
+    strokeColor = { white = 1, alpha = 0.22 },
+    strokeWidth = 1,
+    roundedRectRadii = { xRadius = radius, yRadius = radius },
+  }
+
+  local image = canvas:imageFromCanvas()
+  canvas:delete()
+  if not image then
+    return nil
+  end
+
+  SWATCH_IMAGE_CACHE[cacheKey] = image
+  return image
 end
 
 local function normalizeSegment(segment)
@@ -68,10 +145,17 @@ local function normalizeLine(line)
     imagePath = line.imagePath
   end
 
+  local imageColor = nil
+  if line.imageColor ~= nil then
+    imageColor = line.imageColor
+  end
+
   return {
+    image = line.image,
     imageBundleID = bundleID,
     imageAppName = appName,
     imagePath = imagePath,
+    imageColor = imageColor,
     segments = segments,
   }
 end
@@ -108,8 +192,23 @@ function Toast.message.status(text, opts)
   if type(options.imagePath) == "string" and options.imagePath ~= "" then
     message.lines[1].imagePath = options.imagePath
   end
+  if options.imageColor ~= nil then
+    message.lines[1].imageColor = options.imageColor
+  end
+  if options.image ~= nil then
+    message.lines[1].image = options.image
+  end
 
   return message
+end
+
+function Toast.message.profile(name, color, opts)
+  local options = opts or {}
+  return Toast.message.status(tostring(name or ""), {
+    duration = options.duration or 2.0,
+    color = options.color,
+    imageColor = color,
+  })
 end
 
 function Toast.message.windowAction(opts)
@@ -119,20 +218,35 @@ function Toast.message.windowAction(opts)
     titleText = "[empty]"
   end
 
+  local segments = {
+    {
+      text = tostring(options.prefixText or ""),
+      color = copyTable(options.prefixColor) or copyTable(DEFAULT_TEXT_COLOR),
+    },
+  }
+
+  -- Optional label after a leading color swatch: "Pairing " + swatch + "Matcha [3]: "
+  if options.labelText ~= nil and tostring(options.labelText) ~= "" then
+    segments[#segments + 1] = {
+      text = tostring(options.labelText),
+      color = copyTable(options.labelColor)
+        or copyTable(options.prefixColor)
+        or copyTable(DEFAULT_TEXT_COLOR),
+    }
+  end
+
+  segments[#segments + 1] = {
+    text = tostring(titleText),
+    color = copyTable(options.titleColor) or copyTable(DEFAULT_TEXT_COLOR),
+  }
+
   local line = {
     imageBundleID = options.bundleID,
     imageAppName = options.appName,
     imagePath = options.imagePath,
-    segments = {
-      {
-        text = tostring(options.prefixText or ""),
-        color = copyTable(options.prefixColor) or copyTable(DEFAULT_TEXT_COLOR),
-      },
-      {
-        text = tostring(titleText),
-        color = copyTable(options.titleColor) or copyTable(DEFAULT_TEXT_COLOR),
-      },
-    },
+    imageColor = options.imageColor,
+    image = options.image,
+    segments = segments,
   }
 
   if options.suffixText ~= nil and options.suffixText ~= "" then
@@ -205,15 +319,35 @@ function Toast.new(cfg)
     return math.floor(cfg.tapshopMsgTextSize * 1.35)
   end
 
-  local function lineImage(line)
+  local function imagePixelSize()
+    return math.max(12, math.floor(lineHeight() * 0.95))
+  end
+
+  local function sizedImage(image)
+    if not image then
+      return nil
+    end
+    local size = imagePixelSize()
+    if image.setSize then
+      return image:setSize({ h = size, w = size })
+    end
+    return image
+  end
+
+  local function colorSwatchImage(line)
+    if type(line) ~= "table" or line.imageColor == nil then
+      return nil
+    end
+    return Toast.colorSwatchImage(line.imageColor, imagePixelSize())
+  end
+
+  local function appOrPathImage(line)
     if type(line) ~= "table" then
       return nil
     end
 
-    local size = math.max(12, math.floor(lineHeight() * 0.95))
-
     if line.image then
-      return line.image
+      return sizedImage(line.image)
     end
 
     local imagePath = line.imagePath
@@ -223,7 +357,7 @@ function Toast.new(cfg)
       and hs.image.imageFromPath then
       local image = hs.image.imageFromPath(imagePath)
       if image then
-        return image:setSize({ h = size, w = size })
+        return sizedImage(image)
       end
     end
 
@@ -244,7 +378,12 @@ function Toast.new(cfg)
       return nil
     end
 
-    return image:setSize({ h = size, w = size })
+    return sizedImage(image)
+  end
+
+  local function lineImage(line)
+    -- Prefer explicit image / app icon; fall back to color swatch for status/profile lines.
+    return appOrPathImage(line) or colorSwatchImage(line)
   end
 
   local function pickScreen()
@@ -313,21 +452,63 @@ function Toast.new(cfg)
   local function resolveLineParts(line, isLatest, showPrefixes)
     local prefix = prefixStyledText(isLatest, showPrefixes)
     local segments = line.segments or {}
-    local image = lineImage(line)
+    local appImage = appOrPathImage(line)
+    local swatchImage = colorSwatchImage(line)
 
-    if image and #segments >= 2 then
-      return {
-        { kind = "text", styled = styledSegments({ segments[1] }, prefix) },
-        { kind = "image", image = image },
-        { kind = "text", styled = styledSegments({ table.unpack(segments, 2) }), flexible = true },
+    -- windowAction with label split:
+    -- "> Pairing " + swatch + "Matcha [3]: " + app icon + title
+    if appImage and #segments >= 3 then
+      local parts = {}
+      if prefix then
+        parts[#parts + 1] = { kind = "text", styled = prefix }
+      end
+      parts[#parts + 1] = { kind = "text", styled = styledSegments({ segments[1] }) }
+      if swatchImage then
+        parts[#parts + 1] = { kind = "image", image = swatchImage }
+      end
+      parts[#parts + 1] = { kind = "text", styled = styledSegments({ segments[2] }) }
+      parts[#parts + 1] = { kind = "image", image = appImage }
+      parts[#parts + 1] = {
+        kind = "text",
+        styled = styledSegments({ table.unpack(segments, 3) }),
+        flexible = true,
       }
+      return parts
     end
 
-    if image then
-      return {
-        { kind = "image", image = image },
-        { kind = "text", styled = styledSegments(segments, prefix), flexible = true },
+    -- Legacy windowAction: "> Pairing …:" + app icon + title
+    if appImage and #segments >= 2 then
+      local parts = {}
+      if prefix then
+        parts[#parts + 1] = { kind = "text", styled = prefix }
+      end
+      if swatchImage then
+        parts[#parts + 1] = { kind = "image", image = swatchImage }
+      end
+      parts[#parts + 1] = { kind = "text", styled = styledSegments({ segments[1] }) }
+      parts[#parts + 1] = { kind = "image", image = appImage }
+      parts[#parts + 1] = {
+        kind = "text",
+        styled = styledSegments({ table.unpack(segments, 2) }),
+        flexible = true,
       }
+      return parts
+    end
+
+    -- status/profile: "> " + swatch/icon + title (arrow must not sit between swatch and name)
+    local image = appImage or swatchImage
+    if image then
+      local parts = {}
+      if prefix then
+        parts[#parts + 1] = { kind = "text", styled = prefix }
+      end
+      parts[#parts + 1] = { kind = "image", image = image }
+      parts[#parts + 1] = {
+        kind = "text",
+        styled = styledSegments(segments),
+        flexible = true,
+      }
+      return parts
     end
 
     return {
@@ -435,6 +616,22 @@ function Toast.new(cfg)
     end)
   end
 
+  local pendingRender = false
+  local pendingClearSecs = nil
+
+  local function flushPendingRender()
+    pendingRender = false
+    local clearSecs = pendingClearSecs
+    pendingClearSecs = nil
+    if #lines == 0 then
+      return
+    end
+    render()
+    if clearSecs ~= nil then
+      scheduleClear(clearSecs)
+    end
+  end
+
   return function(msg, secs)
     local normalized = Toast.message.normalize(msg, secs)
     for _, line in ipairs(normalized.lines) do
@@ -445,8 +642,13 @@ function Toast.new(cfg)
         table.remove(lines, 1)
       end
     end
-    render()
-    scheduleClear(normalized.duration or secs or defaultSecs)
+    -- Coalesce canvas rebuilds: many hops in one turn → one replaceElements.
+    pendingClearSecs = normalized.duration or secs or defaultSecs
+    if pendingRender then
+      return
+    end
+    pendingRender = true
+    hs.timer.doAfter(0, flushPendingRender)
   end
 end
 

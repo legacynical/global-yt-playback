@@ -293,48 +293,42 @@ input {
   border-radius: calc(4px * var(--ui-scale));
 }
 
-.profile-switcher {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(2px * var(--ui-scale));
-  padding: calc(1px * var(--ui-scale));
+.header-profile {
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: calc(5px * var(--ui-scale));
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
-.profile-btn,
-.profile-label {
-  border: none;
-  border-radius: calc(3px * var(--ui-scale));
-  color: var(--text-strong);
+.header-profile.has-profile-tint {
+  background: var(--profile-tint);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
 }
 
-.profile-btn {
-  min-width: calc(16px * var(--ui-scale));
-  height: calc(16px * var(--ui-scale));
-  padding: 0 calc(3px * var(--ui-scale));
-  background: rgba(255, 255, 255, 0.06);
-  cursor: pointer;
-  line-height: 1;
+.header-profile.is-profiles-mode {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28),
+    inset 0 0 0 999px rgba(255, 255, 255, 0.08);
 }
 
-.profile-btn:hover,
-.profile-btn.is-pointer-hover {
-  background: rgba(255, 255, 255, 0.14);
+.header-profile:hover,
+.header-profile.is-pointer-hover {
+  /* Avoid filter:brightness — it resamples the SVG and reads as a hover shake. */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22),
+    inset 0 0 0 999px rgba(255, 255, 255, 0.12);
 }
 
-.profile-label {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: calc(24px * var(--ui-scale));
-  height: calc(16px * var(--ui-scale));
-  padding: 0 calc(4px * var(--ui-scale));
-  background: transparent;
-  font-size: calc(9px * var(--ui-scale));
-  font-weight: 700;
-  letter-spacing: 0.02em;
+.header-profile.has-profile-tint:hover,
+.header-profile.has-profile-tint.is-pointer-hover {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.22),
+    inset 0 0 0 999px rgba(255, 255, 255, 0.16);
+}
+
+.header-profile .header-action-icon {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+  /* Soft under-shadow keeps the white stroke readable on pale tints (e.g. Lychee). */
+  filter: drop-shadow(0 1px 1.25px rgba(0, 0, 0, 0.55))
+    drop-shadow(0 0 0.75px rgba(0, 0, 0, 0.35));
 }
 
 .header-btn,
@@ -343,7 +337,7 @@ input {
   border: none;
   border-radius: calc(4px * var(--ui-scale));
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease, opacity 120ms ease, border-color 120ms ease;
+  transition: background 120ms ease, color 120ms ease, opacity 120ms ease, border-color 120ms ease, filter 120ms ease;
 }
 
 .header-btn {
@@ -356,10 +350,12 @@ input {
 }
 
 .header-btn:focus-visible,
-.profile-btn:focus-visible,
 .btn:focus-visible,
 .settings-tab:focus-visible,
-.hotkey-search:focus-visible {
+.hotkey-search:focus-visible,
+.profile-color-btn:focus-visible,
+.profile-icon-btn:focus-visible,
+.profile-label-input:focus-visible {
   outline: none;
   box-shadow: 0 0 0 1px var(--focus);
 }
@@ -442,6 +438,9 @@ input {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, auto);
 }
 
 .workspace-list {
@@ -450,12 +449,56 @@ input {
   grid-template-rows: repeat(9, auto);
   gap: calc(3px * var(--ui-scale));
   align-content: start;
-  transition: opacity 90ms ease;
+  /* No opacity transition here: switch hide/show must be instant or rapid
+     cycling fades previous banks through current (visible flicker). */
+  grid-area: 1 / 1;
+  width: 100%;
+  min-width: 0;
+  align-self: start;
 }
 
 .workspace-list.is-dimmed {
   opacity: 0.18;
   pointer-events: none;
+  transition: opacity 90ms ease;
+}
+
+.body-shell.is-profiles-mode .is-slots-list,
+.body-shell.is-slots-mode .is-profiles-list {
+  display: none;
+}
+
+.body-shell.is-slots-mode .is-slots-list,
+.body-shell.is-profiles-mode .is-profiles-list {
+  display: grid;
+}
+
+.profile-rail {
+  position: absolute;
+  top: calc(2px * var(--ui-scale));
+  bottom: calc(2px * var(--ui-scale));
+  left: calc(18px * var(--ui-scale));
+  width: calc(2px * var(--ui-scale));
+  border-radius: 1px;
+  background: var(--active-profile-color, transparent);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1;
+  /* Opacity only — background color must snap or rapid cycles cross-fade tints. */
+  transition: opacity 120ms ease;
+}
+
+.body-shell.is-slots-mode.has-active-color .profile-rail {
+  opacity: 1;
+}
+
+/* Hide previous profile rows while a switch payload is in flight / applying.
+   Instant (no transition) so rapid cycles never cross-fade banks. */
+.workspace-list.is-switching {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: none;
 }
 
 .row {
@@ -464,33 +507,62 @@ input {
   gap: calc(4px * var(--ui-scale));
   border-radius: calc(5px * var(--ui-scale));
   transition: background 90ms ease, box-shadow 90ms ease;
+  position: relative;
+  min-height: calc(15px * var(--ui-scale));
+}
+
+.row.is-profile-row {
+  /* Match slot-row density: same gap, no extra vertical chrome. */
+  gap: calc(4px * var(--ui-scale));
+}
+
+.row.is-active-profile {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.row.is-editing-row {
+  overflow: visible;
+  z-index: 3;
 }
 
 .row:has(.slot-icon-btn:hover),
 .row:has(.slot-icon-btn.is-pointer-hover),
+.row:has(.profile-color-btn:hover),
+.row:has(.profile-color-btn.is-pointer-hover),
 .row.is-pointer-hover,
-.row:has(.slot-icon-btn:focus-visible) {
+.row:has(.slot-icon-btn:focus-visible),
+.row:has(.profile-color-btn:focus-visible) {
   background: rgba(255, 255, 255, 0.07);
   box-shadow: inset 0 0 0 1px rgba(120, 215, 255, 0.42);
 }
 
 /* Always-on-top utility overlay: ignore native :hover (often sticky/wrong on
    non-key WKWebViews). Pointer hover classes are authoritative. */
-body.is-utility-overlay .row:has(.slot-icon-btn:hover) {
+body.is-utility-overlay .row:has(.slot-icon-btn:hover),
+body.is-utility-overlay .row:has(.profile-color-btn:hover) {
   background: transparent;
   box-shadow: none;
 }
 body.is-utility-overlay .row:has(.slot-icon-btn.is-pointer-hover),
+body.is-utility-overlay .row:has(.profile-color-btn.is-pointer-hover),
 body.is-utility-overlay .row.is-pointer-hover {
   background: rgba(255, 255, 255, 0.07);
   box-shadow: inset 0 0 0 1px rgba(120, 215, 255, 0.42);
 }
 
-body.is-utility-overlay .profile-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+body.is-utility-overlay .header-profile:hover {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
-body.is-utility-overlay .profile-btn.is-pointer-hover {
-  background: rgba(255, 255, 255, 0.14);
+body.is-utility-overlay .header-profile.is-pointer-hover {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22),
+    inset 0 0 0 999px rgba(255, 255, 255, 0.12);
+}
+body.is-utility-overlay .header-profile.has-profile-tint:hover {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+body.is-utility-overlay .header-profile.has-profile-tint.is-pointer-hover {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.22),
+    inset 0 0 0 999px rgba(255, 255, 255, 0.16);
 }
 body.is-utility-overlay .header-danger:hover {
   background: var(--danger);
@@ -548,6 +620,258 @@ body.is-utility-overlay .btn-danger.is-pointer-hover {
   font-size: calc(11px * var(--ui-scale));
   font-weight: 600;
   flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+}
+
+.profile-color-btn {
+  width: calc(15px * var(--ui-scale));
+  height: calc(15px * var(--ui-scale));
+  border-radius: calc(4px * var(--ui-scale));
+  border: none;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  line-height: 0;
+  box-sizing: border-box;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  background: transparent;
+  transform-origin: center center;
+}
+
+.profile-color-btn.is-none {
+  background: var(--panel-bg);
+}
+
+.profile-color-btn.is-wiggle {
+  animation: profile-color-wiggle 0.7s ease-in-out infinite;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.28),
+    0 0 0 1px rgba(120, 215, 255, 0.35);
+}
+
+@keyframes profile-color-wiggle {
+  0%, 100% { transform: rotate(0deg) translateX(0); }
+  20% { transform: rotate(-10deg) translateX(-0.5px); }
+  40% { transform: rotate(10deg) translateX(0.5px); }
+  60% { transform: rotate(-8deg) translateX(-0.5px); }
+  80% { transform: rotate(8deg) translateX(0.5px); }
+}
+
+/* Slot-parallel label column: color square lives inside the pill like app icons. */
+.profile-label {
+  display: flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  font-size: calc(11px * var(--ui-scale));
+}
+
+.profile-label-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  max-width: 100%;
+  min-width: 0;
+  padding: 0 calc(4px * var(--ui-scale));
+  background: rgba(0, 0, 0, 0.14);
+  border-radius: calc(4px * var(--ui-scale));
+  overflow: hidden;
+  color: var(--text);
+}
+
+.profile-label-pill.is-editing {
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 1px var(--focus);
+  overflow: visible;
+}
+
+.profile-label-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  min-width: 0;
+  line-height: calc(15px * var(--ui-scale));
+}
+
+.is-profile-row.is-empty .profile-label-text {
+  color: #555;
+}
+
+.profile-label-input {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-strong);
+  font: 600 calc(11px * var(--ui-scale)) / calc(15px * var(--ui-scale)) inherit;
+  padding: 0;
+  margin: 0;
+  outline: none;
+  height: calc(15px * var(--ui-scale));
+}
+
+.profile-status {
+  font-size: calc(9px * var(--ui-scale));
+  font-variant-numeric: tabular-nums;
+  min-width: 2em;
+  text-align: right;
+  font-weight: 600;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.profile-status.is-paired { color: #7ec87e; }
+.profile-status.is-empty { color: #555; }
+
+.profile-edit-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2px * var(--ui-scale));
+  flex-shrink: 0;
+  height: calc(15px * var(--ui-scale));
+}
+
+.profile-icon-btn {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+  border: none;
+  border-radius: calc(3px * var(--ui-scale));
+  background: rgba(255, 255, 255, 0.05);
+  color: #888;
+  cursor: pointer;
+  font-size: calc(9px * var(--ui-scale));
+  line-height: 0;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.profile-edit-icon {
+  width: calc(10px * var(--ui-scale));
+  height: calc(10px * var(--ui-scale));
+  display: block;
+}
+
+.profile-icon-btn:hover,
+.profile-icon-btn.is-pointer-hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #eee;
+}
+
+.profile-icon-btn.accept {
+  color: #7ec87e;
+  background: rgba(126, 200, 126, 0.12);
+}
+
+.profile-icon-btn.accept:hover,
+.profile-icon-btn.accept.is-pointer-hover {
+  background: rgba(126, 200, 126, 0.22);
+  color: #a8e0a8;
+}
+
+.profile-icon-btn.cancel {
+  color: #ff8a8a;
+  background: rgba(255, 90, 90, 0.1);
+}
+
+.profile-icon-btn.cancel:hover,
+.profile-icon-btn.cancel.is-pointer-hover {
+  background: rgba(255, 90, 90, 0.2);
+  color: #ffb0b0;
+}
+
+body.is-utility-overlay .profile-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #888;
+}
+body.is-utility-overlay .profile-icon-btn.is-pointer-hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #eee;
+}
+body.is-utility-overlay .profile-icon-btn.accept:hover {
+  color: #7ec87e;
+  background: rgba(126, 200, 126, 0.12);
+}
+body.is-utility-overlay .profile-icon-btn.accept.is-pointer-hover {
+  background: rgba(126, 200, 126, 0.22);
+  color: #a8e0a8;
+}
+body.is-utility-overlay .profile-icon-btn.cancel:hover {
+  color: #ff8a8a;
+  background: rgba(255, 90, 90, 0.1);
+}
+body.is-utility-overlay .profile-icon-btn.cancel.is-pointer-hover {
+  background: rgba(255, 90, 90, 0.2);
+  color: #ffb0b0;
+}
+
+.color-picker {
+  display: none;
+  position: absolute;
+  z-index: 40;
+  width: max-content;
+  max-width: calc(148px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale));
+  border-radius: calc(8px * var(--ui-scale));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(18, 18, 18, 0.97);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+
+.color-picker.is-open {
+  display: block;
+}
+
+.color-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(5, calc(22px * var(--ui-scale)));
+  gap: calc(5px * var(--ui-scale));
+}
+
+.color-pick {
+  width: calc(22px * var(--ui-scale));
+  height: calc(22px * var(--ui-scale));
+  border-radius: calc(5px * var(--ui-scale));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+  background: transparent;
+}
+
+.color-pick.is-selected {
+  box-shadow: 0 0 0 2px var(--focus);
+}
+
+.color-pick.is-disabled {
+  opacity: 0.28;
+  cursor: not-allowed;
+}
+
+.color-pick.is-none {
+  background: var(--panel-bg);
+}
+
+.color-pick.is-none::after {
+  content: "✕";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #ff5a5a;
+  font-size: calc(11px * var(--ui-scale));
+  font-weight: 700;
 }
 
 .slot-label {

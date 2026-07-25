@@ -4,10 +4,13 @@ local panelLayout = require("ui.panel_layout")
 local popoverRender = require("ui.popover.render")
 local popoverStyles = require("ui.popover.styles")
 local webviewPanel = require("ui.webview_panel")
+local ProfilePalette = require("state.profile_palette")
 
 local Popover = {}
 local REFRESH_DEBOUNCE_SECONDS = 0.18
 local INTERACTIVE_REFRESH_DELAY_SECONDS = 0.03
+-- Coalesce Accessibility/Spaces row rebuilds until the active bank stops changing.
+local PROFILE_SWITCH_SETTLE_SECONDS = 0.10
 local AUTO_HIDE_ACTIONS = {
   pair = true,
   unpair = true,
@@ -38,6 +41,7 @@ function Popover.new(app, cfg, deps)
   local resizeDirection = ""
   local isFocused = false
   local cachedThemeCss = nil
+  local profileTextEntryActive = false
   local savedTopLeft = appdata.getPopoverTopLeft()
   local savedSize = popoverLayout.loadSavedSize(appdata)
   local runtimeBounds = popoverLayout.initialRuntimeBounds()
@@ -150,7 +154,7 @@ function Popover.new(app, cfg, deps)
   -- click makes the webview key and steals keyboard — keep it false in AOT.
   -- When Always on Top is off, take normal key/app focus on show.
   local function focusPanelWindow(panelRef)
-    if cfg.popoverAlwaysOnTop then
+    if cfg.popoverAlwaysOnTop and not profileTextEntryActive then
       return
     end
 
@@ -214,7 +218,8 @@ function Popover.new(app, cfg, deps)
   local function currentWindowStyle()
     local style = hs.webview.windowMasks.borderless
     -- nonactivating only for Always on Top; normal show/hide should be a real key window.
-    if cfg.popoverAlwaysOnTop then
+    -- While renaming a profile, temporarily allow key focus for the text field.
+    if cfg.popoverAlwaysOnTop and not profileTextEntryActive then
       style = style | hs.webview.windowMasks.nonactivating
     end
     return style
@@ -345,11 +350,15 @@ function Popover.new(app, cfg, deps)
     pointerHoverTap:start()
   end
 
-  -- Non-key AOT panel never receives document keydown; Escape for the
-  -- unpair-all confirm only (do not steal Escape for ordinary close).
+  -- Non-key AOT panel never receives document keydown; Escape dismisses
+  -- confirm / color picker / edit / profiles mode (do not steal Escape for close).
   local function startConfirmEscapeTap()
     stopConfirmEscapeTap()
     if not cfg.popoverAlwaysOnTop then
+      return
+    end
+    if profileTextEntryActive then
+      -- Webview is temporarily key for rename; document keydown owns Escape.
       return
     end
     confirmEscapeTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(event)
@@ -357,13 +366,14 @@ function Popover.new(app, cfg, deps)
         stopConfirmEscapeTap()
         return false
       end
+      if profileTextEntryActive then
+        return false
+      end
       if event:getKeyCode() ~= escapeKeyCode then
         return false
       end
-      -- Stop before JS: a refresh can clear the dialog without sending close.
-      stopConfirmEscapeTap()
       panel:evaluateJavaScript(
-        "window.tapshopHideUnpairAllConfirm && window.tapshopHideUnpairAllConfirm()"
+        "(function(){ return !!(window.tapshopHandleEscape && window.tapshopHandleEscape()); })()"
       )
       return true
     end)
@@ -388,10 +398,45 @@ function Popover.new(app, cfg, deps)
     if cfg.popoverAlwaysOnTop then
       startPointerHoverTap()
       refreshPointerHover(panelRef or panel)
+      if profileTextEntryActive then
+        stopConfirmEscapeTap()
+      end
     else
       stopPointerHoverTap()
       stopConfirmEscapeTap()
       clearPointerHover(panelRef or panel)
+    end
+  end
+
+  local function setProfileTextEntryActive(active, panelRef)
+    local next = active == true
+    if profileTextEntryActive == next then
+      if next then
+        abandonFocusHandback()
+        focusPanelWindow(panelRef or panel)
+      end
+      return
+    end
+    profileTextEntryActive = next
+    if next then
+      abandonFocusHandback()
+    end
+    syncAlwaysOnTopFocusPolicy(panelRef or panel)
+    if next then
+      focusPanelWindow(panelRef or panel)
+    elseif cfg.popoverAlwaysOnTop then
+      scheduleFocusHandback()
+    end
+  end
+
+  local function clearProfileTextEntryState(panelRef)
+    if not profileTextEntryActive then
+      return
+    end
+    profileTextEntryActive = false
+    syncAlwaysOnTopFocusPolicy(panelRef or panel)
+    if cfg.popoverAlwaysOnTop then
+      scheduleFocusHandback()
     end
   end
 
@@ -455,6 +500,12 @@ function Popover.new(app, cfg, deps)
       cachedThemeCss = popoverStyles.buildCss(theme)
     end
 
+    local activeProfile = app.getActiveProfilePresentation and app:getActiveProfilePresentation() or {
+      id = app.getActiveProfileId and app:getActiveProfileId() or 1,
+      name = "Profile",
+      color = nil,
+    }
+
     return {
       css = cachedThemeCss,
       script = clientScript.script,
@@ -467,8 +518,11 @@ function Popover.new(app, cfg, deps)
         hidePairButtons = cfg.popoverHidePairButtons == true,
         utilityOverlay = cfg.popoverAlwaysOnTop == true,
       },
-      activeProfileId = app.getActiveProfileId and app:getActiveProfileId() or 1,
+      activeProfileId = activeProfile.id,
+      activeProfile = activeProfile,
       profileCount = app.getProfileCount and app:getProfileCount() or 1,
+      profileRows = app.getProfileRowModels and app:getProfileRowModels() or {},
+      profilePaletteColors = ProfilePalette.COLORS,
       rows = app:getWorkspaceRowModels(),
     }
   end
@@ -487,12 +541,203 @@ function Popover.new(app, cfg, deps)
     end
   end
 
+  local profileUiEpoch = 0
+  local lastSlotsProfileId = nil
+  local lastSlotsSignature = nil
+  -- Last-known slots HTML per profile so rapid cycles can paint immediately.
+  local slotsHtmlCache = {}
+  local spaceGeneration = 0
+  local pairingGeneration = 0
+  local settleTimer = nil
+  local settleSerial = 0
+
+  local function slotsListConfig()
+    return {
+      hidePairButtons = cfg.popoverHidePairButtons == true,
+      utilityOverlay = cfg.popoverAlwaysOnTop == true,
+    }
+  end
+
+  local function slotsRenderSignature(rows)
+    local parts = {}
+    for i, row in ipairs(rows or {}) do
+      parts[i] = table.concat({
+        tostring(row.index or ""),
+        tostring(row.state or ""),
+        tostring(row.label or ""),
+        tostring(row.className or ""),
+        tostring(row.badgeText or ""),
+        tostring(row.iconBundleID or ""),
+        row.useYouTubeIcon and "1" or "0",
+        row.iconMuted and "1" or "0",
+        row.canPair and "1" or "0",
+        row.canUnpair and "1" or "0",
+      }, "\31")
+    end
+    return table.concat(parts, "\30")
+  end
+
+  local function storeSlotsCache(profileId, signature, html)
+    if profileId == nil or type(html) ~= "string" then
+      return
+    end
+    slotsHtmlCache[profileId] = {
+      signature = signature,
+      html = html,
+      spaceGeneration = spaceGeneration,
+      pairingGeneration = pairingGeneration,
+    }
+  end
+
+  local function warmSlotsCacheForProfile(profileId)
+    if profileId == nil or not app.getWorkspaceRowModelsForProfile then
+      return false
+    end
+    local rows = app:getWorkspaceRowModelsForProfile(profileId)
+    local signature = slotsRenderSignature(rows)
+    local html = popoverRender.slotsListInnerHtml(rows, slotsListConfig())
+    storeSlotsCache(profileId, signature, html)
+    return true
+  end
+
+  local function prefetchNeighborCaches(profileId)
+    if not app.getAdjacentNonEmptyProfileIds then
+      return
+    end
+    local prevId, nextId = app:getAdjacentNonEmptyProfileIds(profileId)
+    hs.timer.doAfter(0, function()
+      if app.getActiveProfileId and app:getActiveProfileId() ~= profileId then
+        return
+      end
+      local warmed = {}
+      for _, neighborId in ipairs({ prevId, nextId }) do
+        if neighborId and neighborId ~= profileId and not warmed[neighborId] then
+          warmed[neighborId] = true
+          local cached = slotsHtmlCache[neighborId]
+          local current = cached
+            and cached.spaceGeneration == spaceGeneration
+            and cached.pairingGeneration == pairingGeneration
+          if not current then
+            warmSlotsCacheForProfile(neighborId)
+          end
+        end
+      end
+    end)
+  end
+
+  local function applySlotsPayload(payload, epoch, onApplied)
+    local encoded = hs.json.encode(payload) or "{}"
+    panel:evaluateJavaScript(
+      "(function(){ return !!(window.tapshopApplyProfileUi && window.tapshopApplyProfileUi("
+        .. encoded
+        .. ")); })()",
+      function(result, err)
+        if epoch ~= profileUiEpoch then
+          return
+        end
+        if err or not result then
+          panel:markDirty()
+          if panel:isShown() then
+            queueRefresh(INTERACTIVE_REFRESH_DELAY_SECONDS)
+          end
+          return
+        end
+        if type(onApplied) == "function" then
+          onApplied()
+        end
+        if cfg.popoverAlwaysOnTop then
+          refreshPointerHover(panel)
+        end
+      end
+    )
+  end
+
+  local function settleRebuildSlots(profileId, epoch, opts)
+    opts = opts or {}
+    if not panel:isShown() or not panel:hasContent() then
+      return
+    end
+    if epoch ~= profileUiEpoch then
+      return
+    end
+    if app.getActiveProfileId and app:getActiveProfileId() ~= profileId then
+      return
+    end
+
+    local rows = app.getWorkspaceRowModelsForProfile
+        and app:getWorkspaceRowModelsForProfile(profileId)
+      or app:getWorkspaceRowModels()
+    local signature = slotsRenderSignature(rows)
+
+    -- Only skip the JS apply when *this controller* already committed this
+    -- exact view. Do not treat "cache matches" as painted — begin is async and
+    -- may not have landed, which would leave the previous bank on screen.
+    if profileId == lastSlotsProfileId and signature == lastSlotsSignature then
+      prefetchNeighborCaches(profileId)
+      return
+    end
+
+    local cached = slotsHtmlCache[profileId]
+    local slotsHtml
+    if cached
+      and cached.signature == signature
+      and cached.spaceGeneration == spaceGeneration
+      and cached.pairingGeneration == pairingGeneration
+      and type(cached.html) == "string"
+    then
+      slotsHtml = cached.html
+    else
+      slotsHtml = popoverRender.slotsListInnerHtml(rows, slotsListConfig())
+      storeSlotsCache(profileId, signature, slotsHtml)
+    end
+
+    local activeProfile = app.getActiveProfilePresentation and app:getActiveProfilePresentation() or {
+      id = profileId,
+      name = "Profile",
+      color = nil,
+    }
+    applySlotsPayload({
+      activeProfile = activeProfile,
+      returnToSlots = opts.returnToSlots == true,
+      epoch = epoch,
+      slotsHtml = slotsHtml,
+    }, epoch, function()
+      lastSlotsProfileId = profileId
+      lastSlotsSignature = signature
+    end)
+    prefetchNeighborCaches(profileId)
+  end
+
+  local function scheduleSettleRebuild(profileId, epoch, opts)
+    settleSerial = settleSerial + 1
+    local serial = settleSerial
+    if settleTimer then
+      settleTimer:stop()
+      settleTimer = nil
+    end
+    settleTimer = hs.timer.doAfter(PROFILE_SWITCH_SETTLE_SECONDS, function()
+      settleTimer = nil
+      if serial ~= settleSerial then
+        return
+      end
+      settleRebuildSlots(profileId, epoch, opts)
+    end)
+  end
+
   local function flushQueuedRefresh()
     pendingRefresh = false
     stopRefreshTimer()
     applyPendingActiveWin()
+    lastSlotsProfileId = nil
+    lastSlotsSignature = nil
+    -- Keep last HTML as fallback paint; bump generations so settle rewarms truth.
+    -- Do not warm/prefetch here — panel:refresh() already paid for active-row
+    -- probes via buildHtml; neighbor probes belong only on switch settle.
+    spaceGeneration = spaceGeneration + 1
+    pairingGeneration = pairingGeneration + 1
 
     if panel:isShown() then
+      clearProfileTextEntryState(panel)
       stopConfirmEscapeTap()
       panel:refresh()
       -- Full HTML rebuild drops DOM hover classes and body flags; re-apply policy.
@@ -536,6 +781,115 @@ function Popover.new(app, cfg, deps)
     return true
   end
 
+  local function pushProfileUiUpdate(opts)
+    if not panel:isShown() or not panel:hasContent() then
+      return false
+    end
+
+    opts = opts or {}
+    profileUiEpoch = profileUiEpoch + 1
+    local epoch = profileUiEpoch
+    if opts.clientEpoch ~= nil then
+      local clientEpoch = math.floor(tonumber(opts.clientEpoch) or 0)
+      if clientEpoch > epoch then
+        profileUiEpoch = clientEpoch
+        epoch = clientEpoch
+      end
+    end
+
+    local activeProfile = app.getActiveProfilePresentation and app:getActiveProfilePresentation() or {
+      id = app.getActiveProfileId and app:getActiveProfileId() or 1,
+      name = "Profile",
+      color = nil,
+    }
+    local returnToSlots = opts.returnToSlots == true
+    local profileId = activeProfile.id
+    local cached = slotsHtmlCache[profileId]
+    local payload = {
+      activeProfile = activeProfile,
+      returnToSlots = returnToSlots,
+      epoch = epoch,
+    }
+
+    -- Paint chrome immediately; include cached slots when warm so rapid cycles
+    -- never sit blank waiting for Accessibility probes.
+    if opts.beginSwitch == true then
+      -- Begin is async and may omit slotsHtml on cache miss. When settle will
+      -- follow, invalidate the "already committed" marker so settle cannot no-op
+      -- and leave the wrong bank on screen.
+      if opts.settleSlots == true then
+        lastSlotsProfileId = nil
+        lastSlotsSignature = nil
+      end
+
+      local beginPayload = {
+        epoch = epoch,
+        activeProfile = activeProfile,
+        returnToSlots = returnToSlots,
+      }
+      -- Only paint generation-current cache; stale Space/pairing HTML is worse
+      -- than keeping the previous bank until settle.
+      if cached
+        and type(cached.html) == "string"
+        and cached.spaceGeneration == spaceGeneration
+        and cached.pairingGeneration == pairingGeneration
+      then
+        beginPayload.slotsHtml = cached.html
+      end
+      -- Click path already ran an optimistic client begin for this epoch; Lua
+      -- begin still helps when the client had no warm HTML. Client-side epoch
+      -- gating prevents a late begin from clobbering a landed settle.
+      local beginEncoded = hs.json.encode(beginPayload) or "{}"
+      panel:evaluateJavaScript(
+        "(function(){ return !!(window.tapshopBeginProfileSwitch && window.tapshopBeginProfileSwitch("
+          .. beginEncoded
+          .. ")); })()"
+      )
+    end
+
+    if opts.includeProfiles == true then
+      local profileRows = app.getProfileRowModels and app:getProfileRowModels() or {}
+      payload.profilesHtml = popoverRender.profilesListInnerHtml(profileRows)
+    end
+
+    -- Happy-path switches: coalesce row truth until the bank settles.
+    if opts.settleSlots == true then
+      scheduleSettleRebuild(profileId, epoch, {
+        returnToSlots = returnToSlots,
+        skipUnchangedSlots = true,
+      })
+      if payload.profilesHtml then
+        applySlotsPayload(payload, epoch)
+      end
+      return true
+    end
+
+    if opts.includeSlots ~= false then
+      local rows = app:getWorkspaceRowModels()
+      local signature = slotsRenderSignature(rows)
+      local unchanged = opts.skipUnchangedSlots == true
+        and profileId == lastSlotsProfileId
+        and signature == lastSlotsSignature
+      if unchanged then
+        if not payload.profilesHtml then
+          return true
+        end
+      else
+        local slotsHtml = popoverRender.slotsListInnerHtml(rows, slotsListConfig())
+        payload.slotsHtml = slotsHtml
+        storeSlotsCache(profileId, signature, slotsHtml)
+        applySlotsPayload(payload, epoch, function()
+          lastSlotsProfileId = profileId
+          lastSlotsSignature = signature
+        end)
+        return true
+      end
+    end
+
+    applySlotsPayload(payload, epoch)
+    return true
+  end
+
   panel = webviewPanel.new({
     messageHandler = "tapshop",
     initialRect = function()
@@ -549,8 +903,9 @@ function Popover.new(app, cfg, deps)
     level = currentPopoverLevel,
     behavior = currentPopoverBehavior,
     -- false while Always on Top: HS uses this for canBecomeKeyWindow.
+    -- Profile rename temporarily opts into text entry even under AOT.
     allowTextEntry = function()
-      return not cfg.popoverAlwaysOnTop
+      return (not cfg.popoverAlwaysOnTop) or profileTextEntryActive
     end,
     buildHtml = function()
       return popoverRender.buildHtml(buildRenderContext())
@@ -596,9 +951,48 @@ function Popover.new(app, cfg, deps)
         return
       end
       if action == "unpairAllConfirmClose" then
-        stopConfirmEscapeTap()
         if cfg.popoverAlwaysOnTop then
+          panelRef:evaluateJavaScript(
+            "(function(){ return !!(window.tapshopNeedsEscapeArm && window.tapshopNeedsEscapeArm()); })()",
+            function(needsArm)
+              if needsArm then
+                startConfirmEscapeTap()
+              else
+                stopConfirmEscapeTap()
+              end
+            end
+          )
           refreshPointerHover(panelRef)
+        else
+          stopConfirmEscapeTap()
+        end
+        return
+      end
+      if action == "profileUiArmEscape" then
+        startConfirmEscapeTap()
+        return
+      end
+      if action == "profileUiDisarmEscape" then
+        stopConfirmEscapeTap()
+        return
+      end
+      if action == "profileEditBegin" then
+        setProfileTextEntryActive(true, panelRef)
+        return
+      end
+      if action == "profileEditEnd" then
+        setProfileTextEntryActive(false, panelRef)
+        if cfg.popoverAlwaysOnTop then
+          panelRef:evaluateJavaScript(
+            "(function(){ return !!(window.tapshopNeedsEscapeArm && window.tapshopNeedsEscapeArm()); })()",
+            function(needsArm)
+              if needsArm then
+                startConfirmEscapeTap()
+              else
+                stopConfirmEscapeTap()
+              end
+            end
+          )
         end
         return
       end
@@ -758,7 +1152,7 @@ function Popover.new(app, cfg, deps)
     windowCallback = function(panelRef, act, _, focusState)
       if act == "focusChange" then
         isFocused = focusState == true
-        if focusState == true and cfg.popoverAlwaysOnTop then
+        if focusState == true and cfg.popoverAlwaysOnTop and not profileTextEntryActive then
           scheduleFocusHandback()
         elseif focusState == false and panelRef:isShown() and not cfg.popoverAlwaysOnTop then
           panelRef:hide()
@@ -798,6 +1192,7 @@ function Popover.new(app, cfg, deps)
       isResizing = false
       resizeDirection = ""
       isFocused = false
+      clearProfileTextEntryState(panel)
       stopPointerHoverTap()
       stopConfirmEscapeTap()
       clearPointerHover(panel)
@@ -870,6 +1265,7 @@ function Popover.new(app, cfg, deps)
 
   function instance:refreshIfShown()
     if panel:isShown() then
+      clearProfileTextEntryState(panel)
       stopConfirmEscapeTap()
       panel:refresh()
       syncAlwaysOnTopFocusPolicy(panel)
@@ -888,11 +1284,20 @@ function Popover.new(app, cfg, deps)
   function instance:refreshCache()
     panel:markDirty()
     cachedThemeCss = nil
+    lastSlotsProfileId = nil
+    lastSlotsSignature = nil
+    slotsHtmlCache = {}
+    spaceGeneration = spaceGeneration + 1
+    pairingGeneration = pairingGeneration + 1
     panel:setLevel(currentPopoverLevel())
     panel:syncBehavior()
     syncAlwaysOnTopFocusPolicy(panel)
     if panel:isShown() then
+      clearProfileTextEntryState(panel)
       stopConfirmEscapeTap()
+      if panel.hasContent and panel:hasContent() then
+        panel:evaluateJavaScript("window.tapshopSlotsHtmlByProfile={};true")
+      end
       panel:refresh()
       requestBoundsRecompute(panel)
     end
@@ -903,15 +1308,68 @@ function Popover.new(app, cfg, deps)
     cachedThemeCss = popoverStyles.buildCss(theme)
   end
 
-  function instance:requestRefresh(reason, win)
+  function instance:requestRefresh(reason, win, opts)
     if win ~= nil then
       pendingActiveWin = win
     end
-    if reason == "profile_switch" then
+    opts = opts or {}
+
+    if reason == "profile_switch" or reason == "profile_metadata" or reason == "profile_validation" then
+      local modeOnly = opts.modeOnly == true
+      if pushProfileUiUpdate({
+        returnToSlots = reason == "profile_switch" and opts.returnToSlots == true,
+        includeSlots = reason ~= "profile_metadata" and not modeOnly,
+        includeProfiles = reason == "profile_metadata",
+        skipUnchangedSlots = reason == "profile_validation",
+        beginSwitch = reason == "profile_switch",
+        settleSlots = reason == "profile_switch" and not modeOnly,
+        clientEpoch = opts.clientEpoch,
+      }) then
+        return
+      end
       queueRefresh(INTERACTIVE_REFRESH_DELAY_SECONDS)
       return
     end
+
+    if reason == "focused_space_change" then
+      spaceGeneration = spaceGeneration + 1
+    end
+
     queueRefresh()
+  end
+
+  function instance:invalidateSlotsCache(opts)
+    opts = opts or {}
+    if opts.space == true then
+      spaceGeneration = spaceGeneration + 1
+    end
+    if opts.pairing == true then
+      pairingGeneration = pairingGeneration + 1
+    end
+    local clearedIds = {}
+    if opts.profileId ~= nil then
+      slotsHtmlCache[opts.profileId] = nil
+      clearedIds[#clearedIds + 1] = opts.profileId
+    elseif opts.all == true then
+      slotsHtmlCache = {}
+      clearedIds = nil
+    end
+    -- Drop the client HTML mirror so click-begin cannot paint pre-mutation banks.
+    if panel and panel.hasContent and panel:hasContent() then
+      local js
+      if clearedIds == nil then
+        js = "window.tapshopSlotsHtmlByProfile={};true"
+      elseif #clearedIds > 0 then
+        local parts = {}
+        for i, id in ipairs(clearedIds) do
+          parts[i] = "delete window.tapshopSlotsHtmlByProfile[" .. tostring(id) .. "]"
+        end
+        js = "if(window.tapshopSlotsHtmlByProfile){" .. table.concat(parts, ";") .. "};true"
+      end
+      if js then
+        panel:evaluateJavaScript(js)
+      end
+    end
   end
 
   function instance:requestActiveWindowUpdate(win)

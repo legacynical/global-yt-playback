@@ -78,7 +78,8 @@ function SlotRow.build(slot, session, deps)
   local baseWin = nil
 
   if bindingKind == "paired" and windowId ~= nil then
-    baseWin = windowService.getWindowById(windowId)
+    -- Off-space rows can paint from stored fingerprint without Accessibility probes.
+    -- Fullscreen / on-space still need live window lookups for MIN/FULL badges.
     if slot:hasTrackedFullscreenTarget() then
       local fullscreenWin = windowService.getWindowById(slot:getFullscreenTargetWindowId())
       state = "fullscreen"
@@ -90,20 +91,14 @@ function SlotRow.build(slot, session, deps)
         iconBundleID = fingerprint.bundleID
         iconAppName = fingerprint.appName
       end
-    end
-
-    if state ~= "fullscreen" then
-      if isOffSpace(slot, session) then
-        state = "off_space"
-        if baseWin then
-          label = rowLabelForWindow(windowService, baseWin)
-          iconBundleID, iconAppName = iconFieldsForWindow(baseWin, fingerprint.bundleID, fingerprint.appName)
-        else
-          label = slot:getStoredWindowTitle()
-          iconBundleID = fingerprint.bundleID
-          iconAppName = fingerprint.appName
-        end
-      elseif baseWin then
+    elseif isOffSpace(slot, session) then
+      state = "off_space"
+      label = slot:getStoredWindowTitle()
+      iconBundleID = fingerprint.bundleID
+      iconAppName = fingerprint.appName
+    else
+      baseWin = windowService.getWindowById(windowId)
+      if baseWin then
         state = baseWin:isMinimized() and "minimized" or "paired"
         label = rowLabelForWindow(windowService, baseWin)
         iconBundleID, iconAppName = iconFieldsForWindow(baseWin, fingerprint.bundleID, fingerprint.appName)

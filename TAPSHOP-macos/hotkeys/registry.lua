@@ -21,6 +21,29 @@ local function buildBindings()
     }
   end
 
+  bindings[#bindings + 1] = {
+    id = "profiles.previousNonEmpty",
+    group = "Profiles",
+    label = "Previous Non-Empty Profile",
+    mods = { "cmd", "alt" },
+    key = "up",
+    action = "activatePreviousNonEmptyProfile",
+    args = {},
+    guarded = true,
+    enabled = true,
+  }
+  bindings[#bindings + 1] = {
+    id = "profiles.nextNonEmpty",
+    group = "Profiles",
+    label = "Next Non-Empty Profile",
+    mods = { "cmd", "alt" },
+    key = "down",
+    action = "activateNextNonEmptyProfile",
+    args = {},
+    guarded = true,
+    enabled = true,
+  }
+
   for i = 1, Layout.SLOTS_PER_PROFILE do
     bindings[#bindings + 1] = {
       id = "slots.activate." .. tostring(i),
