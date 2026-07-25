@@ -9,7 +9,9 @@
 local PopoverFullscreenVisibility = {}
 PopoverFullscreenVisibility.__index = PopoverFullscreenVisibility
 
-local SETTLE_DELAY_SECONDS = 0.08
+-- focusedSpace()/spaceType can lag past a single tick; a short ladder covers
+-- leave-FS restore without waiting for another user gesture.
+local SETTLE_DELAYS_SECONDS = { 0.08, 0.16, 0.32 }
 
 local function popoverShown(popover)
   return popover
@@ -80,15 +82,21 @@ function PopoverFullscreenVisibility:_reconcile()
     return
   end
 
-  self._restorePinned = false
   local popover = self._getPopover and self._getPopover() or nil
   if not popover then
+    self._restorePinned = false
     return
   end
+
   if type(popover.ensureVisible) == "function" then
     popover:ensureVisible()
   elseif type(popover.show) == "function" then
     popover:show()
+  end
+
+  -- Keep the pin if show did not stick so later settle passes can retry.
+  if popoverShown(popover) then
+    self._restorePinned = false
   end
 end
 
@@ -99,19 +107,21 @@ function PopoverFullscreenVisibility:_scheduleSettle()
 
   self._settleGeneration = self._settleGeneration + 1
   local gen = self._settleGeneration
-  self._schedule(SETTLE_DELAY_SECONDS, function()
-    if gen ~= self._settleGeneration then
-      return
-    end
-    local before = type(self._getFocusedSpaceId) == "function" and self._getFocusedSpaceId() or nil
-    if type(self._refreshFocusedSpaceId) == "function" then
-      self._refreshFocusedSpaceId()
-    end
-    local after = type(self._getFocusedSpaceId) == "function" and self._getFocusedSpaceId() or nil
-    if before ~= after or self:_focusedIsFullscreen() or self._restorePinned then
-      self:_reconcile()
-    end
-  end)
+  for _, delay in ipairs(SETTLE_DELAYS_SECONDS) do
+    self._schedule(delay, function()
+      if gen ~= self._settleGeneration then
+        return
+      end
+      local before = type(self._getFocusedSpaceId) == "function" and self._getFocusedSpaceId() or nil
+      if type(self._refreshFocusedSpaceId) == "function" then
+        self._refreshFocusedSpaceId()
+      end
+      local after = type(self._getFocusedSpaceId) == "function" and self._getFocusedSpaceId() or nil
+      if before ~= after or self:_focusedIsFullscreen() or self._restorePinned then
+        self:_reconcile()
+      end
+    end)
+  end
 end
 
 function PopoverFullscreenVisibility:onFocusedSpaceChanged()

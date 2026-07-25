@@ -271,7 +271,14 @@ function Popover.new(app, cfg, deps)
       return
     end
 
-    local pt = hs.mouse.absolutePosition()
+    local mouseApi = hs.mouse
+    if not mouseApi or type(mouseApi.absolutePosition) ~= "function" then
+      return
+    end
+    local ok, pt = pcall(mouseApi.absolutePosition)
+    if not ok or type(pt) ~= "table" then
+      return
+    end
     local frame = view:frame()
     if not isPointInFrame(pt, frame) then
       if pointerInsidePopover or lastPointerHoverX ~= nil or pendingPointerHoverX ~= nil then

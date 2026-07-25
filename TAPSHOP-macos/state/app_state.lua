@@ -327,8 +327,13 @@ function AppState:_runPairingAction(actionFn)
   self:_persistWorkspacePairingsNow()
   self:_syncWorkspaceUi()
   if self.cfg.popoverAutoHideAfterAction and self.popover and self.popover.hide then
+    local wasShown = self.popover.isShown and self.popover:isShown()
     self.popover:hide()
-    self:notePopoverIntentionalDismiss()
+    -- Only clear the FS restore pin when this action actually dismissed a
+    -- shown panel. If policy already hid for a fullscreen Space, keep the pin.
+    if wasShown then
+      self:notePopoverIntentionalDismiss()
+    end
   end
   return true
 end
