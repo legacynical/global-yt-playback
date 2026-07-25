@@ -36,7 +36,15 @@ local DEFAULT_CONFIG = {
   inputDelay = 0.05,
   minimizeThreshold = 2,
   focusWaitTimeout = 0.22,
-  focusPollMicros = 10000,
+  focusPollInterval = 0.01,
+  spaceSwitchPollInterval = 0.05,
+  spaceSwitchPollMaxInterval = 0.20,
+  spaceSwitchPollBackoff = 1.5,
+  spaceSwitchMaxAttempts = 60,
+  fullscreenSpaceSwitchDelay = 0.20,
+  spaceSwitchFocusVerifyDelay = 0.05,
+  spaceSwitchWindowResolveAttempts = 20,
+  spaceSwitchFocusAttempts = 4,
   youtubeDirectDispatch = true,
   popoverAutoHideAfterAction = false,
   popoverAlwaysOnTop = true,
@@ -120,6 +128,24 @@ local app = AppState.new(cfg, {
   toast = toast,
 })
 
+local previousShutdownCallback = hs.shutdownCallback
+hs.shutdownCallback = function()
+  local flushed, flushErr = pcall(function()
+    app:flushActiveProfilePersistence()
+    app:flushWorkspacePairingPersistence()
+  end)
+  if not flushed and hs and type(hs.printf) == "function" then
+    hs.printf("[tapshop-persistence] shutdown flush failed: %s", tostring(flushErr))
+  end
+
+  if type(previousShutdownCallback) == "function" then
+    local chained, chainedErr = pcall(previousShutdownCallback)
+    if not chained and hs and type(hs.printf) == "function" then
+      hs.printf("[tapshop] chained shutdown callback failed: %s", tostring(chainedErr))
+    end
+  end
+end
+
 local hotkeyManager = HotkeyManager.new(app, Settings)
 app:attachHotkeyManager(hotkeyManager)
 
@@ -133,40 +159,37 @@ local settingsWindow = SettingsWindow.new(app, cfg, {
 
 app:attachUi(popover, settingsWindow)
 
-local windowFilter = hs.window.filter.new()
-windowFilter:subscribe({
-  hs.window.filter.windowFocused,
-  hs.window.filter.windowTitleChanged,
-  hs.window.filter.windowCreated,
-  hs.window.filter.windowDestroyed,
-  hs.window.filter.windowVisible,
-  hs.window.filter.windowMinimized,
-  hs.window.filter.windowUnminimized,
-  hs.window.filter.windowFullscreened,
-  hs.window.filter.windowUnfullscreened,
-}, function(win, _, event)
-  if event == hs.window.filter.windowFocused then
-    app:handleActiveWindowChange(win)
+local function startWindowFilter()
+  if app.windowFilter then
+    return
   end
-  app:handleWindowEvent(event, win)
-end)
 
-app.windowFilter = windowFilter
-debugLogger:record("startup", "debug", "window_filter_subscribed", "window filter subscribed", function()
-  return {
-    events = {
-      hs.window.filter.windowFocused,
-      hs.window.filter.windowTitleChanged,
-      hs.window.filter.windowCreated,
-      hs.window.filter.windowDestroyed,
-      hs.window.filter.windowVisible,
-      hs.window.filter.windowMinimized,
-      hs.window.filter.windowUnminimized,
-      hs.window.filter.windowFullscreened,
-      hs.window.filter.windowUnfullscreened,
-    },
+  local subscribedEvents = {
+    hs.window.filter.windowFocused,
+    hs.window.filter.windowTitleChanged,
+    hs.window.filter.windowCreated,
+    hs.window.filter.windowDestroyed,
+    hs.window.filter.windowVisible,
+    hs.window.filter.windowMinimized,
+    hs.window.filter.windowUnminimized,
+    hs.window.filter.windowFullscreened,
+    hs.window.filter.windowUnfullscreened,
   }
-end)
+  local windowFilter = hs.window.filter.new()
+  windowFilter:subscribe(subscribedEvents, function(win, _, event)
+    if event == hs.window.filter.windowFocused then
+      app:handleActiveWindowChange(win)
+    end
+    app:handleWindowEvent(event, win)
+  end)
+
+  app.windowFilter = windowFilter
+  debugLogger:record("startup", "debug", "window_filter_subscribed", "window filter subscribed", function()
+    return {
+      events = subscribedEvents,
+    }
+  end)
+end
 
 hotkeyManager:bindAll()
 debugLogger:record("startup", "info", "hotkeys_bound", "hotkeys bound")
@@ -176,13 +199,15 @@ toast(Toast.message.status("TAPSHOP ready (Hammerspoon)", {
 }))
 debugLogger:record("startup", "info", "app_ready", "TAPSHOP ready")
 
-hs.timer.doAfter(0.10, function()
-  if app.warmHotkeyUiCache then
-    app:warmHotkeyUiCache()
-  end
+hs.timer.doAfter(0.05, startWindowFilter)
+
+hs.timer.doAfter(0.25, function()
   if popover.warmStaticCaches then
     popover:warmStaticCaches()
   end
+end)
+
+hs.timer.doAfter(0.75, function()
   if settingsWindow.warmStaticCaches then
     settingsWindow:warmStaticCaches()
   end

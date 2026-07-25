@@ -119,8 +119,11 @@ function WebviewPanel.new(opts)
     end
   end
 
-  function panel:evaluateJavaScript(script)
+  function panel:evaluateJavaScript(script, callback)
     local view = ensureWebview()
+    if callback then
+      return view:evaluateJavaScript(script, callback)
+    end
     return view:evaluateJavaScript(script)
   end
 

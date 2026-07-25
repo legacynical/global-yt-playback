@@ -1,3 +1,6 @@
+-- DebugLogger: structured, rotatable TAPSHOP debug log (domains, levels, TTL,
+-- size caps, redaction modes). Used by AppState:_recordDebug and startup paths.
+
 local JsonDisk = require("persistence.json_disk")
 local Paths = require("persistence.paths")
 

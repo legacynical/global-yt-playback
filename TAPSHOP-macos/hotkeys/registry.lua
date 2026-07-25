@@ -1,3 +1,6 @@
+-- Hotkey registry: default binding table (id, mods, key, AppState action, args).
+-- Overrides live in appdata; HotkeyManager merges them at resolve time.
+
 local Registry = {}
 local Layout = require("state.layout")
 

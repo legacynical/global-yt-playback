@@ -1,3 +1,7 @@
+-- HotkeyManager: bind/resolve/override TAPSHOP hotkeys from registry + appdata.
+-- Dispatches to AppState methods by binding.action; guards system-shortcut
+-- collisions; maintains settings UI row/HTML caches.
+
 local Registry = require("hotkeys.registry")
 local Normalize = require("persistence.normalize")
 
@@ -585,6 +589,7 @@ function HotkeyManager:_bindFallbackIfNeeded()
   end)
 end
 
+-- (Re)bind all non-conflicting, assigned hotkeys from the resolved table.
 function HotkeyManager:bindAll()
   self:unbindAll()
   self:resolve()
@@ -602,10 +607,6 @@ function HotkeyManager:bindAll()
         goto continue
       end
       if not keyIsAvailable(resolved.key) then
-        goto continue
-      end
-      local isAssignable = comboIsAssignable(resolved.mods, resolved.key)
-      if not isAssignable then
         goto continue
       end
       self.liveHotkeys[resolved.id] = bindHotkeySafe(resolved.mods, resolved.key, function()

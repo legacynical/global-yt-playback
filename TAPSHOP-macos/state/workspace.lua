@@ -1,3 +1,6 @@
+-- Workspace: one slot binding on a profile (paired / recoverable / empty).
+-- Holds baseWindowId, home Space, fingerprint, and optional fullscreen target.
+
 local Workspace = {}
 Workspace.__index = Workspace
 
