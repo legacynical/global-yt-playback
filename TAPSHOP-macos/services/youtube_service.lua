@@ -12,6 +12,10 @@
 --      (focus target, send, delayed restore). App-targeted keystrokes only reach
 --      that process's key window, so blind direct dispatch would misdeliver.
 --   Unsupported keyPress values are rejected before any focus work.
+--
+-- Overlapping commands: focus-fallback restore is owned here (not the shared
+-- WindowService pending token). Rapid commands inherit pendingRestoreId so a
+-- second hotkey cannot observe the YT target as "previous" and skip restore.
 
 local YoutubeService = {}
 YoutubeService.__index = YoutubeService
@@ -81,7 +85,81 @@ function YoutubeService.new(cfg, windowService, toast)
     toast = toast,
     ytTargetId = nil,
     ytTargetTitle = nil,
+    -- Focus-fallback restore across overlapping sendCommand calls.
+    pendingRestoreId = nil,
+    pendingRestoreWindow = nil,
+    restoreSerial = 0,
+    restoreTimer = nil,
   }, YoutubeService)
+end
+
+local function stopRestoreTimer(self)
+  if self.restoreTimer then
+    self.restoreTimer:stop()
+    self.restoreTimer = nil
+  end
+end
+
+local function clearPendingRestore(self)
+  stopRestoreTimer(self)
+  self.restoreSerial = (self.restoreSerial or 0) + 1
+  self.pendingRestoreId = nil
+  self.pendingRestoreWindow = nil
+end
+
+-- Remember the pre-YT window and (re)arm a delayed restore. Safe to call again
+-- for overlapping commands: bumps restoreSerial so only the latest timer fires.
+local function armRestore(self, delay, restoreId, restoreWindow, targetId)
+  stopRestoreTimer(self)
+  if not (restoreId and restoreId ~= targetId) then
+    self.restoreSerial = (self.restoreSerial or 0) + 1
+    self.pendingRestoreId = nil
+    self.pendingRestoreWindow = nil
+    return
+  end
+
+  self.pendingRestoreId = restoreId
+  self.pendingRestoreWindow = restoreWindow
+  self.restoreSerial = (self.restoreSerial or 0) + 1
+  local serial = self.restoreSerial
+  self.restoreTimer = hs.timer.doAfter(delay or 0, function()
+    self.restoreTimer = nil
+    if serial ~= self.restoreSerial then
+      return
+    end
+    local prevId = self.pendingRestoreId
+    local prevWin = self.pendingRestoreWindow
+    self.pendingRestoreId = nil
+    self.pendingRestoreWindow = nil
+    local prev = self.windowService.getWindowById(prevId) or prevWin
+    if prev then
+      self.windowService.requestFrontmost(prev)
+    end
+  end)
+end
+
+-- Prefer an in-flight restore target over current frontmost (which may already
+-- be the YT window after a prior focus fallback that has not restored yet).
+local function resolveRestoreTarget(self, frontmost, targetId)
+  local restoreId = self.pendingRestoreId
+  local restoreWindow = self.pendingRestoreWindow
+  if restoreId == targetId then
+    restoreId = nil
+    restoreWindow = nil
+  end
+  if restoreId then
+    local resolved = self.windowService.getWindowById(restoreId)
+    if resolved then
+      restoreWindow = resolved
+    end
+    return restoreId, restoreWindow
+  end
+
+  local frontmostId = frontmost and frontmost:id() or nil
+  if frontmostId and frontmostId ~= targetId then
+    return frontmostId, frontmost
+  end
+  return nil, nil
 end
 
 -- True when bundleId is in cfg.browserBundleIDs (Chrome, Safari, etc.).
@@ -199,6 +277,9 @@ function YoutubeService:sendCommand(keyPress)
 
   local targetApp = target:application()
   local frontmost = hs.window.frontmostWindow()
+  local targetId = target:id()
+  local frontmostId = frontmost and frontmost:id() or nil
+  local restoreId, restoreWindow = resolveRestoreTarget(self, frontmost, targetId)
 
   if not keyStrokeMap[keyPress] and not (type(keyPress) == "string" and #keyPress == 1) then
     return {
@@ -208,10 +289,23 @@ function YoutubeService:sendCommand(keyPress)
     }
   end
 
+  -- A new command supersedes any armed restore timer; restore target is kept
+  -- via pendingRestoreId / restoreId so we can re-arm after this send.
+  stopRestoreTimer(self)
+
   -- Primary: focus-preserving direct dispatch when the key window is not
   -- another window of the same browser process (Doc / renamed sibling case).
   if shouldUseDirectDispatch(self.cfg, target, targetApp, frontmost) then
     if sendKeyStrokes(self.cfg, keyPress, targetApp) then
+      -- If a prior focus fallback left us on the YT target (or we still owe a
+      -- restore), re-arm restore. Pure other-app direct dispatch needs none.
+      local owesRestore = restoreId and restoreId ~= targetId
+        and (self.pendingRestoreId ~= nil or frontmostId == targetId)
+      if owesRestore then
+        armRestore(self, self.cfg.inputDelay or 0, restoreId, restoreWindow, targetId)
+      else
+        clearPendingRestore(self)
+      end
       return {
         ok = true,
         code = "direct_dispatch",
@@ -223,12 +317,17 @@ function YoutubeService:sendCommand(keyPress)
   -- Fallback: briefly focus YT target, send, then restore previous window.
   -- Required when origin and destination share a browser app — app-targeted
   -- keystrokes cannot address a background window of that process.
-  local previousWindow = frontmost
-  local previousId = previousWindow and previousWindow:id() or nil
-  local targetId = target:id()
+  if restoreId and restoreId ~= targetId then
+    self.pendingRestoreId = restoreId
+    self.pendingRestoreWindow = restoreWindow
+  else
+    clearPendingRestore(self)
+  end
 
   self.windowService.ensureFrontmostAsync(target, self.cfg, function(focusResult, _resolved, token)
     if not focusResult.ok then
+      -- Focus failed without necessarily leaving the user on YT; drop restore.
+      clearPendingRestore(self)
       self.toast(Toast.message.status("Focus failed for YT window"))
       return
     end
@@ -241,16 +340,9 @@ function YoutubeService:sendCommand(keyPress)
         sendKeyStrokes(self.cfg, keyPress, nil)
       end
 
-      if not (previousId and previousId ~= targetId) then
-        return
-      end
-
-      self.windowService.schedulePendingFrontmost(settleDelay, token, function()
-        local prev = self.windowService.getWindowById(previousId) or previousWindow
-        if prev then
-          self.windowService.requestFrontmost(prev)
-        end
-      end)
+      -- Own the restore timer so a later ensureFrontmostAsync (next hotkey)
+      -- cannot cancel restoration by bumping the shared WindowService token.
+      armRestore(self, settleDelay, self.pendingRestoreId, self.pendingRestoreWindow, targetId)
     end)
   end)
 
