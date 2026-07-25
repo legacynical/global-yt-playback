@@ -42,6 +42,7 @@ function Popover.new(app, cfg, deps)
   local savedSize = popoverLayout.loadSavedSize(appdata)
   local runtimeBounds = popoverLayout.initialRuntimeBounds()
   local pointerHoverTap = nil
+  local confirmEscapeTap = nil
   local lastPointerHoverX = nil
   local lastPointerHoverY = nil
   local pointerInsidePopover = false
@@ -50,6 +51,7 @@ function Popover.new(app, cfg, deps)
   local pendingPointerHoverY = nil
   local POINTER_HOVER_INTERVAL = 0.03
   local focusHandbackGeneration = 0
+  local escapeKeyCode = (hs.keycodes and hs.keycodes.map and hs.keycodes.map.escape) or 53
 
   local function isPointInFrame(pt, frame)
     return pt
@@ -289,6 +291,27 @@ function Popover.new(app, cfg, deps)
     end
   end
 
+  local function stopConfirmEscapeTap()
+    if confirmEscapeTap then
+      confirmEscapeTap:stop()
+      confirmEscapeTap = nil
+    end
+  end
+
+  -- Force a fresh hit-test even when client coords are unchanged (layout may
+  -- have moved under a still cursor after drag/resize/bounds clamp).
+  local function refreshPointerHover(panelRef)
+    lastPointerHoverX = nil
+    lastPointerHoverY = nil
+    pendingPointerHoverX = nil
+    pendingPointerHoverY = nil
+    if pointerHoverFlushTimer then
+      pointerHoverFlushTimer:stop()
+      pointerHoverFlushTimer = nil
+    end
+    updatePointerHover(panelRef)
+  end
+
   local function startPointerHoverTap()
     if pointerHoverTap or not cfg.popoverAlwaysOnTop then
       return
@@ -301,6 +324,31 @@ function Popover.new(app, cfg, deps)
       return false
     end)
     pointerHoverTap:start()
+  end
+
+  -- Non-key AOT panel never receives document keydown; Escape for the
+  -- unpair-all confirm only (do not steal Escape for ordinary close).
+  local function startConfirmEscapeTap()
+    stopConfirmEscapeTap()
+    if not cfg.popoverAlwaysOnTop then
+      return
+    end
+    confirmEscapeTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(event)
+      if not panel or not panel:isShown() or not cfg.popoverAlwaysOnTop then
+        stopConfirmEscapeTap()
+        return false
+      end
+      if event:getKeyCode() ~= escapeKeyCode then
+        return false
+      end
+      -- Stop before JS: a refresh can clear the dialog without sending close.
+      stopConfirmEscapeTap()
+      panel:evaluateJavaScript(
+        "window.tapshopHideUnpairAllConfirm && window.tapshopHideUnpairAllConfirm()"
+      )
+      return true
+    end)
+    confirmEscapeTap:start()
   end
 
   local function syncAlwaysOnTopFocusPolicy(panelRef)
@@ -320,9 +368,10 @@ function Popover.new(app, cfg, deps)
     end
     if cfg.popoverAlwaysOnTop then
       startPointerHoverTap()
-      updatePointerHover(panelRef or panel)
+      refreshPointerHover(panelRef or panel)
     else
       stopPointerHoverTap()
+      stopConfirmEscapeTap()
       clearPointerHover(panelRef or panel)
     end
   end
@@ -425,6 +474,7 @@ function Popover.new(app, cfg, deps)
     applyPendingActiveWin()
 
     if panel:isShown() then
+      stopConfirmEscapeTap()
       panel:refresh()
       -- Full HTML rebuild drops DOM hover classes and body flags; re-apply policy.
       syncAlwaysOnTopFocusPolicy(panel)
@@ -514,6 +564,23 @@ function Popover.new(app, cfg, deps)
       if action == "dragEnd" then
         isDragging = false
         saveTopLeftFromFrame(panelRef)
+        if cfg.popoverAlwaysOnTop then
+          refreshPointerHover(panelRef)
+        end
+        return
+      end
+      if action == "unpairAllConfirmOpen" then
+        startConfirmEscapeTap()
+        if cfg.popoverAlwaysOnTop then
+          refreshPointerHover(panelRef)
+        end
+        return
+      end
+      if action == "unpairAllConfirmClose" then
+        stopConfirmEscapeTap()
+        if cfg.popoverAlwaysOnTop then
+          refreshPointerHover(panelRef)
+        end
         return
       end
       if action == "resizeStart" then
@@ -616,6 +683,9 @@ function Popover.new(app, cfg, deps)
               saveSize(clampedSavedSize)
             end
           end
+          if cfg.popoverAlwaysOnTop then
+            refreshPointerHover(panelRef)
+          end
         end
         return
       end
@@ -625,7 +695,7 @@ function Popover.new(app, cfg, deps)
         saveTopLeftFromFrame(panelRef)
         saveSizeFromFrame(panelRef)
         if cfg.popoverAlwaysOnTop then
-          updatePointerHover(panelRef)
+          refreshPointerHover(panelRef)
         end
         return
       end
@@ -646,6 +716,13 @@ function Popover.new(app, cfg, deps)
       if action == "setAlwaysOnTop" then
         panelRef:setLevel(currentPopoverLevel())
         syncAlwaysOnTopFocusPolicy(panelRef)
+        -- Leaving utility-overlay mode: take normal key focus again.
+        if not cfg.popoverAlwaysOnTop and panelRef:isShown() then
+          focusPanelWindow(panelRef)
+          panelRef:evaluateJavaScript(
+            "window.tapshopFocusKeyboardSurface && window.tapshopFocusKeyboardSurface()"
+          )
+        end
       end
       if result ~= false and cfg.popoverAutoHideAfterAction and AUTO_HIDE_ACTIONS[action] then
         abandonFocusHandback()
@@ -694,6 +771,7 @@ function Popover.new(app, cfg, deps)
       resizeDirection = ""
       isFocused = false
       stopPointerHoverTap()
+      stopConfirmEscapeTap()
       clearPointerHover(panel)
       panel:evaluateJavaScript(
         "window.tapshopResetInteractionGestures && window.tapshopResetInteractionGestures()"
@@ -735,6 +813,7 @@ function Popover.new(app, cfg, deps)
 
   function instance:refreshIfShown()
     if panel:isShown() then
+      stopConfirmEscapeTap()
       panel:refresh()
       syncAlwaysOnTopFocusPolicy(panel)
       requestBoundsRecompute(panel)
@@ -756,6 +835,7 @@ function Popover.new(app, cfg, deps)
     panel:syncBehavior()
     syncAlwaysOnTopFocusPolicy(panel)
     if panel:isShown() then
+      stopConfirmEscapeTap()
       panel:refresh()
       requestBoundsRecompute(panel)
     end

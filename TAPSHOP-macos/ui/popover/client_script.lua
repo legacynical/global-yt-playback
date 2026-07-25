@@ -257,11 +257,7 @@ function pointInRect(x, y, rect) {
   return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 }
 
-function findPointerHoverTarget(x, y) {
-  // Prefer explicit rect hit-tests over elementFromPoint: inactive/non-key
-  // WKWebViews are unreliable for the latter, and --ui-scale + resize change
-  // layout without changing the top-left client mapping from Lua.
-  var selectors = [".slot-icon-btn", ".btn", ".header-btn", ".profile-btn"];
+function hitTestSelectorList(x, y, selectors) {
   for (var s = 0; s < selectors.length; s++) {
     var nodes = document.querySelectorAll(selectors[s]);
     for (var i = 0; i < nodes.length; i++) {
@@ -279,6 +275,18 @@ function findPointerHoverTarget(x, y) {
     }
   }
   return null;
+}
+
+function findPointerHoverTarget(x, y) {
+  // Prefer explicit rect hit-tests over elementFromPoint: inactive/non-key
+  // WKWebViews are unreliable for the latter, and --ui-scale + resize change
+  // layout without changing the top-left client mapping from Lua.
+  // While confirm is open, only dialog actions — otherwise covered slots/buttons
+  // still have live rects and would steal hover under the overlay.
+  if (isUnpairAllConfirmOpen()) {
+    return hitTestSelectorList(x, y, [".confirm-ok", ".confirm-cancel"]);
+  }
+  return hitTestSelectorList(x, y, [".slot-icon-btn", ".btn", ".header-btn", ".profile-btn"]);
 }
 
 window.tapshopPointerHoverAt = function (x, y) {
@@ -489,14 +497,19 @@ function showUnpairAllConfirm() {
   hideHeaderTooltip();
   unpairAllConfirm.hidden = false;
   setResizeHandlesEnabled(false);
-  var okBtn = unpairAllConfirm.querySelector(".confirm-ok");
-  if (okBtn && typeof okBtn.focus === "function") {
-    try {
-      okBtn.focus({ preventScroll: true });
-    } catch (_) {
-      okBtn.focus();
+  window.tapshopClearPointerHover && window.tapshopClearPointerHover();
+  // Utility overlay cannot become key — skip focus; Lua Escape tap dismisses.
+  if (!(document.body && document.body.classList.contains("is-utility-overlay"))) {
+    var okBtn = unpairAllConfirm.querySelector(".confirm-ok");
+    if (okBtn && typeof okBtn.focus === "function") {
+      try {
+        okBtn.focus({ preventScroll: true });
+      } catch (_) {
+        okBtn.focus();
+      }
     }
   }
+  sendAction("unpairAllConfirmOpen");
 }
 
 function hideUnpairAllConfirm() {
@@ -504,7 +517,10 @@ function hideUnpairAllConfirm() {
   unpairAllConfirm.hidden = true;
   setResizeHandlesEnabled(true);
   focusKeyboardSurface();
+  sendAction("unpairAllConfirmClose");
 }
+
+window.tapshopHideUnpairAllConfirm = hideUnpairAllConfirm;
 
 function confirmUnpairAll() {
   hideUnpairAllConfirm();

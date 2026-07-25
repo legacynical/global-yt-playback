@@ -815,7 +815,8 @@ body.is-utility-overlay .slot-icon-btn.is-pointer-hover .slot-app-icon.is-muted 
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.confirm-cancel:hover {
+.confirm-cancel:hover,
+.confirm-cancel.is-pointer-hover {
   background: rgba(255, 255, 255, 0.14);
   color: #e8e8e8;
 }
@@ -826,7 +827,25 @@ body.is-utility-overlay .slot-icon-btn.is-pointer-hover .slot-app-icon.is-muted 
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.confirm-ok:hover {
+.confirm-ok:hover,
+.confirm-ok.is-pointer-hover {
+  background: var(--danger-hover);
+  color: #fff;
+}
+
+body.is-utility-overlay .confirm-cancel:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #bbb;
+}
+body.is-utility-overlay .confirm-cancel.is-pointer-hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #e8e8e8;
+}
+body.is-utility-overlay .confirm-ok:hover {
+  background: var(--danger);
+  color: #fff;
+}
+body.is-utility-overlay .confirm-ok.is-pointer-hover {
   background: var(--danger-hover);
   color: #fff;
 }
