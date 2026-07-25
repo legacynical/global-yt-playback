@@ -343,27 +343,6 @@ function AppState:_windowTitleMatchesWorkspace(workspace, win)
   return true
 end
 
-function AppState:_findFullscreenCompanion(workspace, sourceWin, fullscreenSpaceId)
-  if not workspace or not sourceWin or not fullscreenSpaceId then
-    return nil
-  end
-  if not self.windowService.candidateWindows then
-    return nil
-  end
-
-  local sourceId = sourceWin:id()
-  for _, candidate in ipairs(self.windowService:candidateWindows()) do
-    if candidate and candidate:id() ~= sourceId
-      and self.windowService.isWindowFullscreen(candidate)
-      and self.windowService.windowIsInSpace(candidate, fullscreenSpaceId)
-      and self:_windowTitleMatchesWorkspace(workspace, candidate) then
-      return candidate
-    end
-  end
-
-  return nil
-end
-
 function AppState:_resolveFullscreenTargetForActivation(workspace)
   if not workspace or not workspace:hasTrackedFullscreenTarget() then
     return nil, nil
@@ -441,13 +420,15 @@ function AppState:_restorePairedWorkspaceFromRecord(workspace, persisted, opts)
         self:_refreshWorkspaceFingerprint(workspace, fullscreenWin)
       end
     elseif self.windowService.isWindowFullscreen(baseWin) then
-      local baseSpaceId = workspace:getBaseSpaceId() or self:_updateWorkspaceBindingSpaceState(workspace, baseWin)
-      local fullscreenTarget = self:_findFullscreenCompanion(workspace, baseWin, baseSpaceId) or baseWin
+      local fullscreenSpaceId = self.windowService.getPrimarySpaceForWindow(baseWin)
       workspace:setFullscreenState({
-        fullscreenWindowId = fullscreenTarget:id(),
-        fullscreenSpaceId = baseSpaceId,
-        lastKnownSpaceId = workspace:getBaseSpaceId(),
+        fullscreenWindowId = baseWin:id(),
+        fullscreenSpaceId = fullscreenSpaceId,
       })
+      -- Home Space is unknown while already fullscreen unless persisted above.
+      if not persisted.baseSpaceId then
+        workspace:setBaseSpaceId(nil)
+      end
     elseif not workspace:getBaseSpaceId() then
       self:_updateWorkspaceBindingSpaceState(workspace, baseWin)
     end
@@ -748,17 +729,16 @@ end
 function AppState:_pairWorkspace(workspace, windowId, win)
   workspace:pair(windowId, self.windowService.pairingMetadata(win))
   self:_markRecoveryMatchIndexDirty()
-  local spaceId = self:_updateWorkspaceBindingSpaceState(
-    workspace,
-    win
-  )
   if self.windowService.isWindowFullscreen(win) then
-    local fullscreenTarget = self:_findFullscreenCompanion(workspace, win, spaceId) or win
+    local fullscreenSpaceId = self.windowService.getPrimarySpaceForWindow(win)
     workspace:setFullscreenState({
-      fullscreenWindowId = fullscreenTarget:id(),
-      fullscreenSpaceId = spaceId,
-      lastKnownSpaceId = spaceId,
+      fullscreenWindowId = win:id(),
+      fullscreenSpaceId = fullscreenSpaceId,
     })
+    -- Home Space is learned on unfullscreen; do not store the fullscreen Space as home.
+    workspace:setBaseSpaceId(nil)
+  else
+    self:_updateWorkspaceBindingSpaceState(workspace, win)
   end
 end
 
@@ -1388,12 +1368,28 @@ function AppState:_validateWorkspaceExactState(workspace)
       return not deepEqual(before, SlotRecord.encode(workspace.binding))
     end
 
-    local baseSpaceId = self:_updateWorkspaceBindingSpaceState(workspace, baseWin)
-    if not baseSpaceId then
-      workspace:setBaseSpaceId(nil)
-    end
-    self:_refreshWorkspaceFingerprint(workspace, baseWin)
+    local priorHomeSpaceId = workspace:getBaseSpaceId()
+    local primarySpaceId = self.windowService.getPrimarySpaceForWindow(baseWin)
     local baseIsFullscreen = self.windowService.isWindowFullscreen(baseWin)
+    self:_refreshWorkspaceFingerprint(workspace, baseWin)
+
+    local homeSpaceId = nil
+    if baseIsFullscreen then
+      -- Never treat the fullscreen Space as advisory home.
+      if priorHomeSpaceId
+        and not (self.windowService.isFullscreenSpace
+          and self.windowService.isFullscreenSpace(priorHomeSpaceId)) then
+        homeSpaceId = priorHomeSpaceId
+      end
+      workspace:setBaseSpaceId(homeSpaceId)
+    else
+      homeSpaceId = primarySpaceId
+      if homeSpaceId ~= nil then
+        workspace:setBaseSpaceId(homeSpaceId)
+      else
+        workspace:setBaseSpaceId(nil)
+      end
+    end
 
     if workspace:hasTrackedFullscreenTarget() then
       local fullscreenTargetWindowId = workspace:getFullscreenTargetWindowId()
@@ -1402,22 +1398,20 @@ function AppState:_validateWorkspaceExactState(workspace)
         workspace:setFullscreenState({
           fullscreenWindowId = fullscreenTargetWindowId,
           fullscreenSpaceId = fullscreenSpaceId,
-          lastKnownSpaceId = baseSpaceId or workspace:getBaseSpaceId(),
+          lastKnownSpaceId = homeSpaceId,
         })
-      elseif baseIsFullscreen and baseSpaceId then
+      elseif baseIsFullscreen and primarySpaceId then
         workspace:setFullscreenState({
           fullscreenWindowId = baseWindowId,
-          fullscreenSpaceId = baseSpaceId,
-          lastKnownSpaceId = baseSpaceId,
+          fullscreenSpaceId = primarySpaceId,
         })
       else
         workspace:clearFullscreenState()
       end
-    elseif baseIsFullscreen and baseSpaceId then
+    elseif baseIsFullscreen and primarySpaceId then
       workspace:setFullscreenState({
         fullscreenWindowId = baseWindowId,
-        fullscreenSpaceId = baseSpaceId,
-        lastKnownSpaceId = baseSpaceId,
+        fullscreenSpaceId = primarySpaceId,
       })
     end
   else
@@ -2133,12 +2127,11 @@ function AppState:handleWindowEvent(event, win)
     local winId = win:id()
     self:_forEachWorkspace(function(workspace)
       if workspace:getBaseWindowId() == winId then
-        local spaceId = self:_updateWorkspaceBindingSpaceState(workspace, win)
-        local fullscreenTarget = self:_findFullscreenCompanion(workspace, win, spaceId) or win
+        local fullscreenSpaceId = self.windowService.getPrimarySpaceForWindow(win)
+        -- Preserve existing advisory home; do not store the fullscreen Space as baseSpaceId.
         workspace:setFullscreenState({
-          fullscreenWindowId = fullscreenTarget:id(),
-          fullscreenSpaceId = spaceId,
-          lastKnownSpaceId = spaceId,
+          fullscreenWindowId = win:id(),
+          fullscreenSpaceId = fullscreenSpaceId,
         })
       end
     end)
