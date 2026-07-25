@@ -7,7 +7,8 @@ local Toast = require("ui.toast")
 local AppState = {}
 AppState.__index = AppState
 local ACTIVE_PROFILE_PERSIST_DELAY_SECONDS = 0.05
-local ACTIVE_PROFILE_VALIDATION_DELAY_SECONDS = 0
+-- First shallow→active bank entry: defer Spaces reconcile off the switch edge.
+local ACTIVE_PROFILE_VALIDATION_DELAY_SECONDS = 0.20
 -- Lifecycle pairing checkpoints: idle coalesce, not near-realtime durability.
 local WORKSPACE_PAIRING_PERSIST_IDLE_SECONDS = 5.0
 local PAIR_TOAST_COLOR = { red = 0x7e / 255, green = 0xc8 / 255, blue = 0x7e / 255, alpha = 1 }
@@ -1488,6 +1489,9 @@ function AppState:_validateProfileExactState(profile)
   if changed then
     self:_markRecoveryMatchIndexDirty()
     self:_scheduleWorkspacePairingPersist()
+    -- Publish badge-relevant Space/fullscreen corrections; the profile-switch
+    -- paint may have already flushed from shallow cache.
+    self:_syncWorkspaceUi("profile_switch")
   end
   return changed
 end
