@@ -85,18 +85,16 @@ local function requestFrontmostImpl(win)
   win:focus()
 end
 
-local function ensureFrontmostImpl(win, cfg)
-  if not win then
-    return focusResult(false, "missing_window", nil)
+local function focusPollIntervalSec(cfg)
+  cfg = cfg or {}
+  if type(cfg.focusPollInterval) == "number" and cfg.focusPollInterval > 0 then
+    return cfg.focusPollInterval
   end
-
-  if isFrontmost(win) then
-    return focusResult(true, "already_frontmost", win)
+  local micros = cfg.focusPollMicros
+  if type(micros) == "number" and micros > 0 then
+    return micros / 1e6
   end
-
-  requestFrontmostImpl(win)
-  local focused = WindowService.waitForFrontmost(win, cfg)
-  return focusResult(focused, focused and "focus_verified" or "focus_timeout", win)
+  return 0.01
 end
 
 function WindowService.getWindowInfo(win)
@@ -195,18 +193,6 @@ function WindowService.isRecoveryCandidateWindow(win)
   return win:isStandard() and (win:title() or ""):match("%S") ~= nil
 end
 
-function WindowService.waitForFrontmost(win, cfg)
-  local timeoutSec = cfg.focusWaitTimeout
-  local start = hs.timer.secondsSinceEpoch()
-  while (hs.timer.secondsSinceEpoch() - start) < timeoutSec do
-    if isFrontmost(win) then
-      return true
-    end
-    hs.timer.usleep(cfg.focusPollMicros)
-  end
-  return false
-end
-
 -- Request frontmost status opportunistically for slot-style flows.
 -- This path should not block the hotkey/UI loop on verification.
 function WindowService.requestFrontmost(win)
@@ -223,10 +209,72 @@ function WindowService.requestFrontmost(win)
   return focusResult(true, "focus_requested", win)
 end
 
--- Use verified focus only when subsequent input depends on confirmation.
-function WindowService.ensureFrontmost(win, cfg)
-  invalidatePendingFrontmostRequest()
-  return ensureFrontmostImpl(win, cfg)
+-- Verified focus for callers that must confirm before sending input.
+-- Polls with timers so the hotkey/UI thread is never blocked on usleep.
+-- onComplete(result, win, token); use schedulePendingFrontmost for follow-up
+-- work that must cancel with this pending focus generation.
+function WindowService.ensureFrontmostAsync(win, cfg, onComplete)
+  cfg = cfg or {}
+  local token = invalidatePendingFrontmostRequest()
+
+  local function finish(result, resolved)
+    if token ~= pendingFrontmostSerial then
+      return
+    end
+    if onComplete then
+      pcall(onComplete, result, resolved, token)
+    end
+  end
+
+  if not win then
+    finish(focusResult(false, "missing_window", nil), nil)
+    return { ok = true, code = "ensure_frontmost_async_started", token = token }
+  end
+
+  if isFrontmost(win) then
+    finish(focusResult(true, "already_frontmost", win), win)
+    return { ok = true, code = "ensure_frontmost_async_started", token = token }
+  end
+
+  local requested = pcall(requestFrontmostImpl, win)
+  if not requested then
+    finish(focusResult(false, "focus_request_failed", win), win)
+    return { ok = true, code = "ensure_frontmost_async_started", token = token }
+  end
+
+  local timeoutSec = cfg.focusWaitTimeout or 0.22
+  local pollInterval = focusPollIntervalSec(cfg)
+  local deadline = hs.timer.secondsSinceEpoch() + timeoutSec
+
+  local function tick()
+    if token ~= pendingFrontmostSerial then
+      return
+    end
+    if not WindowService.windowStillExists(win) then
+      finish(focusResult(false, "window_unavailable", win), win)
+      return
+    end
+    if isFrontmost(win) then
+      finish(focusResult(true, "focus_verified", win), win)
+      return
+    end
+    if hs.timer.secondsSinceEpoch() >= deadline then
+      finish(focusResult(false, "focus_timeout", win), win)
+      return
+    end
+    schedulePendingFrontmostRequest(pollInterval, token, tick)
+  end
+
+  schedulePendingFrontmostRequest(pollInterval, token, tick)
+  return { ok = true, code = "ensure_frontmost_async_started", token = token }
+end
+
+function WindowService.schedulePendingFrontmost(delay, token, callback)
+  if token ~= pendingFrontmostSerial then
+    return false
+  end
+  schedulePendingFrontmostRequest(delay or 0, token, callback)
+  return true
 end
 
 function WindowService.focusedSpaceId()

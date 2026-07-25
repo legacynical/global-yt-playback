@@ -7,12 +7,6 @@ local keyStrokeMap = {
   ["{Right}"] = "right",
 }
 
-local function sleepSeconds(sec)
-  if sec and sec > 0 then
-    hs.timer.usleep(math.floor(sec * 1e6))
-  end
-end
-
 local function sendKeyStrokes(cfg, keys, app)
   local mapped = keyStrokeMap[keys]
   if mapped then
@@ -123,6 +117,9 @@ function YoutubeService:sendCommand(keyPress)
   end
 
   local targetApp = target:application()
+
+  -- Primary: focus-preserving direct dispatch. Do not steal focus from the
+  -- current window (including same-app siblings / Docs).
   if self.cfg.youtubeDirectDispatch and targetApp and sendKeyStrokes(self.cfg, keyPress, targetApp) then
     return {
       ok = true,
@@ -131,28 +128,43 @@ function YoutubeService:sendCommand(keyPress)
     }
   end
 
+  -- Fallback only: focus target, send so target is key, then restore.
+  -- Restore is delayed so key delivery is not raced within the same app.
   local previousWindow = hs.window.frontmostWindow()
-  local focusResult = self.windowService.ensureFrontmost(target, self.cfg)
-  if not focusResult.ok then
-    self.toast(Toast.message.status("Focus failed for YT window"))
-    return {
-      ok = false,
-      code = "focus_failed",
-      focusResult = focusResult.code,
-    }
-  end
+  local previousId = previousWindow and previousWindow:id() or nil
+  local targetId = target:id()
 
-  sleepSeconds(self.cfg.inputDelay)
-  sendKeyStrokes(self.cfg, keyPress, nil)
+  self.windowService.ensureFrontmostAsync(target, self.cfg, function(focusResult, _resolved, token)
+    if not focusResult.ok then
+      self.toast(Toast.message.status("Focus failed for YT window"))
+      return
+    end
 
-  if previousWindow and previousWindow:id() ~= target:id() then
-    self.windowService.ensureFrontmost(previousWindow, self.cfg)
-  end
+    local settleDelay = self.cfg.inputDelay or 0
+    self.windowService.schedulePendingFrontmost(settleDelay, token, function()
+      local focusedTarget = self.windowService.getWindowById(targetId) or target
+      local app = (focusedTarget and focusedTarget:application()) or targetApp
+      if not sendKeyStrokes(self.cfg, keyPress, app) then
+        sendKeyStrokes(self.cfg, keyPress, nil)
+      end
+
+      if not (previousId and previousId ~= targetId) then
+        return
+      end
+
+      self.windowService.schedulePendingFrontmost(settleDelay, token, function()
+        local prev = self.windowService.getWindowById(previousId) or previousWindow
+        if prev then
+          self.windowService.requestFrontmost(prev)
+        end
+      end)
+    end)
+  end)
 
   return {
     ok = true,
-    code = "focused_and_sent",
-    focusResult = focusResult.code,
+    code = "focus_send_requested",
+    focusResult = nil,
   }
 end
 
