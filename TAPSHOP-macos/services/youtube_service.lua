@@ -19,7 +19,9 @@
 --   target as "previous" and skip restoration.
 --   Focus-fallback sends are queued while focusSendInFlight; a second hotkey
 --   appends instead of restarting ensureFrontmostAsync (which would invalidate
---   the in-flight token and drop the earlier key).
+--   the in-flight token and drop the earlier key). If pairing/workspace work
+--   cancels the shared focus token without a callback, the next hotkey detects
+--   the stale token and restarts focus for the queued keys.
 
 local YoutubeService = {}
 YoutubeService.__index = YoutubeService
