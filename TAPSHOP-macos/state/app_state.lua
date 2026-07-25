@@ -8,6 +8,8 @@ local AppState = {}
 AppState.__index = AppState
 local ACTIVE_PROFILE_PERSIST_DELAY_SECONDS = 0.05
 local ACTIVE_PROFILE_VALIDATION_DELAY_SECONDS = 0
+-- Lifecycle pairing checkpoints: idle coalesce, not near-realtime durability.
+local WORKSPACE_PAIRING_PERSIST_IDLE_SECONDS = 5.0
 local PAIR_TOAST_COLOR = { red = 0x7e / 255, green = 0xc8 / 255, blue = 0x7e / 255, alpha = 1 }
 local UNPAIR_TOAST_COLOR = { red = 0xc0 / 255, green = 0x40 / 255, blue = 0x30 / 255, alpha = 1 }
 local HOTKEY_WARNING_TOAST_COLOR = { red = 0xf2 / 255, green = 0xc1 / 255, blue = 0x4e / 255, alpha = 1 }
@@ -71,6 +73,8 @@ function AppState.new(cfg, deps)
     activeProfilePersistTimer = nil,
     activeProfileValidationTimer = nil,
     pendingActiveProfileId = nil,
+    workspacePairingPersistTimer = nil,
+    workspacePairingPersistDirty = false,
   }, AppState)
 
   for profileId = 1, Layout.MAX_PROFILES do
@@ -274,7 +278,7 @@ function AppState:_runPairingAction(actionFn)
     self.windowService.cancelPendingFrontmostRequest()
   end
   actionFn()
-  self:_persistWorkspacePairings()
+  self:_persistWorkspacePairingsNow()
   self:_syncWorkspaceUi()
   if self.cfg.popoverAutoHideAfterAction and self.popover and self.popover.hide then
     self.popover:hide()
@@ -537,7 +541,7 @@ function AppState:_profilePairingSnapshot()
   return profiles
 end
 
-function AppState:_persistWorkspacePairings()
+function AppState:_writeWorkspacePairingsToDisk()
   local activeProfileId = self.session.activeProfileId
   local profileSnapshot = self:_profilePairingSnapshot()
   local activeProfileSnapshot = self:_workspacePairingSnapshot(self:_getActiveProfile())
@@ -554,6 +558,8 @@ function AppState:_persistWorkspacePairings()
     self.appdata.setWindowPairings(activeProfileSnapshot)
   end
 
+  self.workspacePairingPersistDirty = false
+
   self:_recordDebug("persistence", "debug", "workspace_pairings_persisted", "workspace pairings persisted", function()
     return {
       operation = "write",
@@ -565,6 +571,39 @@ function AppState:_persistWorkspacePairings()
   end, {
     profileId = activeProfileId,
   })
+end
+
+function AppState:_scheduleWorkspacePairingPersist()
+  self.workspacePairingPersistDirty = true
+
+  if self.workspacePairingPersistTimer then
+    self.workspacePairingPersistTimer:stop()
+    self.workspacePairingPersistTimer = nil
+  end
+
+  self.workspacePairingPersistTimer = hs.timer.doAfter(WORKSPACE_PAIRING_PERSIST_IDLE_SECONDS, function()
+    self.workspacePairingPersistTimer = nil
+    self:flushWorkspacePairingPersistence()
+  end)
+end
+
+function AppState:flushWorkspacePairingPersistence()
+  if self.workspacePairingPersistTimer then
+    self.workspacePairingPersistTimer:stop()
+    self.workspacePairingPersistTimer = nil
+  end
+
+  if not self.workspacePairingPersistDirty then
+    return false
+  end
+
+  self:_writeWorkspacePairingsToDisk()
+  return true
+end
+
+function AppState:_persistWorkspacePairingsNow()
+  self.workspacePairingPersistDirty = true
+  return self:flushWorkspacePairingPersistence()
 end
 
 function AppState:_restoreWorkspacePairings(pairings, opts)
@@ -1143,7 +1182,7 @@ function AppState:_restoreWorkspaceFromCandidate(win, opts)
 
   if #restoredWorkspaces > 0 then
     if not (type(opts) == "table" and opts.persist == false) then
-      self:_persistWorkspacePairings()
+      self:_scheduleWorkspacePairingPersist()
     end
     if not (type(opts) == "table" and opts.notify == false) then
       self.toast(self:_formatRestoreToast(restoredWorkspaces, win))
@@ -1251,7 +1290,7 @@ function AppState:_restoreStartupWorkspaceState()
 
   local restoredPairings = self:_profilePairingSnapshot()
   if not deepEqual(restoredPairings, persistedPairings) then
-    self:_persistWorkspacePairings()
+    self:_persistWorkspacePairingsNow()
   end
 end
 
@@ -1367,7 +1406,7 @@ function AppState:_validateProfileExactState(profile)
   })
 
   if changed then
-    self:_persistWorkspacePairings()
+    self:_scheduleWorkspacePairingPersist()
   end
   return changed
 end
@@ -1479,7 +1518,7 @@ function AppState:_clearWorkspaceAndPersist(workspace)
   end
   workspace:clear()
   self:_markRecoveryMatchIndexDirty()
-  self:_persistWorkspacePairings()
+  self:_persistWorkspacePairingsNow()
 end
 
 function AppState:pairSlot(index, sourceWindow)
@@ -1641,7 +1680,7 @@ function AppState:activateSlot(index)
   end)
 
   if bindingChanged then
-    self:_persistWorkspacePairings()
+    self:_scheduleWorkspacePairingPersist()
   end
 end
 
@@ -1817,7 +1856,7 @@ function AppState:setRecoverClosedWindows(enabled)
   self.cfg.recoverClosedWindows = enabled == true
   self.settings.setRecoverClosedWindows(self.cfg.recoverClosedWindows)
   if not self.cfg.recoverClosedWindows and self:_clearRecoverableWorkspaces() then
-    self:_persistWorkspacePairings()
+    self:_persistWorkspacePairingsNow()
   end
   self:syncUi()
 end
@@ -1958,13 +1997,13 @@ function AppState:handleWindowEvent(event, win)
 
     if basePairingChanged then
       self:_markRecoveryMatchIndexDirty()
-      self:_persistWorkspacePairings()
+      self:_scheduleWorkspacePairingPersist()
       if closedWindowToast then
         self.toast(closedWindowToast)
       end
       self:syncUi()
     elseif fullscreenStateChanged then
-      self:_persistWorkspacePairings()
+      self:_scheduleWorkspacePairingPersist()
       self:syncUi()
     end
     return
@@ -1987,7 +2026,7 @@ function AppState:handleWindowEvent(event, win)
         })
       end
     end)
-    self:_persistWorkspacePairings()
+    self:_scheduleWorkspacePairingPersist()
     self:syncUi()
     return
   end
@@ -2013,7 +2052,7 @@ function AppState:handleWindowEvent(event, win)
         end
       end
     end)
-    self:_persistWorkspacePairings()
+    self:_scheduleWorkspacePairingPersist()
     self:syncUi()
     return
   end

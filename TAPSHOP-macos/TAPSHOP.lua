@@ -130,9 +130,10 @@ local previousShutdownCallback = hs.shutdownCallback
 hs.shutdownCallback = function()
   local flushed, flushErr = pcall(function()
     app:flushActiveProfilePersistence()
+    app:flushWorkspacePairingPersistence()
   end)
   if not flushed and hs and type(hs.printf) == "function" then
-    hs.printf("[tapshop-persistence] active profile shutdown flush failed: %s", tostring(flushErr))
+    hs.printf("[tapshop-persistence] shutdown flush failed: %s", tostring(flushErr))
   end
 
   if type(previousShutdownCallback) == "function" then
