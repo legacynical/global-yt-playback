@@ -250,6 +250,21 @@ function YoutubeService:isSupportedBrowser(bundleId)
   return self.cfg.browserBundleIDs[bundleId or ""] == true
 end
 
+-- Shared title matcher for YT pages (Subscriptions feed excluded).
+function YoutubeService.isYouTubeTitle(title)
+  if type(title) ~= "string" or title == "" then
+    return false
+  end
+  if title:find("Subscriptions - YouTube", 1, true) then
+    return false
+  end
+  return title:find(" - YouTube", 1, true) ~= nil
+end
+
+function YoutubeService:isYouTubeTarget(title, bundleId)
+  return self:isSupportedBrowser(bundleId) and YoutubeService.isYouTubeTitle(title)
+end
+
 -- Title-based YT page detection for a visible supported-browser window.
 function YoutubeService:isYouTubeWindow(win)
   if not win or not win:isVisible() then
@@ -261,20 +276,7 @@ function YoutubeService:isYouTubeWindow(win)
     return false
   end
 
-  local bundleId = app:bundleID() or ""
-  if not self:isSupportedBrowser(bundleId) then
-    return false
-  end
-
-  local title = win:title() or ""
-  if title == "" then
-    return false
-  end
-  if title:find("Subscriptions - YouTube", 1, true) then
-    return false
-  end
-
-  return title:find(" - YouTube", 1, true) ~= nil
+  return self:isYouTubeTarget(win:title() or "", app:bundleID() or "")
 end
 
 local function announceTarget(self, win, title)

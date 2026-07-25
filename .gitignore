@@ -4,6 +4,5 @@
 .prettierignore
 .DS_Store
 .cursor
-/tests
 /scripts
 /.venv_icon

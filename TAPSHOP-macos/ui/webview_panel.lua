@@ -76,7 +76,7 @@ function WebviewPanel.new(opts)
 
     webview:allowNewWindows(false)
     webview:allowNavigationGestures(false)
-    webview:allowTextEntry(opts.allowTextEntry == true)
+    webview:allowTextEntry(resolveValue(opts.allowTextEntry) == true)
 
     if opts.windowCallback then
       webview:windowCallback(function(...)
@@ -119,6 +119,12 @@ function WebviewPanel.new(opts)
     end
   end
 
+  function panel:syncAllowTextEntry()
+    if webview and opts.allowTextEntry ~= nil then
+      webview:allowTextEntry(resolveValue(opts.allowTextEntry) == true)
+    end
+  end
+
   function panel:evaluateJavaScript(script, callback)
     local view = ensureWebview()
     if callback then
@@ -143,6 +149,12 @@ function WebviewPanel.new(opts)
       view:level(resolveValue(opts.level))
     end
     applyBehavior(view)
+    if opts.windowStyle then
+      view:windowStyle(resolveValue(opts.windowStyle))
+    end
+    if opts.allowTextEntry ~= nil then
+      view:allowTextEntry(resolveValue(opts.allowTextEntry) == true)
+    end
     if isHtmlDirty or not cachedHtml then
       panel:refresh()
     end

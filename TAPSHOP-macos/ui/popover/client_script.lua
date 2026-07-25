@@ -3,7 +3,6 @@ local ClientScript = {}
 ClientScript.script = [=[
 var HARD_MIN_UI_SCALE_FLOOR = 0.6;
 var MAX_UI_SCALE = 1.75;
-var RESIZE_ZONE = 10;
 var TITLE_TAP_WINDOW_MS = 650;
 var lastReportedBounds = null;
 
@@ -24,6 +23,7 @@ function sendAction(action, extra) {
 }
 
 function focusKeyboardSurface() {
+  if (document.body && document.body.classList.contains("is-utility-overlay")) return;
   if (!document.body || typeof document.body.focus !== "function") return;
   try {
     document.body.focus({ preventScroll: true });
@@ -38,6 +38,11 @@ function setUiScale(scale) {
 
 function readPx(value) {
   return parseFloat(value || "0") || 0;
+}
+
+function resizeRingVerticalPx() {
+  var bodyStyle = window.getComputedStyle(document.body);
+  return readPx(bodyStyle.paddingTop) + readPx(bodyStyle.paddingBottom);
 }
 
 function measureContainerChromeHeight(scale) {
@@ -55,7 +60,8 @@ function measureContainerChromeHeight(scale) {
     + readPx(containerStyle.borderTopWidth)
     + readPx(containerStyle.borderBottomWidth)
     + header.getBoundingClientRect().height
-    + containerGap;
+    + containerGap
+    + resizeRingVerticalPx();
 }
 
 function measureWorkspaceHeightAtScale(scale) {
@@ -240,6 +246,69 @@ window.tapshopRecomputeBounds = function () {
 
 window.tapshopFocusKeyboardSurface = focusKeyboardSurface;
 
+window.tapshopClearPointerHover = function () {
+  document.querySelectorAll(".is-pointer-hover").forEach(function (el) {
+    el.classList.remove("is-pointer-hover");
+  });
+  window.__tapshopPointerHoverEl = null;
+};
+
+function pointInRect(x, y, rect) {
+  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+}
+
+function hitTestSelectorList(x, y, selectors) {
+  for (var s = 0; s < selectors.length; s++) {
+    var nodes = document.querySelectorAll(selectors[s]);
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      if (!node || node.disabled || node.getAttribute("aria-disabled") === "true") continue;
+      if (node.classList.contains("off") || node.hasAttribute("hidden")) continue;
+      if (node.closest && node.closest("[hidden]")) continue;
+      var style = window.getComputedStyle(node);
+      if (style.pointerEvents === "none" || style.visibility === "hidden" || style.display === "none") {
+        continue;
+      }
+      if (pointInRect(x, y, node.getBoundingClientRect())) {
+        return node;
+      }
+    }
+  }
+  return null;
+}
+
+function findPointerHoverTarget(x, y) {
+  // Prefer explicit rect hit-tests over elementFromPoint: inactive/non-key
+  // WKWebViews are unreliable for the latter, and --ui-scale + resize change
+  // layout without changing the top-left client mapping from Lua.
+  // While confirm is open, only dialog actions — otherwise covered slots/buttons
+  // still have live rects and would steal hover under the overlay.
+  if (isUnpairAllConfirmOpen()) {
+    return hitTestSelectorList(x, y, [".confirm-ok", ".confirm-cancel"]);
+  }
+  return hitTestSelectorList(x, y, [".slot-icon-btn", ".btn", ".header-btn", ".profile-btn"]);
+}
+
+window.tapshopPointerHoverAt = function (x, y) {
+  var next = null;
+  if (x != null && y != null && !isNaN(x) && !isNaN(y)) {
+    next = findPointerHoverTarget(x, y);
+  }
+  if (next === window.__tapshopPointerHoverEl) {
+    if (!next) window.tapshopClearPointerHover();
+    return;
+  }
+  window.tapshopClearPointerHover();
+  window.__tapshopPointerHoverEl = next;
+  if (next) {
+    next.classList.add("is-pointer-hover");
+    if (next.classList.contains("slot-icon-btn")) {
+      var row = next.closest(".row");
+      if (row) row.classList.add("is-pointer-hover");
+    }
+  }
+};
+
 window.tapshopUpdateOpacity = function (percent) {
   var p = parseInt(percent, 10);
   if (isNaN(p)) return;
@@ -288,21 +357,10 @@ window.tapshopUpdateActiveWindow = function (payload) {
   return true;
 };
 
-function getResizeDirection(e) {
-  var nearLeft = e.clientX <= RESIZE_ZONE;
-  var nearRight = e.clientX >= window.innerWidth - RESIZE_ZONE;
-  var nearTop = e.clientY <= RESIZE_ZONE;
-  var nearBottom = e.clientY >= window.innerHeight - RESIZE_ZONE;
-
-  if (nearTop && nearLeft) return "nw";
-  if (nearTop && nearRight) return "ne";
-  if (nearBottom && nearLeft) return "sw";
-  if (nearBottom && nearRight) return "se";
-  if (nearLeft) return "w";
-  if (nearRight) return "e";
-  if (nearTop) return "n";
-  if (nearBottom) return "s";
-  return "";
+function getResizeDirectionFromEvent(e) {
+  var handle = e.target && e.target.closest && e.target.closest("[data-resize]");
+  if (!handle) return "";
+  return handle.getAttribute("data-resize") || "";
 }
 
 function cursorForDirection(direction) {
@@ -313,9 +371,16 @@ function cursorForDirection(direction) {
   return "";
 }
 
-function setGlobalCursor(cursor) {
-  document.documentElement.style.cursor = cursor || "";
-  document.body.style.cursor = cursor || "";
+function setInteractionCursor(cursor) {
+  var value = cursor || "";
+  document.documentElement.style.cursor = value;
+  document.body.style.cursor = value;
+}
+
+function setResizeHandlesEnabled(enabled) {
+  var handles = document.querySelector(".resize-handles");
+  if (!handles) return;
+  handles.classList.toggle("is-disabled", !enabled);
 }
 
 var container = document.querySelector(".container");
@@ -323,6 +388,7 @@ var header = document.querySelector(".header");
 var headerActions = document.querySelector(".header-actions");
 var headerTooltip = document.querySelector(".header-tooltip");
 var titleLogo = document.querySelector(".title-logo");
+var unpairAllConfirm = document.getElementById("unpair-all-confirm");
 var tooltipTarget = null;
 var titleTapTimestamps = [];
 
@@ -389,37 +455,97 @@ var resizeState = {
   direction: ""
 };
 
+function resetInteractionGestures() {
+  dragState.active = false;
+  resizeState.active = false;
+  resizeState.direction = "";
+  setInteractionCursor("");
+  // Hide can run without reloading the DOM; clear confirm so re-show is clean
+  // and the Lua Escape tap is not left responsible for a leftover overlay.
+  hideUnpairAllConfirm();
+}
+
+window.tapshopResetInteractionGestures = resetInteractionGestures;
+
 document.addEventListener("mousedown", function (e) {
   if (e.button !== 0) return;
-  var direction = getResizeDirection(e);
+  if (isUnpairAllConfirmOpen()) return;
+  var direction = getResizeDirectionFromEvent(e);
   if (!direction) return;
   resizeState.active = true;
   resizeState.direction = direction;
   resizeState.lastX = e.screenX;
   resizeState.lastY = e.screenY;
-  setGlobalCursor(cursorForDirection(direction));
+  setInteractionCursor(cursorForDirection(direction));
   hideHeaderTooltip();
   sendAction("resizeStart", { direction: direction });
   e.preventDefault();
   e.stopPropagation();
 }, true);
 
-if (header) {
-  header.addEventListener("mousedown", function (e) {
-    if (e.button !== 0) return;
-    if (
-      e.target
-      && e.target.closest
-      && e.target.closest(".header-actions, .title-logo, button, input, label")
-    ) return;
-    dragState.active = true;
-    dragState.lastX = e.screenX;
-    dragState.lastY = e.screenY;
-    hideHeaderTooltip();
-    sendAction("dragStart");
-    e.preventDefault();
-  });
+function isDragExcludedTarget(target) {
+  return !!(
+    target
+    && target.closest
+    && target.closest(".header-actions, .title-logo, .slot-icon-btn, .confirm-shell, .resize-handle, button, input, label, a, select, textarea")
+  );
 }
+
+function isUnpairAllConfirmOpen() {
+  return !!(unpairAllConfirm && !unpairAllConfirm.hidden);
+}
+
+function showUnpairAllConfirm() {
+  if (!unpairAllConfirm) return;
+  hideHeaderTooltip();
+  unpairAllConfirm.hidden = false;
+  setResizeHandlesEnabled(false);
+  window.tapshopClearPointerHover && window.tapshopClearPointerHover();
+  // Utility overlay cannot become key — skip focus; Lua Escape tap dismisses.
+  if (!(document.body && document.body.classList.contains("is-utility-overlay"))) {
+    var okBtn = unpairAllConfirm.querySelector(".confirm-ok");
+    if (okBtn && typeof okBtn.focus === "function") {
+      try {
+        okBtn.focus({ preventScroll: true });
+      } catch (_) {
+        okBtn.focus();
+      }
+    }
+  }
+  sendAction("unpairAllConfirmOpen");
+}
+
+function hideUnpairAllConfirm() {
+  if (!unpairAllConfirm || unpairAllConfirm.hidden) return;
+  unpairAllConfirm.hidden = true;
+  setResizeHandlesEnabled(true);
+  focusKeyboardSurface();
+  sendAction("unpairAllConfirmClose");
+}
+
+window.tapshopHideUnpairAllConfirm = hideUnpairAllConfirm;
+
+function confirmUnpairAll() {
+  hideUnpairAllConfirm();
+  sendAction("unpairAll");
+}
+
+document.addEventListener("mousedown", function (e) {
+  if (e.button !== 0) return;
+  if (isUnpairAllConfirmOpen()) return;
+  if (resizeState.active) return;
+  if (getResizeDirectionFromEvent(e)) return;
+  if (isDragExcludedTarget(e.target)) return;
+  if (!e.target.closest || !e.target.closest(".container")) return;
+
+  dragState.active = true;
+  dragState.lastX = e.screenX;
+  dragState.lastY = e.screenY;
+  setInteractionCursor("move");
+  hideHeaderTooltip();
+  sendAction("dragStart");
+  e.preventDefault();
+});
 
 window.addEventListener("mousemove", function (e) {
   if (dragState.active) {
@@ -448,31 +574,26 @@ window.addEventListener("mouseup", function () {
 
   if (dragState.active) {
     dragState.active = false;
+    setInteractionCursor("");
     sendAction("dragEnd");
   }
 
   if (resizeState.active) {
     resizeState.active = false;
     resizeState.direction = "";
-    setGlobalCursor("");
+    setInteractionCursor("");
     sendAction("resizeEnd");
   }
-});
-
-document.addEventListener("mousemove", function (e) {
-  if (dragState.active || resizeState.active) return;
-  setGlobalCursor(cursorForDirection(getResizeDirection(e)));
-});
-
-document.addEventListener("mouseleave", function () {
-  if (dragState.active || resizeState.active) return;
-  setGlobalCursor("");
 });
 
 document.addEventListener("keydown", function (e) {
   if (e.key === "Escape") {
     e.preventDefault();
     e.stopPropagation();
+    if (isUnpairAllConfirmOpen()) {
+      hideUnpairAllConfirm();
+      return;
+    }
     sendAction("close");
   }
 });

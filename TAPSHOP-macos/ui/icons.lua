@@ -283,8 +283,20 @@ function Icons.tapshopIconPath()
   return dir .. "/tapshop.png"
 end
 
+function Icons.youtubeIconPath()
+  local dir = moduleDir()
+  if not dir then
+    return nil
+  end
+  return dir .. "/youtube.png"
+end
+
 function Icons.tapshopBrandIconHtml(className, size)
   return Icons.imagePathHtml(Icons.tapshopIconPath(), className or "title-brand-icon", size or 16, "TAPSHOP")
+end
+
+function Icons.youtubeSlotIconHtml(className, size)
+  return Icons.imagePathHtml(Icons.youtubeIconPath(), className or "slot-app-icon", size or 18, "YouTube")
 end
 
 function Icons.slotAppIconHtml(bundleID, appName, className)
