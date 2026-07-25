@@ -234,6 +234,9 @@ function YoutubeService:handleDestroyedWindowId(id)
     self.ytTargetId = nil
     self.ytTargetTitle = nil
   end
+  if self.pendingRestoreId == id then
+    clearPendingRestore(self)
+  end
 end
 
 function YoutubeService:getTargetId()
