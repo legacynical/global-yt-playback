@@ -328,6 +328,10 @@ function Toast.new(cfg)
       return nil
     end
     local size = imagePixelSize()
+    -- Avoid mutating Hammerspoon's shared app-bundle image cache.
+    if image.copy and image.setSize then
+      return image:copy():setSize({ h = size, w = size })
+    end
     if image.setSize then
       return image:setSize({ h = size, w = size })
     end
@@ -427,11 +431,11 @@ function Toast.new(cfg)
     local styledText = prefixStyled
 
     for _, segment in ipairs(segments or {}) do
-      styledText = (styledText or styledChunk("", defaultTextColor))
+      styledText = (styledText or styledChunk("", DEFAULT_TEXT_COLOR))
         .. styledChunk(segment.text or "", segment.color)
     end
 
-    return styledText or styledChunk(" ", defaultTextColor)
+    return styledText or styledChunk(" ", DEFAULT_TEXT_COLOR)
   end
 
   local function prefixStyledText(isLatest, showPrefixes)
@@ -439,7 +443,7 @@ function Toast.new(cfg)
       return nil
     end
 
-    local styledText = styledChunk("", defaultTextColor)
+    local styledText = styledChunk("", DEFAULT_TEXT_COLOR)
     if isLatest then
       return styledText .. styledChunk("> ", prefixColor)
     end
@@ -610,28 +614,14 @@ function Toast.new(cfg)
       timer = nil
     end
 
-    timer = hs.timer.doAfter(secs, function()
+    timer = hs.timer.doAfter(secs or defaultSecs, function()
       lines = {}
       destroy()
     end)
   end
 
-  local pendingRender = false
-  local pendingClearSecs = nil
-
-  local function flushPendingRender()
-    pendingRender = false
-    local clearSecs = pendingClearSecs
-    pendingClearSecs = nil
-    if #lines == 0 then
-      return
-    end
-    render()
-    if clearSecs ~= nil then
-      scheduleClear(clearSecs)
-    end
-  end
-
+  -- Append line(s), paint immediately, reset the shared expiry timer.
+  -- Rapid callers (profile hops) naturally rebuild the stack; no deferred latch.
   return function(msg, secs)
     local normalized = Toast.message.normalize(msg, secs)
     for _, line in ipairs(normalized.lines) do
@@ -642,13 +632,8 @@ function Toast.new(cfg)
         table.remove(lines, 1)
       end
     end
-    -- Coalesce canvas rebuilds: many hops in one turn → one replaceElements.
-    pendingClearSecs = normalized.duration or secs or defaultSecs
-    if pendingRender then
-      return
-    end
-    pendingRender = true
-    hs.timer.doAfter(0, flushPendingRender)
+    render()
+    scheduleClear(normalized.duration or secs or defaultSecs)
   end
 end
 

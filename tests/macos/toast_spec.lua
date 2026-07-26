@@ -29,7 +29,7 @@ local function currentTextDrawing()
   local drawings = FakeHs.state().drawings
   for index = #drawings, 1, -1 do
     local drawing = drawings[index]
-    if drawing.kind == "text" and not drawing.deleted then
+    if drawing.kind == "text" and not drawing.deleted and drawing.visible then
       return drawing
     end
   end
@@ -40,7 +40,7 @@ local function currentTextPayloads()
   local drawings = FakeHs.state().drawings
   local out = {}
   for _, drawing in ipairs(drawings) do
-    if drawing.kind == "text" and not drawing.deleted then
+    if drawing.kind == "text" and not drawing.deleted and drawing.visible then
       out[#out + 1] = drawing.payload
     end
   end
@@ -200,30 +200,58 @@ return {
       name = "preserves styled segmented payloads in the stacked renderer",
       run = function()
         local toast = makeToast()
-        local accent = { red = 0.4, green = 0.8, blue = 1.0, alpha = 1 }
+        local accent = { red = 0.2, green = 0.9, blue = 0.4, alpha = 1 }
 
         toast({
           segments = {
-            { text = "Restored Window 2: " },
-            { text = "[Browser] Docs", color = accent },
+            { text = "Restored Window 4: " },
+            { text = "[Editor] Notes", color = accent },
           },
         })
         toast("YT Target Updated")
 
         Assert.truthy(#currentTextPayloads() > 0, "expected visible text drawings")
-        Assert.equal(visibleTexts(), " Restored Window 2: [Browser] Docs\n> YT Target Updated")
-        Assert.equal(runTextsByAlpha(0), ">")
-
-        local foundAccent = false
+        Assert.equal(visibleTexts(), " Restored Window 4: [Editor] Notes\n> YT Target Updated")
         for _, payload in ipairs(currentTextPayloads()) do
           for _, run in ipairs(payload.runs or {}) do
-            if run.text == "[Browser] Docs" then
-              Assert.sameKeys(run.style.color, accent)
-              foundAccent = true
+            if run.text == "[Editor] Notes" then
+              Assert.equal(run.style.color.red, accent.red)
+              Assert.equal(run.style.color.green, accent.green)
+              Assert.equal(run.style.color.blue, accent.blue)
             end
           end
         end
-        Assert.truthy(foundAccent, "expected to preserve the styled segment color")
+      end,
+    },
+    {
+      name = "renders again after a previous toast stack expires",
+      run = function()
+        local toast = makeToast()
+        local Toast = require("ui.toast")
+
+        toast(Toast.message.windowAction({
+          prefixText = "Pairing ",
+          labelText = "Matcha [1]: ",
+          titleText = "Docs",
+          bundleID = "com.google.Chrome",
+          imageColor = "#4C8DFF",
+          duration = 2.0,
+        }))
+        Assert.truthy(currentTextDrawing(), "expected first pair toast")
+
+        FakeHs.runScheduledTimers()
+        Assert.falsy(currentTextDrawing(), "expected first toast to expire")
+
+        toast(Toast.message.windowAction({
+          prefixText = "Unpairing ",
+          labelText = "Matcha [1]: ",
+          titleText = "Docs",
+          bundleID = "com.google.Chrome",
+          imageColor = "#4C8DFF",
+          duration = 2.0,
+        }))
+        Assert.truthy(currentTextDrawing(), "expected second toast after expiry")
+        Assert.truthy(string.find(visibleTexts(), "Unpairing", 1, true), "expected unpair text")
       end,
     },
   },

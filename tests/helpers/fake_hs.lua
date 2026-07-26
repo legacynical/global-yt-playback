@@ -36,6 +36,17 @@ local function makeImage(source)
     return self
   end
 
+  function image:copy()
+    local copied = makeImage(self.source)
+    if self.size then
+      copied.size = {
+        h = self.size.h,
+        w = self.size.w,
+      }
+    end
+    return copied
+  end
+
   function image:encodeAsURLString()
     local width = self.size and self.size.w or 0
     local height = self.size and self.size.h or 0
@@ -272,6 +283,13 @@ local function makeCanvas(rect)
       end
     end
     return self
+  end
+
+  function canvas:imageFromCanvas()
+    return makeImage({
+      kind = "canvas",
+      value = string.format("%sx%s", tostring(self.rect and self.rect.w or 0), tostring(self.rect and self.rect.h or 0)),
+    })
   end
 
   function canvas:delete()
