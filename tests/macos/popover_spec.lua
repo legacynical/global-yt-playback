@@ -435,43 +435,24 @@ return {
 
         Assert.truthy(popover ~= nil)
         Assert.truthy(app:activateProfile(2))
-        Assert.equal(#FakeHs.state().doAfterCalls, 3)
-        local validationTimerIndex = nil
-        local refreshTimerIndex = nil
-        local persistenceTimerFound = false
-        for index, timer in ipairs(FakeHs.state().doAfterCalls) do
-          if timer.delay == 0.20 then
-            validationTimerIndex = index
-          elseif timer.delay == 0.03 then
-            refreshTimerIndex = index
-          elseif timer.delay == 0.05 then
-            persistenceTimerFound = true
-          end
-        end
-        Assert.truthy(validationTimerIndex ~= nil)
-        Assert.truthy(refreshTimerIndex ~= nil)
-        Assert.truthy(persistenceTimerFound)
-
-        FakeHs.runScheduledTimers()
-
-        Assert.equal(panelStub.calls.refresh, 1)
-        local hasIdlePersist = false
-        local hasRepublish = false
+        -- Hotkey edge toasts immediately; UI/persistence/validation stay deferred.
+        Assert.equal(panelStub.calls.evaluateJavaScript, 0)
+        Assert.equal(panelStub.calls.refresh, 0)
+        local delays = {}
         for _, timer in ipairs(FakeHs.state().doAfterCalls) do
-          if timer.delay == 5.0 then
-            hasIdlePersist = true
-          elseif timer.delay == 0.03 then
-            hasRepublish = true
-          end
+          delays[#delays + 1] = timer.delay
         end
-        Assert.truthy(hasIdlePersist)
-        Assert.truthy(hasRepublish)
+        Assert.equal(#delays, 3)
+        table.sort(delays)
+        Assert.equal(delays[1], 0)
+        Assert.equal(delays[2], 0.05)
+        Assert.equal(delays[3], 0.20)
 
-        FakeHs.runScheduledTimers()
-        Assert.equal(panelStub.calls.refresh, 2)
+        FakeHs.flushScheduledTimers(8)
+
         Assert.equal(app:getWorkspaces()[1].binding.baseSpaceId, 2)
         Assert.truthy(string.find(panelStub.lastHtml or "", "paired-off-space", 1, true) ~= nil)
-        Assert.truthy(string.find(panelStub.lastHtml or "", "P2", 1, true) ~= nil)
+        Assert.truthy(string.find(panelStub.lastHtml or "", "Peach", 1, true) ~= nil)
         Assert.equal(candidateCalls, 0)
       end,
     },

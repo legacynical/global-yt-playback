@@ -86,6 +86,7 @@ function AppState.new(cfg, deps)
     pendingActiveProfileId = nil,
     workspacePairingPersistTimer = nil,
     workspacePairingPersistDirty = false,
+    profileSwitchUiSerial = 0,
   }, AppState)
 
   for profileId = 1, Layout.MAX_PROFILES do
@@ -421,6 +422,23 @@ function AppState:_syncWorkspaceUi(reason, opts)
   elseif self.popover and self.popover.refreshIfShown then
     self.popover:refreshIfShown()
   end
+end
+
+-- Drop cached slots HTML for a profile after pairing/recovery mutations so
+-- begin-paint cannot flash pre-mutation banks during rapid switches.
+-- Profile-cycle hotkeys must return immediately. Popover begin/settle work uses
+-- evaluateJavaScript and can block the Hammerspoon thread long enough for Carbon
+-- to drop a second ⌘⌥↑/↓ press. Coalesce to the latest hop on the next tick.
+function AppState:_queueProfileSwitchUi(opts)
+  self.profileSwitchUiSerial = (self.profileSwitchUiSerial or 0) + 1
+  local serial = self.profileSwitchUiSerial
+  local switchOpts = opts or {}
+  hs.timer.doAfter(0, function()
+    if serial ~= self.profileSwitchUiSerial then
+      return
+    end
+    self:_syncWorkspaceUi("profile_switch", switchOpts)
+  end)
 end
 
 -- Drop cached slots HTML for a profile after pairing/recovery mutations so
@@ -2194,7 +2212,8 @@ function AppState:flushActiveProfilePersistence()
   return true
 end
 
--- Switch active profile bank; defers Spaces validation off the hotkey edge.
+-- Switch active profile bank; defers Spaces validation and popover paint off the
+-- hotkey edge so rapid ⌘⌥↑/↓ presses are not dropped while JS runs.
 function AppState:activateProfile(profileId, opts)
   local profile = self:_getProfile(profileId)
   if not profile then
@@ -2204,8 +2223,8 @@ function AppState:activateProfile(profileId, opts)
   opts = opts or {}
   if profile.id == self.session.activeProfileId then
     -- Already active: return to slots without settle probes / row rebuilds.
-    if opts.returnToSlots == true and self.popover and self.popover.requestRefresh then
-      self.popover:requestRefresh("profile_switch", nil, {
+    if opts.returnToSlots == true then
+      self:_queueProfileSwitchUi({
         returnToSlots = true,
         clientEpoch = opts.clientEpoch,
         modeOnly = true,
@@ -2217,17 +2236,17 @@ function AppState:activateProfile(profileId, opts)
   self.session.activeProfileId = profile.id
   self:_queueActiveProfilePersistence()
   self:_queueActiveProfileValidation(profile)
-  self:_syncWorkspaceUi("profile_switch", {
+  self:_queueProfileSwitchUi({
     returnToSlots = opts.returnToSlots == true,
     clientEpoch = opts.clientEpoch,
   })
-  -- One toast line per hop (matches UI cycling). Capture name/color now so a
-  -- deferred render cannot rewrite earlier stack lines to the final bank.
-  local toastName = self:getProfileDisplayName(profile.id)
-  local toastColor = self:getProfileColor(profile.id)
-  hs.timer.doAfter(0, function()
-    self.toast(Toast.message.profile(toastName, toastColor, { duration = 2.0 }))
-  end)
+  -- Toast stays on the hotkey edge: cheap canvas paint, one line per hop for
+  -- responsive feedback. Popover JS remains coalesced off-thread above.
+  self.toast(Toast.message.profile(
+    self:getProfileDisplayName(profile.id),
+    self:getProfileColor(profile.id),
+    { duration = 2.0 }
+  ))
   return true
 end
 

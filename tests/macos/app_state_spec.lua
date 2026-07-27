@@ -118,7 +118,6 @@ return {
 
         Assert.truthy(app:activateProfile(2))
         Assert.equal(app:getActiveProfileId(), 2)
-        Assert.equal(refreshReason, "profile_switch")
         Assert.equal(appdata:getActiveProfileId(), 1)
 
         for _, call in ipairs(appdata.calls) do
@@ -127,6 +126,7 @@ return {
 
         flushScheduledTimers()
 
+        Assert.equal(refreshReason, "profile_switch")
         Assert.equal(appdata:getActiveProfileId(), 2)
       end,
     },
@@ -157,6 +157,51 @@ return {
           end
         end
         Assert.equal(activeProfileWrites, 1)
+      end,
+    },
+    {
+      name = "rapid profile activation coalesces popover UI to the final hop",
+      run = function()
+        local toast, toasts = Fakes.createToast()
+        local app = makeApp({
+          settings = Fakes.createSettingsStore(),
+          appdata = Fakes.createSettingsStore(),
+          windowService = Fakes.createWindowService(),
+          youtubeService = Fakes.createNoopYoutubeService(),
+          spotifyService = Fakes.createNoopSpotifyService(),
+          toast = toast,
+        })
+        local refreshCalls = {}
+        app:attachUi({
+          requestRefresh = function(_, reason)
+            refreshCalls[#refreshCalls + 1] = {
+              reason = reason,
+              profileId = app:getActiveProfileId(),
+            }
+          end,
+        }, nil)
+
+        Assert.truthy(app:activateProfile(2))
+        Assert.truthy(app:activateProfile(3))
+        -- Toasts stay on the hotkey edge (one per hop); UI is deferred.
+        Assert.equal(#toasts, 2)
+        Assert.equal(toasts[1].message.lines[1].segments[1].text, "Peach")
+        Assert.equal(toasts[2].message.lines[1].segments[1].text, "Matcha")
+        Assert.equal(#refreshCalls, 0)
+
+        flushScheduledTimers()
+
+        local switchCount = 0
+        local lastSwitchProfile = nil
+        for _, call in ipairs(refreshCalls) do
+          if call.reason == "profile_switch" then
+            switchCount = switchCount + 1
+            lastSwitchProfile = call.profileId
+          end
+        end
+        Assert.equal(switchCount, 1)
+        Assert.equal(lastSwitchProfile, 3)
+        Assert.equal(#toasts, 2)
       end,
     },
     {
@@ -241,10 +286,10 @@ return {
         appdata.calls = {}
 
         Assert.truthy(app:activateProfile(2))
-        Assert.equal(#refreshReasons, 1)
-        Assert.equal(refreshReasons[1], "profile_switch")
+        Assert.equal(#refreshReasons, 0)
         Assert.equal(#windowService.getWindowSpacesCalls, 0)
         flushScheduledTimers()
+        Assert.equal(refreshReasons[1], "profile_switch")
 
         local workspace = app:getWorkspaces()[1]
         Assert.equal(workspace.binding.kind, "paired")
@@ -256,7 +301,7 @@ return {
         -- Shallow profile-switch paint, then a short republish after exact validation
         -- corrects Space/fullscreen advisory fields.
         Assert.equal(#refreshReasons, 2)
-        Assert.equal(refreshReasons[2], "profile_switch")
+        Assert.equal(refreshReasons[2], "profile_validation")
 
         Assert.truthy(app:activateProfile(1))
         flushScheduledTimers()
