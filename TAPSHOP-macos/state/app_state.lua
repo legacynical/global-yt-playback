@@ -475,12 +475,19 @@ function AppState:_runPairingAction(actionFn)
   return true
 end
 
-function AppState:_runWorkspaceAction(actionFn)
+-- Slot hotkeys: cancel in-flight focus, run the action, optionally paint.
+-- Pure focus hops should pass syncUi=false; pair / badge / Space corrections
+-- opt in so mashable ⌘⌥N does not rebuild popover JS every press.
+function AppState:_runWorkspaceAction(actionFn, opts)
   if self.windowService and self.windowService.cancelPendingFrontmostRequest then
     self.windowService.cancelPendingFrontmostRequest()
   end
   actionFn()
-  self:_syncWorkspaceUi()
+  opts = opts or {}
+  if opts.syncUi == false then
+    return
+  end
+  self:_syncWorkspaceUi(opts.reason)
 end
 
 function AppState:_spaceIsFullscreen(spaceId)
@@ -861,6 +868,24 @@ function AppState:_refreshWorkspaceFingerprint(workspace, win)
   end
 end
 
+-- Fingerprint AX work is advisory; keep it off the slot hotkey edge so rapid
+-- ⌘⌥N focus hops are not blocked behind pairingMetadata.
+function AppState:_queueWorkspaceFingerprintRefresh(workspace)
+  if not workspace or not workspace:getBaseWindowId() then
+    return
+  end
+  local slotIndex = workspace.getIndex and workspace:getIndex() or nil
+  local profileId = self.session.activeProfileId
+  local expectedId = workspace:getBaseWindowId()
+  hs.timer.doAfter(0, function()
+    local ws = (slotIndex and self:_getWorkspace(slotIndex, profileId)) or workspace
+    if not ws or ws:getBaseWindowId() ~= expectedId then
+      return
+    end
+    self:_refreshWorkspaceFingerprint(ws, nil)
+  end)
+end
+
 function AppState:_refreshPairedWorkspaceMetadataForWindow(win, opts)
   if not win then
     return false, false
@@ -1080,9 +1105,12 @@ function AppState:_requestWindowInSpace(workspace, windowId, spaceId, activation
   return activationPath
 end
 
+-- Focus a live paired window. Returns resultCode, spaceCorrected.
+-- Spaces IPC only when cached baseSpaceId disagrees with the focused Space;
+-- fingerprint refresh is queued off the hotkey edge for same-Space focus.
 function AppState:_activateResolvedPairedWindow(workspace, paired, focusedSpaceId)
   if not workspace or not paired then
-    return nil
+    return nil, false
   end
 
   local shouldInspectSpaces = workspace:getBaseSpaceId() ~= nil
@@ -1092,12 +1120,14 @@ function AppState:_activateResolvedPairedWindow(workspace, paired, focusedSpaceI
   if shouldInspectSpaces then
     local targetSpaceId, inFocusedSpace, resolvedSpaceId = self:_resolvedTargetSpaceForWindow(paired, focusedSpaceId)
     if inFocusedSpace then
-      if resolvedSpaceId then
+      local spaceCorrected = false
+      if resolvedSpaceId and resolvedSpaceId ~= workspace:getBaseSpaceId() then
         workspace:setBaseSpaceId(resolvedSpaceId)
+        spaceCorrected = true
       end
-      self:_refreshWorkspaceFingerprint(workspace, paired)
+      self:_queueWorkspaceFingerprintRefresh(workspace)
       self.windowService.requestFrontmost(paired)
-      return "base-window"
+      return "base-window", spaceCorrected
     end
 
     if targetSpaceId then
@@ -1110,13 +1140,13 @@ function AppState:_activateResolvedPairedWindow(workspace, paired, focusedSpaceI
           workspace:setBaseSpaceId(targetSpaceId)
           self:_refreshWorkspaceFingerprint(workspace, resolved)
         end
-      )
+      ), false
     end
   end
 
-  self:_refreshWorkspaceFingerprint(workspace, paired)
+  self:_queueWorkspaceFingerprintRefresh(workspace)
   self.windowService.requestFrontmost(paired)
-  return "base-window"
+  return "base-window", false
 end
 
 function AppState:_activateExactWindowIdAcrossSpaces(workspace, focusedSpaceId)
@@ -1930,6 +1960,8 @@ function AppState:pairSlot(index, sourceWindow)
 end
 
 -- Hotkey: pair if empty, else focus/minimize the paired window (incl. cross-Space).
+-- Cheap edge work only: toast on pair/error, kick focus/minimize/Space switch.
+-- Popover rebuild is skipped for pure focus; fingerprint AX is deferred.
 function AppState:activateSlot(index)
   local workspace = self:_getWorkspace(index)
   if not workspace then
@@ -1949,6 +1981,7 @@ function AppState:activateSlot(index)
   })
 
   local bindingChanged = false
+  local needsUiSync = false
   self:_runWorkspaceAction(function()
     local win = hs.window.frontmostWindow()
     if not win then
@@ -1971,6 +2004,7 @@ function AppState:activateSlot(index)
     if not workspace:isPaired() then
       self:_pairWorkspace(workspace, currentId, win)
       bindingChanged = true
+      needsUiSync = true
       self:_recordDebug("focus", "info", "slot_activation_result", "slot activation paired frontmost window", function()
         return {
           slot = index,
@@ -2005,6 +2039,7 @@ function AppState:activateSlot(index)
               lastKnownSpaceId = workspace:getBaseSpaceId(),
             })
             bindingChanged = true
+            needsUiSync = true
           end
 
           if focusedSpaceId == resolvedFullscreenSpaceId then
@@ -2017,11 +2052,12 @@ function AppState:activateSlot(index)
                 lastKnownSpaceId = workspace:getBaseSpaceId(),
               })
               self.windowService.requestFrontmost(fullscreenWin)
-              self:_refreshWorkspaceFingerprint(workspace, fullscreenWin)
+              self:_queueWorkspaceFingerprintRefresh(workspace)
               return
             end
           else
             -- _requestWindowInSpace hides when the target Space is fullscreen.
+            -- Completion callback refreshes UI via slot_space_switch_result.
             self:_requestWindowInSpace(
               workspace,
               workspace:getFullscreenTargetWindowId(),
@@ -2041,13 +2077,18 @@ function AppState:activateSlot(index)
         else
           workspace:clearFullscreenState()
           bindingChanged = true
+          needsUiSync = true
         end
       end
 
       local paired = self:_resolvePairedWindow(workspace)
       if paired then
         workspace:resetInputBuffer()
-        self:_activateResolvedPairedWindow(workspace, paired, focusedSpaceId)
+        local _, spaceCorrected = self:_activateResolvedPairedWindow(workspace, paired, focusedSpaceId)
+        if spaceCorrected then
+          bindingChanged = true
+          needsUiSync = true
+        end
       elseif not self:_activateExactWindowIdAcrossSpaces(workspace, focusedSpaceId) then
         self.toast(Toast.message.plain("Window not found in any spaces"))
       end
@@ -2064,12 +2105,17 @@ function AppState:activateSlot(index)
     if paired and workspace:shouldMinimize() then
       workspace:resetInputBuffer()
       paired:minimize()
+      -- Minimize badge is visible in the popover when shown.
+      needsUiSync = true
       return
     end
-  end)
+  end, { syncUi = false })
 
   if bindingChanged then
     self:_scheduleWorkspacePairingPersist()
+  end
+  if needsUiSync then
+    self:_syncWorkspaceUi("workspace_state")
   end
 end
 

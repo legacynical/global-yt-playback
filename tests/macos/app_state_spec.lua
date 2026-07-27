@@ -3201,6 +3201,107 @@ return {
       end,
     },
     {
+      name = "same-Space slot focus skips popover sync and defers fingerprint work",
+      run = function()
+        FakeHs.install()
+        local paired = FakeHs.makeWindow({
+          id = 501,
+          title = "Docs",
+          bundleId = "com.apple.Safari",
+          appName = "Safari",
+          spaceIds = { 1 },
+        })
+        local other = FakeHs.makeWindow({
+          id = 502,
+          title = "Mail",
+          bundleId = "com.apple.mail",
+          appName = "Mail",
+          spaceIds = { 1 },
+        })
+        local windowService = Fakes.createWindowService({ paired, other })
+        local pairingMetadata = windowService.pairingMetadata
+        local pairingMetadataCalls = 0
+        windowService.pairingMetadata = function(win)
+          pairingMetadataCalls = pairingMetadataCalls + 1
+          return pairingMetadata(win)
+        end
+        local app = makeApp({
+          settingsStore = Fakes.createSettingsStore(),
+          windowService = windowService,
+          youtubeService = Fakes.createNoopYoutubeService(),
+          spotifyService = Fakes.createNoopSpotifyService(),
+          toast = function() end,
+        })
+        local refreshReasons = {}
+        app:attachUi({
+          requestRefresh = function(_, reason)
+            refreshReasons[#refreshReasons + 1] = reason
+          end,
+        }, nil)
+
+        FakeHs.setFrontmostWindow(paired)
+        app:pairSlot(1, paired)
+        refreshReasons = {}
+        pairingMetadataCalls = 0
+        windowService.getWindowSpacesCalls = {}
+
+        FakeHs.setFrontmostWindow(other)
+        app:activateSlot(1)
+
+        Assert.equal(#windowService.requestFrontmostCalls, 1)
+        Assert.equal(windowService.requestFrontmostCalls[1].win:id(), 501)
+        Assert.equal(#refreshReasons, 0)
+        Assert.equal(#windowService.getWindowSpacesCalls, 0)
+        Assert.equal(pairingMetadataCalls, 0)
+
+        flushScheduledTimers()
+        Assert.truthy(pairingMetadataCalls >= 1)
+        Assert.equal(#refreshReasons, 0)
+      end,
+    },
+    {
+      name = "slot pair and minimize still sync popover workspace state",
+      run = function()
+        FakeHs.install()
+        local paired = FakeHs.makeWindow({
+          id = 511,
+          title = "Docs",
+          bundleId = "com.apple.Safari",
+          appName = "Safari",
+          spaceIds = { 1 },
+        })
+        local windowService = Fakes.createWindowService({ paired })
+        local app = makeApp({
+          settingsStore = Fakes.createSettingsStore(),
+          windowService = windowService,
+          youtubeService = Fakes.createNoopYoutubeService(),
+          spotifyService = Fakes.createNoopSpotifyService(),
+          toast = function() end,
+        })
+        local refreshReasons = {}
+        app:attachUi({
+          requestRefresh = function(_, reason)
+            refreshReasons[#refreshReasons + 1] = reason
+          end,
+        }, nil)
+
+        FakeHs.setFrontmostWindow(paired)
+        app:activateSlot(1)
+        Assert.equal(#refreshReasons, 1)
+        Assert.equal(refreshReasons[1], "workspace_state")
+        Assert.equal(app:getWorkspaces()[1].binding.baseWindowId, 511)
+
+        refreshReasons = {}
+        app:activateSlot(1)
+        Assert.equal(#refreshReasons, 0)
+
+        app:activateSlot(1)
+        Assert.equal(#refreshReasons, 1)
+        Assert.equal(refreshReasons[1], "workspace_state")
+        Assert.truthy(paired:isMinimized())
+      end,
+    },
+    {
       name = "hotkey binding mutations do not force a broad syncUi refresh",
       run = function()
         local app = makeApp({
