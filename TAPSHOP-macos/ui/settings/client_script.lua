@@ -8,6 +8,12 @@ var MOD_SYMBOLS = {
   shift: "⇧"
 };
 
+// WebKit's default context menu includes Reload, which blanks this injected-HTML
+// panel. Tapshop is app chrome, not a browser page — suppress it.
+document.addEventListener("contextmenu", function (e) {
+  e.preventDefault();
+}, true);
+
 var MOD_TITLES = {
   cmd: "Command",
   alt: "Option",

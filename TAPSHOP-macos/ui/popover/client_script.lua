@@ -6,6 +6,12 @@ var MAX_UI_SCALE = 1.75;
 var TITLE_TAP_WINDOW_MS = 650;
 var lastReportedBounds = null;
 
+// WebKit's default context menu includes Reload, which blanks this injected-HTML
+// panel. Tapshop is app chrome, not a browser page — suppress it.
+document.addEventListener("contextmenu", function (e) {
+  e.preventDefault();
+}, true);
+
 function layoutPolicy() {
   return window.tapshopLayoutPolicy || {};
 }
