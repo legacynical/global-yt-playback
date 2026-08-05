@@ -209,6 +209,6 @@ The original single-purpose scripts are preserved in their respective folders:
 
 This project's scripts are provided under the MIT license.
 
-**Windows (AHK):** The AutoHotkey interpreter is under the [GPL-2.0 license](https://github.com/AutoHotkey/AutoHotkey?tab=GPL-2.0-1-ov-file). This applies to compiled builds (`.exe`) because they bundle the AHK script and interpreter. For most users or developers this is not a practical concern, as GPL-2.0 is permissive.
+**Windows (AHK):** The AutoHotkey interpreter is under the [GPL-2.0 license](https://github.com/AutoHotkey/AutoHotkey?tab=GPL-2.0-1-ov-file). This applies to compiled builds (`.exe`) because they bundle the AHK script and interpreter. Compiled AutoHotkey distributions may include GPL-2.0-covered components. Review and retain the applicable notices and license terms when distributing compiled builds.
 
 **macOS (Hammerspoon/Lua):** The macOS stack relies on [Hammerspoon](https://www.hammerspoon.org/) (MIT) and [Lua](https://www.lua.org/) (MIT). If you distribute software that includes or depends on them, you must retain their copyright notices and the full MIT license text for each. Hammerspoon’s license is in its [repository](https://github.com/Hammerspoon/hammerspoon); Lua’s license is at [lua.org/license.html](https://www.lua.org/license.html).
