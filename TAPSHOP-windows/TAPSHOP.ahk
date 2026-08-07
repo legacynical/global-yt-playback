@@ -426,6 +426,9 @@ DisplayActiveWindowStats() {
 <#8:: PairWindow(TAPSHOP.workspaceList[8])
 <#9:: PairWindow(TAPSHOP.workspaceList[9])
 
+; `inputBuffer` is intentionally shared interaction state, not per-workspace
+; state. Refocusing a paired window or completing a minimize resets the
+; countdown; slots intentionally do not retain independent partial gestures.
 PairWindow(workspaceObject) {
 	local maxInputBuffer := TAPSHOP.cfg.minimizeThreshold
 	static inputBuffer := maxInputBuffer
